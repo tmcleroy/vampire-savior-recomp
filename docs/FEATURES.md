@@ -8,10 +8,11 @@ presets: **Pure** (all off), **Enhanced** (the default: free play on), **Custom*
 This list is what `vampire_savior --list-features` prints. How features are written is in
 [cps2recomp/docs/FEATURES.md](../cps2recomp/docs/FEATURES.md).
 
-## Modes
+## Alternative modes
 
-The in-game menu's first page, "Modes", starts ways of running the game that the board does not
-have. Each ends when another is started or with the menu's Reset.
+"Alternative modes", the first row of the in-game menu, has ways of running the game that the
+board does not have. Attract mode and the stage viewer each have a page there with a Start row
+and their choices. Each mode ends when another is started or with the menu's Reset.
 
 - **Training mode**: straight to the character choice with two players and a fight with no clock
   that nobody loses (the README says more; the Training and Dummy features below are its aids).
@@ -22,10 +23,10 @@ have. Each ends when another is started or with the menu's Reset.
 
 | Feature | Name in `settings.ini` | What it does |
 | --- | --- | --- |
-| Attract shows | `attract_show` | What attract mode plays. Choices: Everything, The intro only (the introduction to the title, over and over), The fights only (one of the game's eight demonstration fights after another). |
-| Stage | `viewer_stage` | The stage the viewer shows: any of the twelve. Changing it while viewing goes to the new one. |
-| Scrolling | `viewer_scroll` | How the viewer moves across the stage. Choices: With the stick, Slow, Medium, Fast. |
-| Music | `viewer_music` | The tune that plays in the viewer. Choices: The stage's own, any stage's, Character select. |
+| Attract mode: Shows | `attract_show` | What attract mode plays. Choices: Everything, The intro only (the introduction to the title, over and over), The fights only (one of the game's eight demonstration fights after another). |
+| Stage viewer: Stage | `viewer_stage` | The stage the viewer shows: any of the twelve. Changing it while viewing goes to the new one. |
+| Stage viewer: Scrolling | `viewer_scroll` | How the viewer moves across the stage. Choices: With the stick, Slow (a pixel every four frames), Medium, Fast (a pixel a frame). |
+| Stage viewer: Music | `viewer_music` | The tune that plays in the viewer. Choices: The stage's own, any stage's, Character select. |
 
 ## Game
 

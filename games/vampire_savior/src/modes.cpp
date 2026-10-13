@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Tommy McLeroy
 //
-// Vampire Savior: the in-game menu's "Modes" page. Ways of running the game that the board does not have:
-// training (training.cpp), attract mode on a loop, and a viewer for the stages. Each is started by a command
-// of the page and ends when the board is reset, when another is started, or (attract mode) with Start.
+// Vampire Savior: the "Alternative modes" page at the head of the in-game menu. Ways of running the game that
+// the board does not have: training (training.cpp), attract mode on a loop, and a viewer for the stages (the
+// last two each with a page under it for their choices). Each is started by a command and ends when the
+// board is reset, when another is started, or (attract mode) with Start.
 //
 // Attract mode is the game's own loop of notices, introduction, title, two fights and the rankings, with no
 // coin in. "The intro only" and "the fights only" leave parts of the loop out by moving the game's own step
@@ -28,6 +29,9 @@ bool Booting();
 
 namespace {
     using namespace vsav;
+
+    // The menu's pages
+    constexpr const char *kModes = "Alternative modes", *kAttract = "Attract mode", *kViewer = "Stage viewer";
 
     enum class Mode : int32_t { None, Attract, Viewer };
     struct State {
@@ -124,8 +128,8 @@ namespace {
         return colours < 22 || (colours == 22 && tile >= 0xF8E0 && tile < 0xF920);
     }
     constexpr uint16_t kApart = 0xC0;                  // the players stand this far apart (the camera then keeps their middle in the picture's)
-    constexpr int32_t kStick = 3 * 256;                // a frame's scrolling with the stick held
-    constexpr int32_t kScroll[] = {0, 128, 256, 512};  //   and by itself: slow, medium, fast
+    constexpr int32_t kStick = 384;                    // a frame's scrolling with the stick held, in 256ths of a pixel
+    constexpr int32_t kScroll[] = {0, 64, 128, 256};   //   and by itself: slow, medium, fast
 
     // The tune of each stage, in the order of the stages' numbers, and the others offered
     constexpr uint16_t kStageTune = 0x09; // (a stage's own tune: this and its number)
@@ -280,29 +284,32 @@ void ModesState(Archive &ar) {
 
 void RegisterModes() {
     Game &game = TheGame();
-    game.commands.push_back({"training_start", "Modes", "Training mode",
+    // The page at the head of the menu, and a page under it for each mode that has choices
+    game.pages.push_back({kModes, "", "Other ways to run the game: training, attract mode on a loop, a viewer for the stages.", true});
+    game.pages.push_back({kAttract, kModes,
+                          "The game's own show on a loop, with no coin in: the introduction, the title, fights and rankings."});
+    game.pages.push_back({kViewer, kModes, "A stage with nobody on it, to look at and listen to."});
+    game.commands.push_back({"training_start", kModes, "Training mode",
                              "Straight to the character choice with two players (player 1's controls choose both), then a fight "
                              "with no clock that nobody loses.",
                              TrainingCommand});
-    game.commands.push_back({"attract_start", "Modes", "Attract mode",
-                             "The game's own show on a loop, with no coin in: the introduction, the title, fights and rankings. "
-                             "Start ends it.",
-                             StartAttract});
-    game.commands.push_back({"viewer_start", "Modes", "Stage viewer",
-                             "The stage chosen below with nobody on it. Left and right scroll it, or it scrolls by itself. Reset "
-                             "ends it.",
-                             StartViewer});
-    game.features.push_back({"attract_show", "Modes", "Attract shows",
+    game.commands.push_back({"attract_start", kAttract, "Start",
+                             "Starts attract mode: the game's own show, over and over. Start (or a coin) ends it.", StartAttract});
+    game.features.push_back({"attract_show", kAttract, "Shows",
                              "What attract mode plays: everything the board does, the introduction over and over, or one fight "
                              "after another.",
                              0, {"Everything", "The intro only", "The fights only"}});
-    game.features.push_back({"viewer_stage", "Modes", "Stage", "The stage the viewer shows. Changing it while viewing goes to the new one.", 0,
+    game.commands.push_back({"viewer_start", kViewer, "Start",
+                             "Shows the stage chosen below with nobody on it. Left and right scroll it, or it scrolls by itself. "
+                             "Reset ends it.",
+                             StartViewer});
+    game.features.push_back({"viewer_stage", kViewer, "Stage", "The stage the viewer shows. Changing it while viewing goes to the new one.", 0,
                              {"Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau", "Abaraya",
                               "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror", "Fetus of God"}});
-    game.features.push_back({"viewer_scroll", "Modes", "Scrolling",
+    game.features.push_back({"viewer_scroll", kViewer, "Scrolling",
                              "How the viewer moves across the stage: with the stick, or by itself from one end to the other and back.",
                              0, {"With the stick", "Slow", "Medium", "Fast"}});
-    game.features.push_back({"viewer_music", "Modes", "Music", "The tune that plays in the viewer: the stage's own, or another's.", 0,
+    game.features.push_back({"viewer_music", kViewer, "Music", "The tune that plays in the viewer: the stage's own, or another's.", 0,
                              {"The stage's own", "Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau",
                               "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                               "Fetus of God", "Character select"}});

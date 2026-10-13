@@ -102,8 +102,9 @@ The Japanese arcade release of 1997-05-19 (ROM set `vsavj`), on Capcom's CPS-2 b
 
 ## Modes (2026-10-12)
 
-The menu's first page, "Modes" (`src/modes.cpp`): training (moved there), attract mode, a stage
-viewer. Checked with no window only (pictures, traces of the game's memory, sound dumps); nobody
+"Alternative modes", the first row of the menu (`src/modes.cpp`): training (moved there), attract
+mode and a stage viewer, the last two with a page each under it (the shared menu's pages under
+pages, `Game::pages`). Checked with no window only (pictures, traces of the game's memory, sound dumps); nobody
 has yet used them in a window or listened.
 
 - **Attract mode.** The board reset and no coin kept in (free play's credits are held back). "The

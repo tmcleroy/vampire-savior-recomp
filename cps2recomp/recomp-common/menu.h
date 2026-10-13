@@ -38,13 +38,14 @@ struct MenuRow {
         Slot,   // the slot (1-9) those two use
         Speed,  // one of MenuConfig::speeds (left out when there are none)
         Pages,  // stands for several rows: the commands of no category, then a row for each category's page
+        Page,   // a row for one page, named by `title`, wherever the host wants it; Pages then leaves it out
         Action, // the host's own: Chosen::Action with its id
         Quit,   // "Quit game": Chosen::Quit
         Resume, // closes the menu
     };
     Kind kind;
     int id;                  // Action: handed back when chosen
-    std::string title;       // Action
+    std::string title;       // Action; Page: the page's name
     std::string description; // Action
     MenuRow(Kind kind, int id = 0, std::string title = {}, std::string description = {})
         : kind(kind), id(id), title(std::move(title)), description(std::move(description)) {}
@@ -66,11 +67,23 @@ struct MenuCommand {
     std::string description;
 };
 
+// More about a page than its name, for the pages that need it. A page is a category of features and
+// commands; one with a parent is reached from the parent's page, not from the first.
+struct MenuPage {
+    std::string name;        // the category
+    std::string parent;      // the page its row is on ("": the first page)
+    std::string description; // what its row says ("": "The page of <name> choices.")
+    bool counts = true;      // its row says how many of its features are on
+};
+
 struct MenuConfig {
     // The first page, in groups; a line is drawn between groups.
     std::vector<std::vector<MenuRow>> groups;
     std::vector<MenuFeature> features;
     std::vector<MenuCommand> commands;
+    // Pages that are under another page, or whose rows say something of their own. A page under another
+    // comes on its parent's page after the parent's commands and before its features, in this order.
+    std::vector<MenuPage> pages;
     // A feature's value now (by its place in `features`), and changing it
     std::function<int(size_t feature)> value;
     std::function<void(size_t feature, int value)> setValue;
@@ -101,7 +114,8 @@ public:
         return m_open;
     }
     // Buttons newly pressed (kMenu... bits): Up/Down choose, Confirm changes a row or goes into a page,
-    // Left/Right change a row with several values, Left leaves a page, Back closes.
+    // Left/Right change a row with several values, Left leaves a page (for the one it was reached from),
+    // Back closes.
     // Returns what the host is to do (with Slot() for Save and Load); the host closes the menu if that
     // went well. Resume and Back close it themselves.
     Chosen Buttons(unsigned pressed);
@@ -131,13 +145,17 @@ private:
         bool divider = false; // a line above it: the first of a group of rows
     };
     void Fill();
+    const MenuPage *PageOf(const std::string &name) const;
+    std::string Parent(const std::string &page) const;
+    bool Exists(const std::string &page) const;
+    void Leave();
     MenuConfig m_config;
     std::vector<MenuRow> m_first; // the first page's rows as given, groups one after another
     bool m_open = false;
     std::vector<Row> m_rows;
     std::string m_page;     // the category shown ("": the first page)
     int m_selected = 0;
-    int m_rootSelected = 0; // (where the first page was left)
+    std::vector<int> m_left; // (the rows the pages above this one were left on, the first page's first)
     int m_speed = 0;
     int m_slot = 1;
     std::string m_note;

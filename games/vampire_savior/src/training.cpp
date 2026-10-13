@@ -625,7 +625,7 @@ bool TrainingMode() {
     return FeatureOn("training_mode") || StageViewer();
 }
 
-// The Modes page's "Training mode" (modes.cpp)
+// "Training mode" on the menu's Alternative modes page (modes.cpp)
 void StartTraining(Machine &machine) {
     Start(machine);
 }
@@ -645,7 +645,7 @@ bool Booting() {
 void RegisterTraining() {
     Game &game = TheGame();
     AddHook(0x00AE7C, "ChooseStage", ChooseStage);
-    game.commands.push_back({"training_restart", "", "Start over",
+    game.commands.push_back({"training_restart", "Training", "Start over",
                              "In a training session: the round as it began, with the players where \"Start over at\" says. Backspace "
                              "or a gamepad's left shoulder does this while playing; the stick held as it is pressed chooses the place "
                              "(left, right: a corner; down: sides swapped; up: the middle).",
@@ -660,7 +660,7 @@ void RegisterTraining() {
                                  "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                                  "Fetus of God"}});
     game.features.push_back({"training_mode", "Training", "Training session",
-                             "The fight has no clock and nobody is knocked out. (\"Training mode\" on the Modes page switches this "
+                             "The fight has no clock and nobody is knocked out. (\"Training mode\" under Alternative modes switches this "
                              "on and takes the game to the character choice; Reset ends it.)",
                              kFeatureSession});
     game.features.push_back({"damage_readout", "Training", "Combo readout",

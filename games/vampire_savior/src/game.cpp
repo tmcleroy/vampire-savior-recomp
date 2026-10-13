@@ -22,7 +22,7 @@ void ModesFrame(Machine &machine);
 void ModesState(Archive &ar);
 
 void RegisterGame() {
-    RegisterModes(); // (first: its page is the menu's first)
+    RegisterModes();
     RegisterCheats();
     RegisterTraining();
     RegisterCollision();

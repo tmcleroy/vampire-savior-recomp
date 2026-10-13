@@ -33,8 +33,8 @@ ahead of time into C++ ([how it works](docs/PORT.md)).
 
 ## Training mode
 
-"Training mode" on the in-game menu's Modes page goes straight to the character choice with two
-players and into a fight with no clock that nobody loses.
+"Training mode", under "Alternative modes" at the top of the in-game menu, goes straight to the
+character choice with two players and into a fight with no clock that nobody loses.
 
 | Feature | What it does |
 | --- | --- |
@@ -59,7 +59,7 @@ gauge, infinite time). [docs/FEATURES.md](docs/FEATURES.md) has the whole list.
 
 ## Other modes
 
-The Modes page of the in-game menu also has:
+"Alternative modes" also has:
 
 - **Attract mode**: the game's own show on a loop, as a cabinet left alone plays it, with no coin
   to keep out: everything, the introduction only, or its eight demonstration fights one after

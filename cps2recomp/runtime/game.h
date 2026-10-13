@@ -51,9 +51,19 @@ enum : unsigned {
     kKeyExtra,   // Backslash; a gamepad's left trigger held with the left shoulder
 };
 
+// More about a page of the in-game menu than its name (a page is a category of features and commands), for
+// the pages that need it: a page under another page, or at the head of the menu.
+struct Page {
+    const char *name;        // the category
+    const char *parent;      // the page its row is on ("": the first page)
+    const char *description; // what its row says
+    bool top = false;        // on the first page: before everything else, not among the other pages
+};
+
 struct Game {
     std::vector<Feature> features;
     std::vector<Command> commands;
+    std::vector<Page> pages;
     void (*beforeFrame)(Machine &machine) = nullptr; // with the players' input set, before the game runs a frame
     void (*frame)(Machine &machine) = nullptr;       // after every frame the game ran
     void (*state)(Archive &ar) = nullptr;            // the game sources' own state, for save states

@@ -29,18 +29,63 @@ void Menu::SetSpeed(int speed) {
     m_speed = std::clamp(speed, 0, std::max(static_cast<int>(m_config.speeds.size()) - 1, 0));
 }
 
+const MenuPage *Menu::PageOf(const std::string &name) const {
+    for (const MenuPage &page : m_config.pages) {
+        if (page.name == name) {
+            return &page;
+        }
+    }
+    return nullptr;
+}
+
+std::string Menu::Parent(const std::string &page) const {
+    const MenuPage *of = PageOf(page);
+    return of ? of->parent : std::string();
+}
+
+// A page is there when something is on it: a feature, a command, or a page under it that is there
+bool Menu::Exists(const std::string &page) const {
+    if (page.empty()) {
+        return true;
+    }
+    if (std::any_of(m_config.features.begin(), m_config.features.end(), [&](const MenuFeature &f) { return f.category == page; }) ||
+        std::any_of(m_config.commands.begin(), m_config.commands.end(), [&](const MenuCommand &c) { return c.category == page; })) {
+        return true;
+    }
+    // (or a page under it has: looked at one level down, which is what a page of pages needs, and cannot go
+    // round for ever whatever the host has named as whose parent)
+    for (const MenuPage &under : m_config.pages) {
+        if (under.parent == page && under.name != page &&
+            (std::any_of(m_config.features.begin(), m_config.features.end(), [&](const MenuFeature &f) { return f.category == under.name; }) ||
+             std::any_of(m_config.commands.begin(), m_config.commands.end(), [&](const MenuCommand &c) { return c.category == under.name; }))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Back to the page this one was reached from, on the row it was left on
+void Menu::Leave() {
+    m_page = Parent(m_page);
+    m_selected = m_left.empty() ? 0 : m_left.back();
+    if (!m_left.empty()) {
+        m_left.pop_back();
+    }
+    if (m_page.empty()) {
+        m_left.clear();
+    }
+    Fill();
+}
+
 // The rows of the page being shown
 void Menu::Fill() {
     m_rows.clear();
     m_first.clear();
     // (a page that is no longer there: the first page)
-    if (!m_page.empty()) {
-        const bool feature = std::any_of(m_config.features.begin(), m_config.features.end(), [&](const MenuFeature &f) { return f.category == m_page; });
-        const bool command = std::any_of(m_config.commands.begin(), m_config.commands.end(), [&](const MenuCommand &c) { return c.category == m_page; });
-        if (!feature && !command) {
-            m_page.clear();
-            m_selected = m_rootSelected;
-        }
+    if (!m_page.empty() && !Exists(m_page)) {
+        m_page.clear();
+        m_selected = m_left.empty() ? 0 : m_left.front();
+        m_left.clear();
     }
     if (m_page.empty()) {
         for (const std::vector<MenuRow> &group : m_config.groups) {
@@ -65,18 +110,33 @@ void Menu::Fill() {
                 case MenuRow::Action: add({kRowAction, index, ""}); break;
                 case MenuRow::Quit: add({kRowQuit, index, ""}); break;
                 case MenuRow::Resume: add({kRowResume, index, ""}); break;
+                case MenuRow::Page:
+                    if (!row.title.empty() && Exists(row.title)) {
+                        add({kRowPage, index, row.title});
+                    }
+                    break;
                 case MenuRow::Pages: {
                     for (size_t i = 0; i < m_config.commands.size(); i++) {
                         if (m_config.commands[i].category.empty()) {
                             add({kRowCommand, i, ""});
                         }
                     }
-                    // A page for each category, in the order they first come up
+                    // A page for each category, in the order they first come up: but for the pages that are
+                    // under another page, and those the host has given a row of their own
                     std::vector<std::string> pages;
+                    for (const std::vector<MenuRow> &others : m_config.groups) {
+                        for (const MenuRow &other : others) {
+                            if (other.kind == MenuRow::Page) {
+                                pages.push_back(other.title);
+                            }
+                        }
+                    }
                     auto addPage = [&](const std::string &category) {
                         if (!category.empty() && std::find(pages.begin(), pages.end(), category) == pages.end()) {
                             pages.push_back(category);
-                            add({kRowPage, 0, category});
+                            if (Parent(category).empty()) {
+                                add({kRowPage, 0, category});
+                            }
                         }
                     };
                     for (const MenuFeature &feature : m_config.features) {
@@ -94,6 +154,11 @@ void Menu::Fill() {
         for (size_t i = 0; i < m_config.commands.size(); i++) {
             if (m_page == m_config.commands[i].category) {
                 m_rows.push_back({kRowCommand, i, ""});
+            }
+        }
+        for (const MenuPage &under : m_config.pages) {
+            if (under.parent == m_page && under.name != m_page && Exists(under.name)) {
+                m_rows.push_back({kRowPage, 0, under.name});
             }
         }
         for (size_t i = 0; i < m_config.features.size(); i++) {
@@ -158,11 +223,9 @@ Menu::Chosen Menu::Buttons(unsigned pressed) {
         return {};
     }
     if (!press) {
-        // (Left on a page's other rows: back to the first page)
+        // (Left on a page's other rows: back to the page it was reached from)
         if ((pressed & kMenuLeft) && !m_page.empty()) {
-            m_page.clear();
-            m_selected = m_rootSelected;
-            Fill();
+            Leave();
         }
         return {};
     }
@@ -174,16 +237,12 @@ Menu::Chosen Menu::Buttons(unsigned pressed) {
     case kRowResume: m_open = false; break;
     case kRowCommand: return {Chosen::Command, static_cast<int>(row.index)};
     case kRowPage:
-        m_rootSelected = m_selected;
+        m_left.push_back(m_selected);
         m_page = row.page;
         m_selected = 0;
         Fill();
         break;
-    case kRowBack:
-        m_page.clear();
-        m_selected = m_rootSelected;
-        Fill();
-        break;
+    case kRowBack: Leave(); break;
     default: break;
     }
     return {};
@@ -278,9 +337,10 @@ void Menu::Draw(uint32_t *pixels, int width, int height) const {
             title = row.page;
             value = ">";
             valueColor = dim;
-            // (what is on the page, and how much of it is on)
+            // (what is on the page, and how much of it is on, unless the page is one that does not say)
+            const MenuPage *page = PageOf(row.page);
             int onCount = 0;
-            for (size_t f = 0; f < m_config.features.size(); f++) {
+            for (size_t f = 0; f < m_config.features.size() && (!page || page->counts); f++) {
                 if (row.page == m_config.features[f].category) {
                     onCount += m_config.value && m_config.value(f) != 0;
                 }
@@ -289,12 +349,12 @@ void Menu::Draw(uint32_t *pixels, int width, int height) const {
                 value = std::to_string(onCount) + " on  >";
                 valueColor = on;
             }
-            rowDescription = "The page of " + row.page + " choices.";
+            rowDescription = page && !page->description.empty() ? page->description : "The page of " + row.page + " choices.";
             break;
         }
         case kRowBack:
             title = "Back";
-            rowDescription = "To the first page (Left does the same).";
+            rowDescription = Parent(m_page).empty() ? "To the first page (Left does the same)." : "To the " + Parent(m_page) + " page (Left does the same).";
             break;
         case kRowFeature: {
             const MenuFeature &feature = m_config.features[row.index];
