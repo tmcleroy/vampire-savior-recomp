@@ -94,7 +94,9 @@ namespace {
         for (int n = 0; n < rows.floorSame; n++, at += 2) {
             SetMem16(c, at, row);
         }
-        // (the wall, upwards)
+        // (the wall, upwards. Its rows are slower than the camera: in a wide picture, slower again: stage.h)
+        const uint32_t floorStep = c.d[3];
+        c.d[3] = static_cast<uint32_t>(WideLag(static_cast<int32_t>(c.d[3])));
         at = own;
         for (int n = 0; n < rows.wall; n++) {
             SetRam32(record + kRowsAbove, Ram32(record + kRowsAbove) - c.d[3]);
@@ -110,6 +112,7 @@ namespace {
         for (int n = 0; n < rows.wallSame; n++) {
             SetMem16(c, at -= 2, row);
         }
+        c.d[3] = floorStep;
         SetLow16(c.d[0], row);
         c.d[1] = 0xFFFF;
         c.a[1] = at;

@@ -428,6 +428,55 @@ namespace {
         Call(c, OutOfView(c, 0x1BF, false) ? 0x07DF82 : HookAt(0x07DF54));
     }
 
+    // --- pieces that work their own place out from the camera's ---
+    //
+    // Three scripts' pieces are in front of the stage or behind it by a rate of their own: each frame
+    // their place is where they started and a part of the camera's travel from its start (the big thing
+    // under the helicopter on the Tower of Arrogance is one). The camera's travel across is taken as
+    // WideLag has it (stage.h), so that in a wide picture they keep step with the planes.
+    int16_t TravelAcross() {
+        return static_cast<int16_t>(WideLag(static_cast<int16_t>(Ram16(kCameraRecord + kLayerStartX) - Ram16(kCameraX))));
+    }
+    int16_t TravelUp() {
+        return static_cast<int16_t>(Ram16(kCameraRecord + kLayerStartY) - Ram16(kCameraY));
+    }
+    constexpr uint32_t kStartedX = 0x40, kStartedY = 0x44; // words: where the piece started
+    // (these pieces ride no scroll screen: their place is in the picture, counted from the board's left
+    // edge. A wide picture's left edge is 64 left of that with the camera at its start and at the same
+    // place with the camera at its left end: where the board's edge would be is that much to the side.)
+    int16_t BoardEdge(uint32_t piece) {
+        if (Ram8(piece + kIsRiding)) {
+            return 0;
+        }
+        return static_cast<int16_t>(static_cast<int16_t>(Ram16(kCameraRecord + kLayerStartX) - Ram16(kCameraX)) - TravelAcross());
+    }
+
+    // 0803BA (script 46, Tower of Arrogance): a quarter of the camera's travel across the other way, and
+    // all of its travel up
+    void PlaceAQuarter(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        SetRam16(piece + kX, static_cast<uint16_t>((TravelAcross() >> 2) + Ram16(piece + kStartedX) + BoardEdge(piece)));
+        SetRam16(piece + kY, static_cast<uint16_t>(TravelUp() + Ram16(piece + kStartedY)));
+        PieceDrawn(c);
+    }
+    // 08042A (script 47, Deserted Chateau): three quarters, both ways
+    void PlaceThreeQuarters(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        const int16_t across = TravelAcross(), up = TravelUp();
+        SetRam16(piece + kX, static_cast<uint16_t>(across - (across >> 2) + Ram16(piece + kStartedX) + BoardEdge(piece)));
+        SetRam16(piece + kY, static_cast<uint16_t>(up - (up >> 2) + Ram16(piece + kStartedY)));
+        PieceDrawn(c);
+    }
+    // 080066 (script 43, Fetus of God): a sixteenth more than the camera's travel, both ways
+    void PlaceASixteenthMore(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        const int16_t across = TravelAcross(), up = TravelUp();
+        SetRam16(piece + kX, static_cast<uint16_t>(across + (across >> 4) + Ram16(piece + kStartedX) + BoardEdge(piece)));
+        SetLow16(c.d[1], up >> 4);
+        SetLow16(c.d[0], up + (up >> 4) + Ram16(piece + kStartedY));
+        SetRam16(piece + kY, static_cast<uint16_t>(c.d[0]));
+    }
+
     // --- other pieces that are two by turns ---
     //
     // Three more scripts have a record that is one thing left of a place of the camera's and another right
@@ -569,8 +618,11 @@ void RegisterPieces() {
     AddRewrite(0x07FE26, "Piece39InView", WhileInView<0x1E0, true, HookAt(0x07FE2E)>, kFreeFlags, 30);
     AddRewrite(0x0808A6, "Piece55InView", WhileInView<0x1E8, true, HookAt(0x0808AE)>, kFreeFlags, 30);
     AddRewrite(0x07FB22, "Piece34InView", WhileInView<0x228, false, HookAt(0x07FB2A)>, kFreeFlags, 30);
-    AddRewrite(0x0803B0, "Piece46InView", WhileLeftOf<0x278, HookAt(0x0803BA)>, kFreeFlags, 30);
-    AddRewrite(0x080420, "Piece47InView", WhileLeftOf<0x1E0, HookAt(0x08042A)>, kFreeFlags, 30);
+    AddRewrite(0x0803B0, "Piece46InView", WhileLeftOf<0x278, 0x0803BA>, kFreeFlags, 30);
+    AddRewrite(0x080420, "Piece47InView", WhileLeftOf<0x1E0, 0x08042A>, kFreeFlags, 30);
+    AddRewrite(0x0803BA, "Piece46Place", PlaceAQuarter, kFreeFlags, 80);
+    AddRewrite(0x08042A, "Piece47Place", PlaceThreeQuarters, kFreeFlags, 110);
+    AddRewrite(0x080066, "Piece43Place", PlaceASixteenthMore, kFreeFlags, 110);
     AddRewrite(0x07F26A, "Piece26InView", FloaterFrame, kFreeFlags, 30);
     AddRewrite(0x07DF4C, "Piece10InView", RunnerFrame, kFreeFlags, 30);
 }

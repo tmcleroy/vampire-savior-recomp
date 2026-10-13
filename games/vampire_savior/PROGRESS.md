@@ -124,9 +124,8 @@ What is there:
   stages, where a piece is drawn sooner; on Iron Horse, Iron Terror much differs and has not been
   looked into).
 
-Known, and why it stopped here: at a stage's very ends the planes behind (which move less than
-the camera) show up to 64 columns that are not painted, and some stage pieces come in late at the
-wide picture's edge (each stage's script has its own tests of the camera's place).
+(What was known when it stopped here, the planes' unpainted columns at a stage's ends and the pieces
+coming in late, is dealt with below.)
 
 **What was tried on top of this and taken out again** (commits 4ced3aa to 368d76e on the branch
 `widescreen`, the owner's playing found each one glitching; all of it was hooks from outside into
@@ -240,6 +239,24 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   script 29 on War Agony (it waits on the piece that made it, not on the camera) and script 41 on the
   train (no test of the camera in it). Pictures of both ends of Concrete Cave, Tower of Arrogance and
   Abaraya were looked at; none of this has been played.
+
+- What is slower than the camera is slower again in a wide picture (`WideLag`, `stage.h`): the lag of a
+  plane behind the camera, and the step of the wall's rows of the row scroll table, are greater in the
+  proportion of the board's camera's travel to the wide one's (192 to 128; 288 to 224 on Fetus of God).
+  So with the wide camera at its end the wide picture's edge is where the board's picture's edge is with
+  its camera at its end, and nothing is seen beyond its painting. Before, the wall and the planes behind
+  ran up to 64 columns past their painting at a stage's ends: black bands where the viewer's infinite
+  stage puts two stages side by side (the owner saw them), and at the ends of a fight's stage. The
+  floor's rows, which are faster than the camera, are as they were. Found on the way: the word at
+  `398(A5)` that the planes add to the camera's travel is the wall's top row's lag (the row table's
+  record `+18`), so planes at "the whole" of it go as the top of the wall does.
+- Scripts 46, 47 and 43 place their piece in the picture itself (it rides no scroll screen) from the
+  camera's travel. Their placing is written again; the travel is taken as `WideLag` has it and the place
+  counted from where the board's picture's edge would be (script 46 is the building under the
+  helicopter on the Tower of Arrogance, which stood 28 columns off at the stage's left end).
+- Checked: the outermost column of the viewer's picture at both ends of all twelve stages, board against
+  wide, is the same but for moving colours and the floor; 450 frames of the infinite stage (every 20th
+  of 9,000, fast) have no column that is black above the floor, where 24 of 130 had before.
 
 Open: in the same made-up play the pieces' animations step on 75% of the frames with the board's picture
 and 62% with the wide one, the same before and after the rewrites. The fights are not the same fights
