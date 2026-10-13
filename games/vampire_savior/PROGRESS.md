@@ -123,10 +123,12 @@ played in it, the same day.)
 - The camera's ends in its record are 320 and 576 (256 and 640 on the board), so the wide
   picture ends where the stage does. (If the camera is ever nearer an end than that, the stage is
   drawn to the side by what is missing: the first version's rule, still there.)
-- What the game asks "is it in the picture?" of, in routines all its objects share, is asked of
-  the wide one: a thing thrown is done away with outside it (`0154AC`), a piece of the stage is
-  drawn inside it (`015512`, `01552E`) or while the camera is to one side of a place (`0154E2`,
-  `0154F4`). Each is one comparison, made by a hook with the wider numbers.
+- What the game asks "is it in the picture?" of, in routines all its objects share: a thing
+  thrown is done away with outside the wide picture and a margin (`0154AC`: one comparison, made
+  by a hook with the wider numbers). A piece of the stage is always drawn: the comparisons that
+  would leave it out (`015512`, `01552E`; `0154E2` and `0154F4`, by the camera's place) always say
+  it is in. Asked of the wider picture, some pieces still came in late (the dancers on the left of
+  Feast of the Damned): they ride on planes that move less than the camera.
 - Survival, the endless battle, the ring out and the viewer's infinite stage are wide: every
   machine's frame is as wide as the port's that frame, and the pictures are put together at that
   width; the ring out's edge is the wide picture's.

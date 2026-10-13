@@ -184,12 +184,15 @@ namespace {
 
 // The things on a stage. The game asks of each whether it is in the picture, in a few routines all its
 // objects share, and what is not is not drawn, or is done away with. Each asks by one comparison, which is
-// made here instead when fights are played in the wide picture: the same question of a picture 64 wider
-// on each side.
+// made here instead when fights are played in the wide picture. A thing thrown is asked the same question
+// of a picture 64 wider on each side. A piece of the stage is not asked at all: it is always drawn. (The
+// pieces ride on the planes behind, which move less than the camera, and some are wide: asked of a wider
+// picture, some still came in late. The owner's idea, and nothing is lost by it: what is outside the
+// picture is not seen, and a stage has few pieces.)
 namespace {
     // (where the 68000 goes on after each of those comparisons: named so that there is translated code from
     // there, and the interpreter is not needed)
-    [[maybe_unused]] constexpr uint32_t kGoesOnAt[] = {HookAt(0x0154B0), HookAt(0x015516), HookAt(0x015532), HookAt(0x0154E6), HookAt(0x0154F8)};
+    [[maybe_unused]] constexpr uint32_t kGoesOnAt[] = {HookAt(0x0154B0), HookAt(0x015516), HookAt(0x015532)};
     // What `cmp.w` leaves in the flags, of `value` less `than`; the 68000 goes on after the instruction
     // (four bytes long, at `at`: a hook is not told where the 68000 is)
     bool Compared(M68K &c, uint32_t at, uint32_t value, uint32_t than) {
@@ -202,19 +205,26 @@ namespace {
         c.cycles += 8;
         return true;
     }
-    // 0154AC, 015512, 01552E: `cmpi.w #width,d1`, where d1 is how far right of the picture's left edge the
-    // thing is, and a margin (a thing thrown is done away with outside it; a piece is not drawn)
-    template <uint32_t kAt, uint32_t kWidth>
-    bool InPicture(M68K &c) {
-        return g_play && Compared(c, kAt, c.d[1] + kSide, kWidth + 2 * kSide);
+    // 0154AC: `cmpi.w #$240,d1`, where d1 is how far right of the picture's left edge a thing thrown is,
+    // and a margin of 96: outside that it is done away with
+    bool ThrownInPicture(M68K &c) {
+        return g_play && Compared(c, 0x0154AC, c.d[1] + kSide, 0x240 + 2 * kSide);
     }
-    // 0154E2, 0154F4: `cmp.w camera,d1`. A piece of the stage that is only drawn while the camera is left
-    // of a place (the piece's right edge), or right of one (its left edge less the picture's width)
-    bool WhileLeftOf(M68K &c) {
-        return g_play && Compared(c, 0x0154E2, c.d[1], Ram16(kCameraX) - kSide);
+    // 015512, 01552E: `cmpi.w #width,d1` in the two routines that say whether a piece of the stage is drawn
+    // (by how far across the picture it is; how far up is asked after). Always: as if it were at the edge.
+    template <uint32_t kAt>
+    bool PieceInPicture(M68K &c) {
+        return g_play && Compared(c, kAt, 0, 1);
     }
-    bool WhileRightOf(M68K &c) {
-        return g_play && Compared(c, 0x0154F4, c.d[1], Ram16(kCameraX) + kSide);
+    // 0154E2, 0154F4: `cmp.w camera,d1` for a piece that is only drawn while the camera is left of a place,
+    // or right of one. Always: on to where the routine goes when it is (015696).
+    bool PieceWhile(M68K &c) {
+        if (!g_play) {
+            return false;
+        }
+        c.pc = 0x015696;
+        c.cycles += 18;
+        return true;
     }
 } // namespace
 
@@ -293,11 +303,11 @@ void RegisterWidescreen() {
     AddHook(kKeepsInDone, "KeepsInDone", Widen);
     AddHook(kKeepsBothIn, "KeepsBothIn", KeepBothIn);
     AddHook(kKeepsBothInDone, "KeepsBothInDone", Widen);
-    AddHook(0x0154AC, "ThrownInPicture", InPicture<0x0154AC, 0x240>);
-    AddHook(0x015512, "PieceInPicture", InPicture<0x015512, 0x280>);
-    AddHook(0x01552E, "PieceInPicture2", InPicture<0x01552E, 0x200>);
-    AddHook(0x0154E2, "PieceWhileLeftOf", WhileLeftOf);
-    AddHook(0x0154F4, "PieceWhileRightOf", WhileRightOf);
+    AddHook(0x0154AC, "ThrownInPicture", ThrownInPicture);
+    AddHook(0x015512, "PieceInPicture", PieceInPicture<0x015512>);
+    AddHook(0x01552E, "PieceInPicture2", PieceInPicture<0x01552E>);
+    AddHook(0x0154E2, "PieceWhileLeftOf", PieceWhile);
+    AddHook(0x0154F4, "PieceWhileRightOf", PieceWhile);
     TheGame().widestPicture = [] { return Video::kWidth + (FeatureOn("widescreen") ? 2 * kSide : 0); };
     // (not in the Enhanced preset: it shows more of the stage than the board does, and a player who wants the
     // game as it is played in competition must not get that without asking)
