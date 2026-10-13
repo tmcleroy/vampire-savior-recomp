@@ -1968,6 +1968,90 @@ namespace {
         }
     }
 
+    // 07F052 (script 24, Abaraya): a piece whose animation is chosen by its step within the frame (the
+    // step halved, and ten). At a frame with its spare byte set it takes its next step: from the first,
+    // one time in thirty-two the second; or the last, when both players' health is below 48 and one of
+    // them is in a certain state; from the others, the step the frame's event names (from the second and
+    // third, when there is an event, only one time in four). The last step, with the camera left of 264,
+    // copies in a set of colours and goes back to the first, for good.
+    constexpr uint32_t kScript24Colours[2] = {0x3A1420, 0x3A2F40};
+    constexpr uint32_t kPlayerState = 0x02001200; // a player's kState but for its last byte
+    void Script24(M68K &c) {
+        static constexpr Steps kSteps = {0x07F052, {0x07F066, 0x07F07C, 0x07F19E, 0x07F19E}};
+        static constexpr uint32_t kInnerAt[6] = {0x07F0A6, 0x07F126, 0x07F126, 0x07F150, 0x07F150, 0x07F168};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        // (the animation for the step within the frame that D0's low byte names)
+        auto become = [&] {
+            SetRam8(piece + kInner, c.d[0]);
+            SetLow8(c.d[0], ((c.d[0] & 0xFF) >> 1) + 0x0A);
+            SetStageAnimation(c);
+        };
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            c.d[0] = 0;
+            SetRam8(piece + kHalf, 0);
+            SetLow8(c.d[0], 0x0A);
+            SetStageAnimation(c);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                const int inner = InnerStepOf(c, 0x07F09A, kInnerAt);
+                if (inner == 10) {
+                    if (Ram16(kCameraX) < 0x108) {
+                        SetRam8(piece + kHalf, 0xFF);
+                        SetLow16(c.d[0], Ram16(Var(c, kColoursOf)));
+                        c.a[0] = kScript24Colours[((c.d[0] & 0xFFFF) >> 2) & 1];
+                        c.a[1] = 0x90C2E0;
+                        c.d[7] = 0;
+                        Call(c, kCopyColours);
+                        c.d[0] = 0;
+                        become();
+                    }
+                } else if (Ram8(piece + kSpare)) {
+                    SetRam8(piece + kSpare, 0);
+                    if (inner == 0) {
+                        Call(c, kRandom);
+                        SetLow16(c.d[0], c.d[0] & 0x1F);
+                        SetLow8(c.d[0], (c.d[0] & 0xFFFF) == 31 ? 2 : 0);
+                        if (!Ram8(piece + kHalf) && !Ram8(Var(c, kScript43Never)) && Ram16(Player(0) + kHealth) < 0x30 &&
+                            Ram16(Player(1) + kHealth) < 0x30) {
+                            c.d[1] = 0xFFFFFF00;
+                            c.d[2] = kPlayerState;
+                            c.d[3] = Ram32(Player(0) + kState) & c.d[1];
+                            if (c.d[3] != c.d[2]) {
+                                c.d[3] = Ram32(Player(1) + kState) & c.d[1];
+                            }
+                            if (c.d[3] == c.d[2]) {
+                                c.d[0] = 0x0A;
+                            }
+                        }
+                        become();
+                    } else if (inner >= 6) {
+                        SetLow8(c.d[0], Ram8(piece + kEvent));
+                        become();
+                    } else {
+                        bool goes = true;
+                        if (Ram8(piece + kEvent)) {
+                            Chance(c, true);
+                            goes = !(c.d[0] & 0xFFFF);
+                        }
+                        if (goes) {
+                            SetLow8(c.d[0], Ram8(piece + kEvent));
+                            become();
+                        }
+                    }
+                }
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
     // The scripts, by a record's kScript: where each is in the game's program
     constexpr uint32_t kScripts[58] = {
         0x07D354, 0x07D3A2, 0x07D3F6, 0x07D4BA, 0x07D534, 0x07D59C, 0x07D710, 0x07DDD8, 0x07DE32, 0x07DECE, 0x07DF1E, 0x07DF9C,
@@ -2034,6 +2118,7 @@ void RegisterPieces() {
     AddRewrite(0x07D4BA, "PieceLady", Lady, kFreeFlags, 166);
     AddRewrite(0x07D534, "PieceThrower", Thrower, kFreeFlags, 134);
     AddRewrite(0x07D240, "AllPieces", AllPieces, kFreeFlags);
+    AddRewrite(0x07F052, "Script24", Script24, kFreeFlags, 150);
     AddRewrite(0x07FCF0, "Script38", Script38, kFreeFlags, 150);
     AddRewrite(0x07DF9C, "Script11", Script11, kFreeFlags, 150);
     AddRewrite(0x07D59C, "Script5", Script5, kFreeFlags, 200);

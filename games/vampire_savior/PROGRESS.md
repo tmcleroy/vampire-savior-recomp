@@ -259,8 +259,9 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   of 9,000, fast) have no column that is black above the floor, where 24 of 130 had before.
 
 - Piece scripts written again whole so far (`pieces.cpp`), each checked on its stage: 0-5, 7-13, 15,
-  21, 22, 25, 26, 29-39, 41, 43, 44, 46-48, 51-57 (47 of the 58). The game's own code still: 6, 14, 16-18,
-  24, 27, 28, 40, 45, and 19, 20, 23, 42, 49, 50, which no stage was seen to use. The check is of the
+  21, 22, 24-26, 29-39, 41, 43, 44, 46-48, 51-57 (48 of the 58). The game's own code still: 6, 14, 16-18,
+  27, 28, 40, 45 (the longer ones: several run a second animation inside the record through `09190A`
+  and `09192A`, or move by `07E672` and `07E77E`, which are not read yet), and 19, 20, 23, 42, 49, 50, which no stage was seen to use. The check is of the
   paths the made-up play reached: a script's rarer steps (script 11's second and third animations,
   script 38's events) may not have been among them. The two pieces the finder still names are explained
   by their scripts: 41 (the train) is not there until the round is on, and 29 (War Agony) waits, not
@@ -272,6 +273,11 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   move by `015466`. From A5: `107` not zero once the round's fighting has begun, `B4` bit 0 turning over
   each frame (pieces drawn every other frame: Vanity Paradise's flames, the train's), `10B` ends Green
   Scream's script 32.
+
+- Script 11 (Concrete Cave) was asleep with the camera left of `1D0`; written again, it is awake in a
+  wide picture whenever it is near the picture, as the other such pieces are. The piece it makes
+  (script 51) is drawn only on the frames of 11's animation that say so, so with 11 awake the finder
+  now names it at some places of the camera: that is the piece working, not a piece missed.
 
 Open: in the same made-up play the pieces' animations step on 75% of the frames with the board's picture
 and 62% with the wide one, the same before and after the rewrites. The fights are not the same fights
