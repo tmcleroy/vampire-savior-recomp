@@ -15,7 +15,23 @@ namespace cps2recomp {
 
 namespace {
     using namespace vsav;
+    constexpr uint16_t kOwnRow = 0x7B0, kMiddle = 0xC0; // (rows.cpp)
+} // namespace
 
+bool AcrossInPicture(M68K &c, uint32_t object, int &across) {
+    const uint8_t rides = Ram8(object + kIsRiding);
+    if (rides != 4 && rides != 8 && rides != 12) {
+        return false;
+    }
+    across = static_cast<int16_t>(Ram16(object + kX) - Ram16(kLayerRecords[rides >> 2] + kLayerShownX));
+    if (rides == 8 && Ram16(object + 0x24)) {
+        const uint32_t row = Ram32(Var(c, kRowsTable)) + static_cast<uint32_t>(static_cast<int16_t>(kOwnRow - Ram16(object + 0x24) * 2));
+        across -= static_cast<int16_t>(Mem16(c, row) - kMiddle);
+    }
+    return true;
+}
+
+namespace {
     // More of an object's record
     constexpr uint32_t kDrawn = 0x01;    // byte: 1 when the object is in the picture this frame
     constexpr uint32_t kKind = 0x08;     // byte: what it is, for which list it goes on (kIsThrown: 0 for a player)
@@ -31,7 +47,7 @@ namespace {
     // The board's picture, and the margins about it inside which a thing is still drawn
     constexpr int kMarginLeft = 0x40, kMarginTop = 0x40, kAcross = 0x200, kAcrossWide = 0x280, kUp = 0x180;
     constexpr int kThrownMarginLeft = 0x60, kThrownAcross = 0x240;
-    constexpr uint16_t kOwnRow = 0x7B0, kMiddle = 0xC0; // (rows.cpp)
+    constexpr int kPictureAcross = 0x180;
 
     // 01559E. The record of the scroll screen the object rides on, in A3
     void PlaneOf(M68K &c) {
@@ -139,6 +155,13 @@ namespace {
         }
     }
 
+    // Is the object within kNear of the board's picture, across, where it is drawn?
+    constexpr int kNear = 192;
+    bool NearPicture(M68K &c, uint32_t object) {
+        int across = 0;
+        return AcrossInPicture(c, object, across) && across >= -kNear && across < kPictureAcross + kNear;
+    }
+
     // 0154CC. A piece of the stage that is drawn only while the camera is to one side of a place: left of
     // the long's first word; or, that word being below nothing, right of its second (both below nothing:
     // always). Such a piece is one of two that share a part of the stage's memory for objects' pictures.
@@ -161,6 +184,12 @@ namespace {
         } else {
             c.d[1] = places;
             drawn = rightOf < static_cast<uint16_t>(camera + side);
+        }
+        // (the places are for the board's picture and take a piece to go by as the camera does. One that
+        // rides a plane or a row going more slowly is still in a wide picture when they say it has left:
+        // there, a piece is drawn too while it is itself anywhere near the picture)
+        if (!drawn && side && NearPicture(c, object)) {
+            drawn = true;
         }
         if (drawn) {
             c.d[0] = 0;

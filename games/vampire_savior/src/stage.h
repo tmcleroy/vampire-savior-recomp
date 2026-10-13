@@ -32,4 +32,9 @@ constexpr uint32_t kLayerRecords[4] = {0x000030, vsav::kBackLayer, vsav::kCamera
 void PlaceLayerAcross(M68K &c, const Layer &layer);
 void PlaceLayerUp(M68K &c, const Layer &layer);
 
+// How far right of the board's picture's left edge the object is, where it is drawn (the place the list's
+// making gives it: its scroll screen's, and its row's when it rides one). False for an object that rides
+// no scroll screen. Nothing of the CPU's is changed.
+bool AcrossInPicture(M68K &c, uint32_t object, int &across);
+
 } // namespace cps2recomp
