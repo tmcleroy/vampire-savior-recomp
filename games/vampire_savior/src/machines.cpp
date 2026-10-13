@@ -149,7 +149,7 @@ void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &
     machine.video.markObjects = false;
     g_wanted = MatchWanted();
     g_camera = CameraWanted();
-    WideForSpare(machine);
+    WideForSpare(machine, spare.planes);
     before(machine);
     machine.RunFrame();
     if (after) {
@@ -175,7 +175,7 @@ void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &
     machine.video.layerMask = layers;
     machine.video.markObjects = mark;
     machine.video.wide = wide;
-    WideForPort(machine);
+    WideForPort(machine, spare.planes);
     g_wanted = wanted;
     g_camera = camera;
 }
@@ -184,6 +184,7 @@ void Promote(Machine &machine, Spare &spare) {
     if (!spare.state.empty()) {
         Archive ar(spare.state, false);
         machine.Serialize(ar);
+        WidePromoted(spare.planes);
     }
     spare.Clear();
 }

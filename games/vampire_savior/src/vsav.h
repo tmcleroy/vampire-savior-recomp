@@ -39,6 +39,9 @@ constexpr int kStages = 12; // in the order of their numbers: Feast of the Damne
 // the stage is made); a block is 8 x 8 words in the ROM, down then across, each the number of a 32-pixel
 // cell; a cell is 4 x 4 tiles, down then across, two words a tile as the map has them.
 constexpr uint32_t kBackLayer = 0xFF8200, kLayerDrawnAsItGoes = 0x03, kLayerX = 0x20;
+// (the three planes' records follow one another: 8-, 16-, 32-pixel tiles; +10 and +14 are where the plane is
+// shown, across and up, which is what an object riding on it is placed against)
+constexpr uint32_t kLayerSize = 0x80, kLayerShownX = 0x10, kLayerShownY = 0x14;
 constexpr uint32_t kBackPlan = 0xFF4302, kBackBlocks = 0x35AD18, kBackCells = 0x35C918;
 // Who is playing: bit 0 player 1, bit 1 player 2
 constexpr uint32_t kPlayersIn = 0xFF808D;

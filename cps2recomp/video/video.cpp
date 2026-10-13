@@ -76,6 +76,9 @@ void Video::LatchObjects(const uint8_t *objectRam) {
             break;
         }
     }
+    if (objectsTaken) {
+        objectsTaken(m_objects, m_lastObject);
+    }
 }
 
 // One scroll screen's pixels on a raster line. which: 0 (8-pixel tiles), 1 (16), 2 (32).
@@ -190,7 +193,7 @@ void Video::DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const
         const uint16_t colour = static_cast<uint16_t>((attr & 0x1F) * 16);
         const uint32_t mask = masks[level] | 0x80000000u;
         // (where the first column drawn is in the object's own count across, which wraps at 1024)
-        const int first = kWide ? kFirstColumn - wide.side - (wide.object ? wide.object(code, attr) : 0) - 16 : 0;
+        const int first = kWide ? kFirstColumn - wide.side - (wide.object ? wide.object(code, attr, i / 4) : 0) - 16 : 0;
         for (int ty = 0; ty < down; ty++) {
             const int sy = (y + ty * 16 + yOffset) & 0x3FF;
             if (rasterLine < sy || rasterLine >= sy + 16) {

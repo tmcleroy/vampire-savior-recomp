@@ -127,8 +127,26 @@ played in it, the same day.)
   thrown is done away with outside the wide picture and a margin (`0154AC`: one comparison, made
   by a hook with the wider numbers). A piece of the stage is always drawn: the comparisons that
   would leave it out (`015512`, `01552E`; `0154E2` and `0154F4`, by the camera's place) always say
-  it is in. Asked of the wider picture, some pieces still came in late (the dancers on the left of
-  Feast of the Damned): they ride on planes that move less than the camera.
+  it is in.
+- The stages' own scripts (`07D4xx`-`080Axx`) compare the camera with a place too. Eleven such
+  comparisons only draw or move a piece while the camera is on one side (`07DF4C`, `07E05E`,
+  `07E0BA`, `07F26E`, `07F896`, `07FB22`, `07FD4A`, `07FE26`, `0803B4`, `080424`, `0808A6`): they
+  are answered the way that keeps the piece. Four scripts keep two pieces in one record, which is
+  the left one while the camera is left of a place and the right one otherwise (`07D438`: Feast
+  of the Damned's dancers and a piece on the right; `07DE78`, `0809A6`, `080A20`): in the wide
+  picture both can be seen, so the piece the record is not is drawn from the entries the game
+  last put in the object list for it, placed against its plane (`Video::objectsTaken`). The
+  dancers move, so their record is kept the dancers once the other piece has been seen; the
+  other three pairs do not move. Seen in a pan of each stage; the three other pairs not looked
+  for one by one.
+- The planes behind are kept inside what the board shows of them, each by how far it travels
+  (`kTravel`, seen in the planes' records): a plane goes with the camera until 64 more columns
+  on a side would show where nothing was painted, and stops there. (Before this the backdrop's
+  colour showed in a strip at a stage's end on some stages, and where two stages meet in the
+  endless battle's scroll.) A piece of the stage rides on one of the planes and is drawn to the
+  side with it: the game says which plane as it works out the piece's place (`01BBC2`, `01BC3A`,
+  by the byte at `+0C` of its record; `01BC88` for the panel), and hooks there note it for the
+  entries of the object list that follow. Each machine a mode keeps has its own note.
 - Survival, the endless battle, the ring out and the viewer's infinite stage are wide: every
   machine's frame is as wide as the port's that frame, and the pictures are put together at that
   width; the ring out's edge is the wide picture's.
@@ -142,9 +160,8 @@ played in it, the same day.)
 - Known, not done: each character's own code that knows the board's width (helpers and things
   that come in from the picture's edge, moves that go to an edge: dozens of places with 384,
   416 or 448 in them) still uses the board's, so such a thing comes in 64 columns inside the wide
-  picture's edge. The planes behind move less than the camera, so the view shows up to 64 columns
-  of them that the board never shows; on the desert stage the tent ends about 30 columns short of
-  the picture's right edge at some places of the camera.
+  picture's edge. On the two planes that travel less than 128 (the desert's), the view shows a few
+  columns more than the board ever does (25 and 7 on each side); nothing missing was seen there.
 
 ## Modes (2026-10-12)
 

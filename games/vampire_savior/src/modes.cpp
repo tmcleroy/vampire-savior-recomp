@@ -56,6 +56,7 @@ namespace {
         int32_t slide = 0;       // how far the next stage has come into the picture, in 256ths of a pixel
     } g;
     std::vector<uint8_t> g_other;      // the machine of the stage that comes next, as a save state
+    WidePlanes g_otherPlanes;          //   and what is kept of it besides, for a wide picture (widescreen.h)
     std::vector<uint8_t> g_mine;       // (the shown stage's, while the other's runs)
     std::vector<int16_t> g_otherSound; // sound the next stage has made and that has not been heard yet
     std::vector<int16_t> g_carry;      // sound to come before the next frame's
@@ -261,7 +262,7 @@ namespace {
         }
         Wanted().stage = g.next;
         machine.video.hideObject = NotTheStage;
-        WideForSpare(machine); // (its picture as wide as the shown stage's)
+        WideForSpare(machine, g_otherPlanes); // (its picture as wide as the shown stage's)
         for (int n = 0; n < kOnTheWay; n++) {
             machine.audio.resize(g_soundBefore);
             g.nextReady = g.nextReady || ToRound(machine, g.nextFrames);
@@ -302,7 +303,8 @@ namespace {
         }
         g_otherSound.erase(g_otherSound.begin(), g_otherSound.begin() + static_cast<std::ptrdiff_t>(count));
 
-        if (g.slide >= Across()) {
+        const bool promoted = g.slide >= Across();
+        if (promoted) {
             // The next stage has come all the way in: its machine is the one the port runs from here, and
             // the stage after it is switched on
             g.stage = g.next;
@@ -327,7 +329,11 @@ namespace {
         machine.players[0] = held[0];
         machine.players[1] = held[1];
         machine.video.wide = wide;
-        WideForPort(machine);
+        WideForPort(machine, g_otherPlanes);
+        if (promoted) {
+            WidePromoted(g_otherPlanes);
+            g_otherPlanes = WidePlanes();
+        }
         memcpy(machine.Picture(), shown.data(), pixels * sizeof(uint32_t));
         machine.audio.insert(machine.audio.end(), sound.begin(), sound.end());
     }

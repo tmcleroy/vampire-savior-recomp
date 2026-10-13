@@ -54,13 +54,20 @@ public:
     // of the objects alone can be laid over another picture, and one object's pixels told from another's.
     bool markObjects = false;
 
+    // For a game's own sources that draw something the game's list has not got (a thing the game stopped
+    // drawing because the board's picture would not show it): called when the board has taken the object
+    // list, with the copy the picture is made from, to change. `list` is 1024 entries of four words;
+    // `last` is where the last entry in use starts in it (-4: none), and is to be kept right.
+    void (*objectsTaken)(uint16_t *list, int &last) = nullptr;
+
     // A wider picture, for a game's own sources (a widescreen feature). The board draws 384 of the 512
     // columns its raster counts; the scroll screens and the object list reach further, and `side` more
     // columns (kMaxSide at most) are drawn on each side of the board's own. With 64, the picture is the
     // whole raster: 16:9 where the board's is 4:3.
     // What the game put beyond its picture's edges is not always what should be there, so each scroll
     // screen can be drawn moved to the right by `scroll` pixels, and each object by what `object` says of
-    // it (its tile's number and its attributes, as hideObject has them; none: not moved).
+    // it (its tile's number and its attributes, as hideObject has them, and which entry of the object
+    // list it is, 0-1023; none: not moved).
     // A game that fills a scroll screen's map as its camera moves has only kept up what its own picture
     // shows. `tile` is asked for every tile that is not wholly inside the board's own 384 columns: which
     // scroll screen (0-2), the tile's column and row in the map (0-63), and the picture's column its left
@@ -71,7 +78,7 @@ public:
     struct Wide {
         int side = 0;
         int scroll[3] = {0, 0, 0};
-        int (*object)(uint32_t tile, uint16_t attributes) = nullptr;
+        int (*object)(uint32_t tile, uint16_t attributes, int entry) = nullptr;
         bool (*tile)(int which, int column, int row, int at, uint16_t &code, uint16_t &attributes) = nullptr;
     } wide;
     int Width() const {

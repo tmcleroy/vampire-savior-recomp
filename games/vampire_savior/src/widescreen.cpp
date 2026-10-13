@@ -14,10 +14,13 @@
 // ends, and nearer an end the whole view stays where it was 64 from it: everything on the stage is drawn that
 // much to the side (video.h, Video::wide), the panel is not.
 //
-// The planes behind go with it: they and the stage's own pieces (objects that ride on them) keep the places
-// they have against each other on the board. They move less than the camera, so the view shows up to 64
-// columns of them that the board never does at any place of the camera; on every stage but one the game has
-// those drawn (PROGRESS.md says what is seen where it has not).
+// The same rule is kept for the planes behind, each by its own measure. A plane that moves less than the
+// camera is drawn only as far as the board ever shows it: the 384 columns and as far as it travels. The view
+// of it is kept inside that: it goes with the camera until 64 more columns on a side would show where
+// nothing was drawn, and stops there (ViewShift), as the stage's own plane does at the stage's ends. A plane
+// that travels less than 128 has not 512 columns the board shows; its view stays at its middle. A piece of
+// the stage (an object) rides on one of the planes, and is drawn to the side with it: the game says which
+// as it puts the piece in the object list (Rides).
 //
 // The scroll screens of 16- and 32-pixel tiles are whole pictures in the board's memory. The one of 8-pixel
 // tiles is only 512 columns there, and on most stages its picture is wider: the game draws it into the
@@ -31,8 +34,10 @@
 #include "vsav.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 namespace cps2recomp {
 
@@ -41,9 +46,254 @@ using namespace vsav;
 namespace {
     constexpr int kSide = Video::kMaxSide;
 
+    constexpr int kCameraMiddle = (kCameraLeft + kCameraRight) / 2, kCameraTravel = kCameraRight - kCameraLeft;
+
+    // How far each stage's planes behind travel while the camera goes from one end to the other (on the
+    // board: 384): the scroll screen of 8-pixel tiles and the one of 32. (Seen in their records as the stage
+    // viewer went across; the game works a plane's place out with shifts, a routine for each rate. The one
+    // of 16 is the stage's own plane on every stage: its lines have rates of their own for the floor, which
+    // are left alone.)
+    constexpr int kTravel[kStages][2] = {{265, 265}, {318, 339}, {137, 137}, {77, 114}, {206, 309}, {359, 335},
+                                         {306, 218}, {363, 298}, {400, 352}, {306, 262}, {384, 384}, {336, 288}};
+
     // What the picture being made was asked to be: the columns added on each side, and how far to the right
-    // the stage is drawn
-    int g_side = 0, g_shift = 0;
+    // each scroll screen is drawn (g_shift: the stage's own plane, the one of 16-pixel tiles)
+    int g_side = 0, g_shift = 0, g_shifts[3] = {0, 0, 0};
+    bool g_play = false; // fights are played in the wide picture (WidePlay, and the second half of this file)
+
+    // How far to the right a plane is drawn that travels `travel` across the camera's range, with the camera
+    // at `camera`: nothing while 64 more columns of it on each side are columns the board shows too
+    int ViewShift(int camera, int travel) {
+        const double at = static_cast<double>(camera - kCameraMiddle) * travel / kCameraTravel; // from its middle
+        const double most = std::max(travel / 2.0 - kSide, 0.0);
+        return static_cast<int>(std::lround(at - std::clamp(at, -most, most)));
+    }
+    void SetShifts(int camera) {
+        const unsigned stage = Ram16(kStage) / 2u;
+        g_shift = g_shifts[1] = ViewShift(camera, kCameraTravel);
+        g_shifts[0] = stage < kStages ? ViewShift(camera, kTravel[stage][0]) : g_shift;
+        g_shifts[2] = stage < kStages ? ViewShift(camera, kTravel[stage][1]) : g_shift;
+    }
+
+    // Which plane each entry of the object list rides on. The game works out an object's place in the
+    // picture in three routines, just before it puts the object's entries in the list at A2: 01BBC2 and
+    // 01BC3A against the plane the object's record names (a byte, 4, 8 or 12: the scroll screen of 8-, 16-
+    // or 32-pixel tiles), 01BC88 with no plane (the panel: its own place in the picture). A hook on each
+    // notes it for the entries from A2 on. The list is made a frame before it is drawn, so the picture goes
+    // by what was noted when its frame began (g_shown).
+    constexpr uint32_t kPlacedOnPlane = 0x01BBC2, kPlacedOnPlane2 = 0x01BC3A, kPlacedInPicture = 0x01BC88;
+    constexpr uint32_t kRidesOn = 0x0C; // an object's record: which plane
+    enum : uint8_t { kRidesNotKnown, kRidesFirst, kRidesNone = 4 };
+    WidePlanes g_planes, g_shown, g_portPlanes, g_portShown;
+    int g_portShifts[3] = {0, 0, 0};
+
+    Machine *g_machine = nullptr; // (the machine whose memory is loaded: for reading the list it is making)
+
+    // A twin's entries are all in the list (the next object's begin at `end`): kept, for drawing the piece
+    // when the record is the other one. An entry's place is across and down the picture; what stays the
+    // same as the camera moves is that plus the plane's place across, and less its place up.
+    void Filled(const uint8_t *list, int end) {
+        if (g_planes.filling < 0) {
+            return;
+        }
+        WidePlanes::Twin &twin = g_planes.twins[g_planes.filling];
+        g_planes.filling = -1;
+        twin.count = std::clamp(end - twin.at, 0, +WidePlanes::kTwinEntries);
+        if (twin.is < 0 || twin.count == 0 || twin.plane < 1 || twin.plane > 3) {
+            return;
+        }
+        WidePlanes::Twin::Piece &piece = twin.piece[twin.is];
+        piece.count = 0;
+        for (int n = 0; n < twin.count; n++) {
+            const uint8_t *entry = list + (twin.at + n) * 8;
+            const uint16_t x = static_cast<uint16_t>((entry[0] << 8) | entry[1]), y = static_cast<uint16_t>((entry[2] << 8) | entry[3]);
+            const uint16_t attributes = static_cast<uint16_t>((entry[6] << 8) | entry[7]);
+            if (y >= 0x8000 || attributes >= 0xFF00) {
+                twin.count = n; // (the list's end)
+                break;
+            }
+            uint16_t *kept = piece.entries[piece.count++];
+            kept[0] = static_cast<uint16_t>((x & 0xFC00) | ((x + g_planes.planeX[twin.plane - 1]) & 0x3FF));
+            kept[1] = static_cast<uint16_t>((y & 0xFC00) | ((y - g_planes.planeY[twin.plane - 1]) & 0x3FF));
+            kept[2] = static_cast<uint16_t>((entry[4] << 8) | entry[5]);
+            kept[3] = attributes;
+        }
+    }
+    // (while the game makes the list it is the one the 68000 sees at 708000)
+    const uint8_t *ListBeingMade() {
+        static uint8_t copy[0x2000];
+        for (uint32_t n = 0; n < 0x2000; n += 2) {
+            const uint16_t word = g_machine->Read16(0x708000 + n);
+            copy[n] = static_cast<uint8_t>(word >> 8);
+            copy[n + 1] = static_cast<uint8_t>(word);
+        }
+        return copy;
+    }
+
+    void Rides(M68K &c, uint8_t rides) {
+        const uint32_t at = c.a[2] & 0xFFFFFF;
+        if (at < 0x708000 || at >= 0x70A000) {
+            return; // (not the list)
+        }
+        const int entry = static_cast<int>((at & 0x1FFF) >> 3);
+        if (g_planes.filling >= 0 && g_machine) {
+            Filled(ListBeingMade(), entry);
+        }
+        if (entry <= g_planes.last) {
+            // (an entry before the last object's: a new list is begun, and no twin is in it yet)
+            for (WidePlanes::Twin &twin : g_planes.twins) {
+                twin.is = -1;
+            }
+        }
+        // (the entries since the last object's are that object's)
+        for (int n = g_planes.last + 1; n < entry; n++) {
+            g_planes.rides[n] = g_planes.rides[g_planes.last];
+        }
+        g_planes.rides[entry] = rides;
+        g_planes.last = entry;
+        if (rides >= kRidesFirst && rides < kRidesNone) {
+            const uint32_t object = c.a[6] & 0xFFFFFF, plane = kBackLayer + (rides - kRidesFirst) * kLayerSize;
+            g_planes.planeX[rides - kRidesFirst] = static_cast<int16_t>(Ram16(plane + kLayerShownX));
+            g_planes.planeY[rides - kRidesFirst] = static_cast<int16_t>(Ram16(plane + kLayerShownY));
+            for (int n = 0; n < WidePlanes::kTwins; n++) {
+                WidePlanes::Twin &twin = g_planes.twins[n];
+                if (twin.record == object) {
+                    twin.is = Ram8(object + twin.stateAt) ? 1 : 0;
+                    twin.at = entry;
+                    twin.count = 0;
+                    twin.plane = rides;
+                    g_planes.filling = n;
+                }
+            }
+        }
+    }
+    bool PlacedOnPlane(M68K &c) {
+        if (!g_play) {
+            return false;
+        }
+        const uint8_t plane = Ram8((c.a[6] & 0xFFFFFF) + kRidesOn);
+        Rides(c, plane == 4 || plane == 8 || plane == 12 ? static_cast<uint8_t>(plane / 4) : kRidesNotKnown);
+        return false;
+    }
+    bool PlacedInPicture(M68K &c) {
+        if (g_play) {
+            Rides(c, kRidesNone);
+        }
+        return false;
+    }
+
+    // --- a record that is one of two pieces ---
+    //
+    // Four of the stages' scripts keep two pieces of the stage in one record: it is the one on the left
+    // while the camera is left of a place, and the one on the right while it is right of it (on the board
+    // the two are never in the picture together). In the wide picture they are, so the one the record is
+    // not is drawn from what the game last put in the list for it (ListTaken). The scripts, and the byte
+    // of the record that says which piece it is:
+    //   07D438 (+0A): Feast of the Damned's dancers, who move, and a piece on the right that does not.
+    //                 There the record is kept the dancers (the two comparisons of the camera in the
+    //                 script are answered "left of it") once the other piece has been seen.
+    //   07DE78 (+0A), 0809A6 (+0B), 080A20 (+0A): two pieces that do not move.
+    template <uint8_t kStateAt>
+    bool TwinScript(M68K &c) {
+        if (!g_play) {
+            return false;
+        }
+        const uint32_t record = c.a[6] & 0xFFFFFF;
+        WidePlanes::Twin *free = nullptr;
+        for (WidePlanes::Twin &twin : g_planes.twins) {
+            if (twin.record == record) {
+                return false;
+            }
+            if (!twin.record && !free) {
+                free = &twin;
+            }
+        }
+        if (free) {
+            *free = WidePlanes::Twin();
+            free->record = record;
+            free->stateAt = kStateAt;
+        }
+        return false;
+    }
+    // What the 68000 is left with after a comparison answered for it: lower (carry) or not; on after the
+    // instruction, `length` bytes long at `at`
+    bool Answered(M68K &c, uint32_t at, uint32_t length, bool lower) {
+        c.flagC = c.flagN = lower;
+        c.flagZ = c.flagV = false;
+        c.pc = at + length;
+        c.cycles += 8 + 2 * length;
+        return true;
+    }
+    template <uint32_t kAt>
+    bool KeepTheDancers(M68K &c) {
+        if (!g_play) {
+            return false;
+        }
+        const uint32_t record = c.a[6] & 0xFFFFFF;
+        for (const WidePlanes::Twin &twin : g_planes.twins) {
+            if (twin.record == record && twin.piece[1].count > 0) {
+                return Answered(c, kAt, 6, true);
+            }
+        }
+        return false;
+    }
+    // A piece of a stage that its script only draws, or only moves, while the camera is on one side of a
+    // place (it is out of the board's picture on the other): in the wide picture, always. The comparison of
+    // the camera with the place is answered the way that keeps the piece.
+    template <uint32_t kAt, uint32_t kLength, bool kLower>
+    bool KeepThePiece(M68K &c) {
+        return g_play && Answered(c, kAt, kLength, kLower);
+    }
+    [[maybe_unused]] constexpr uint32_t kScriptsGoOnAt[] = {
+        HookAt(0x07D444), HookAt(0x07D494), HookAt(0x07DF52), HookAt(0x07E064), HookAt(0x07E0C0), HookAt(0x07F89C), HookAt(0x07FB28),
+        HookAt(0x07FD50), HookAt(0x07FE2C), HookAt(0x0808AC), HookAt(0x0803B8), HookAt(0x080428), HookAt(0x07F272)};
+
+    // When the board has taken the list: after each twin's entries, the other piece's, put where it is with
+    // the planes where they were when the list was made. (From the last twin in the list back, so that the
+    // places of those before it stay as noted; what each entry rides on moves along with the entries.)
+    void ListTaken(uint16_t *list, int &last) {
+        int order[WidePlanes::kTwins], twins = 0;
+        for (int n = 0; n < WidePlanes::kTwins; n++) {
+            const WidePlanes::Twin &twin = g_shown.twins[n];
+            if (twin.record && twin.is >= 0 && twin.count > 0 && twin.piece[1 - twin.is].count > 0 && twin.plane >= 1 && twin.plane <= 3) {
+                order[twins++] = n;
+            }
+        }
+        std::sort(order, order + twins, [](int a, int b) { return g_shown.twins[a].at > g_shown.twins[b].at; });
+        for (int k = 0; k < twins; k++) {
+            const WidePlanes::Twin &twin = g_shown.twins[order[k]];
+            const WidePlanes::Twin::Piece &other = twin.piece[1 - twin.is];
+            const int at = twin.at + twin.count, entries = last / 4 + 1;
+            if (at > entries || entries + other.count > 0x400) {
+                continue;
+            }
+            memmove(list + (at + other.count) * 4, list + at * 4, static_cast<size_t>(entries - at) * 4 * sizeof(uint16_t));
+            memmove(g_shown.rides + at + other.count, g_shown.rides + at, static_cast<size_t>(0x400 - at - other.count));
+            for (int n = 0; n < other.count; n++) {
+                uint16_t *entry = list + (at + n) * 4;
+                entry[0] = static_cast<uint16_t>((other.entries[n][0] & 0xFC00) | ((other.entries[n][0] - g_shown.planeX[twin.plane - 1]) & 0x3FF));
+                entry[1] = static_cast<uint16_t>((other.entries[n][1] & 0xFC00) | ((other.entries[n][1] + g_shown.planeY[twin.plane - 1]) & 0x3FF));
+                entry[2] = other.entries[n][2];
+                entry[3] = other.entries[n][3];
+                g_shown.rides[at + n] = twin.plane;
+            }
+            last += other.count * 4;
+        }
+    }
+
+    // What the picture a frame makes goes by: the list as it stands, the last object's entries to its end
+    void Show(WidePlanes &planes, const Machine &machine) {
+        if (planes.filling >= 0) {
+            // (the twin was the last thing put in the list, which is the one the board takes next)
+            WidePlanes mine = g_planes;
+            g_planes = planes;
+            Filled(machine.ObjectsToCome(), 0x400);
+            planes = g_planes;
+            g_planes = mine;
+        }
+        g_shown = planes;
+        std::fill(g_shown.rides + std::min(planes.last + 1, 0x400), g_shown.rides + 0x400, planes.rides[planes.last]);
+    }
     // The camera's place a frame ago. The picture a frame makes is the one the game worked out the frame
     // before from the camera as it then was: its scroll registers are written and its objects taken at the
     // start of the frame. (Not in a save state: after loading one the view can be a frame behind for a frame.)
@@ -72,11 +322,13 @@ namespace {
     }
 
     // An object's place: the panel's objects stay, the stage's and the fighters' go with the view
-    int MoveObject(uint32_t tile, uint16_t attributes) {
-        return ThePanel(tile, attributes) ? 0 : g_shift;
+    int MoveObject(uint32_t tile, uint16_t attributes, int entry) {
+        const uint8_t rides = g_shown.rides[entry & 0x3FF];
+        if (rides == kRidesNone || ThePanel(tile, attributes)) {
+            return 0;
+        }
+        return g_shifts[rides == kRidesNotKnown ? 1 : rides - kRidesFirst];
     }
-
-    Machine *g_machine = nullptr; // (for the picture's questions, which come while a frame runs)
 
     // The tile of the 8-pixel scroll screen's picture at a place in the stage, as the game's own routine
     // that draws a strip of it finds it (01EE22, 01EE58, 01EF16, 01F06E): the place's 256-pixel block from
@@ -97,7 +349,7 @@ namespace {
         if (which != 0 || !g_machine) {
             return false;
         }
-        const int looksAt = static_cast<int16_t>(Ram16(kBackLayer + kLayerX)) - g_side - g_shift + at;
+        const int looksAt = static_cast<int16_t>(Ram16(kBackLayer + kLayerX)) - g_side - g_shifts[0] + at;
         const int x = column * 8 + ((looksAt - column * 8 + 256) & ~511);
         StagePlanTile(*g_machine, static_cast<uint32_t>(x), static_cast<uint32_t>(row) * 8, code, attributes);
         return true;
@@ -156,7 +408,6 @@ namespace {
     constexpr uint32_t kHalfWidth = 0x132; // a player's record: half its width (a word)
     constexpr uint32_t kOther = 0x32;      // ... and the other player's record (a word: its address's low half)
 
-    bool g_play = false;              // fights are played in the wide picture (WidePlay)
     uint32_t g_narrowed[2] = {0, 0};  // the records whose half width is 64 less just now
 
     void Narrow(int n, uint32_t player) {
@@ -262,18 +513,21 @@ int WideStage() {
 void WidescreenBeforeFrame(Machine &machine) {
     const int camera = static_cast<int16_t>(Ram16(kCameraX)), shown = g_cameraBefore;
     g_cameraBefore = camera;
-    g_side = g_shift = 0;
+    g_side = g_shift = g_shifts[0] = g_shifts[1] = g_shifts[2] = 0;
     g_play = FeatureOn("widescreen");
-    // (the modes that put their picture together from more than one machine's keep the board's)
     if (g_play && OnStage(camera) && OnStage(shown) && !CurtainDrawn(machine)) {
         g_side = kSide;
-        // (the view's left edge is 64 left of the camera, and no further left than the camera's own end:
-        // nearer the end than that, the stage is drawn to the side by what is missing)
-        g_shift = shown - std::clamp<int>(shown, kCameraLeft + kSide, kCameraRight - kSide);
+        SetShifts(shown);
     }
+    g_machine = &machine;
+    if (!OnStage(camera)) {
+        g_planes = WidePlanes(); // (no stage: its twins are gone with it)
+    }
+    Show(g_planes, machine);
+    machine.video.objectsTaken = g_side ? ListTaken : nullptr;
     Video::Wide &wide = machine.video.wide;
     wide.side = g_side;
-    wide.scroll[0] = wide.scroll[1] = wide.scroll[2] = g_shift;
+    std::copy(g_shifts, g_shifts + 3, wide.scroll);
     wide.object = g_side ? MoveObject : nullptr;
     // (a stage whose 8-pixel scroll screen is a whole picture in the map needs no help: it goes round)
     g_machine = &machine;
@@ -282,20 +536,39 @@ void WidescreenBeforeFrame(Machine &machine) {
 }
 
 // A frame of another machine's (its memory is the one loaded now): as wide as the port's own this frame, and
-// drawn by the same rules from what that machine is showing. (Its camera a frame ago is not kept, so near a
-// stage's end its view could be a frame late; in the wide picture the camera does not go there.)
-void WideForSpare(Machine &machine) {
+// drawn by the same rules from what that machine is showing. (Its camera a frame ago is not kept, so its
+// planes can be a frame late against its camera: a pixel, while the camera moves.)
+void WideForSpare(Machine &machine, WidePlanes &planes) {
+    g_portPlanes = g_planes;
+    g_portShown = g_shown;
+    std::copy(g_shifts, g_shifts + 3, g_portShifts);
     const int camera = static_cast<int16_t>(Ram16(kCameraX));
-    g_shift = g_side && OnStage(camera) ? camera - std::clamp<int>(camera, kCameraLeft + kSide, kCameraRight - kSide) : 0;
+    if (!OnStage(camera)) {
+        planes = WidePlanes();
+    }
+    Show(planes, machine);
+    g_planes = planes;
+    g_shift = g_shifts[0] = g_shifts[1] = g_shifts[2] = 0;
+    if (g_side && OnStage(camera)) {
+        SetShifts(camera);
+    }
     Video::Wide &wide = machine.video.wide;
     wide.side = g_side;
-    wide.scroll[0] = wide.scroll[1] = wide.scroll[2] = g_shift;
+    std::copy(g_shifts, g_shifts + 3, wide.scroll);
     wide.object = g_side ? MoveObject : nullptr;
     wide.tile = g_side && Ram8(kBackLayer + kLayerDrawnAsItGoes) ? SideTile : nullptr;
 }
 
-void WideForPort(Machine &machine) {
-    g_shift = machine.video.wide.scroll[1];
+void WideForPort(Machine &, WidePlanes &planes) {
+    planes = g_planes;
+    g_planes = g_portPlanes;
+    g_shown = g_portShown;
+    std::copy(g_portShifts, g_portShifts + 3, g_shifts);
+    g_shift = g_shifts[1];
+}
+
+void WidePromoted(const WidePlanes &planes) {
+    g_planes = planes;
 }
 
 void RegisterWidescreen() {
@@ -303,6 +576,26 @@ void RegisterWidescreen() {
     AddHook(kKeepsInDone, "KeepsInDone", Widen);
     AddHook(kKeepsBothIn, "KeepsBothIn", KeepBothIn);
     AddHook(kKeepsBothInDone, "KeepsBothInDone", Widen);
+    AddHook(kPlacedOnPlane, "PlacedOnPlane", PlacedOnPlane);
+    AddHook(kPlacedOnPlane2, "PlacedOnPlane2", PlacedOnPlane);
+    AddHook(kPlacedInPicture, "PlacedInPicture", PlacedInPicture);
+    AddHook(0x07D438, "TwinScript", TwinScript<0x0A>);
+    AddHook(0x07DE78, "TwinScript2", TwinScript<0x0A>);
+    AddHook(0x0809A6, "TwinScript3", TwinScript<0x0B>);
+    AddHook(0x080A20, "TwinScript4", TwinScript<0x0A>);
+    AddHook(0x07D43E, "KeepTheDancers", KeepTheDancers<0x07D43E>);
+    AddHook(0x07D48E, "KeepTheDancers2", KeepTheDancers<0x07D48E>);
+    AddHook(0x07DF4C, "KeepThePiece", KeepThePiece<0x07DF4C, 6, true>);
+    AddHook(0x07E05E, "KeepThePiece2", KeepThePiece<0x07E05E, 6, false>);
+    AddHook(0x07E0BA, "KeepThePiece3", KeepThePiece<0x07E0BA, 6, false>);
+    AddHook(0x07F896, "KeepThePiece4", KeepThePiece<0x07F896, 6, false>);
+    AddHook(0x07FB22, "KeepThePiece5", KeepThePiece<0x07FB22, 6, true>);
+    AddHook(0x07FD4A, "KeepThePiece6", KeepThePiece<0x07FD4A, 6, false>);
+    AddHook(0x07FE26, "KeepThePiece7", KeepThePiece<0x07FE26, 6, false>);
+    AddHook(0x0808A6, "KeepThePiece8", KeepThePiece<0x0808A6, 6, false>);
+    AddHook(0x0803B4, "KeepThePiece9", KeepThePiece<0x0803B4, 4, true>);
+    AddHook(0x080424, "KeepThePiece10", KeepThePiece<0x080424, 4, true>);
+    AddHook(0x07F26E, "KeepThePiece11", KeepThePiece<0x07F26E, 4, true>);
     AddHook(0x0154AC, "ThrownInPicture", ThrownInPicture);
     AddHook(0x015512, "PieceInPicture", PieceInPicture<0x015512>);
     AddHook(0x01552E, "PieceInPicture2", PieceInPicture<0x01552E>);
