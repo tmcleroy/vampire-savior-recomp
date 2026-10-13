@@ -32,6 +32,9 @@ the rules it changes (`if (FeatureOn("no_damage")) ...`).
 - Other rewrites: as plain C++ calls.
 - The game's own routines that are not rewritten: `Call(c, address)` runs one to its return. It
   must not be one that waits (for the next frame, for a task switch).
+- A routine that waits only in some state: `RewriteWhen(address, when)` after its `AddRewrite`; `when`
+  is asked before each call, and when it says no the game's own code runs that time. The rewrites
+  that would call it in that state have to stand aside the same way.
 
 ## Checking
 

@@ -35,16 +35,20 @@ struct Options {
     std::string trace;         // --trace LOW-HIGH:file
     bool checkRewrites = false, noRewrites = false;
     std::string cpu;           // native | blocks | interp | check (default: native when there is translated code)
+    std::string sound;         // driver | z80 | check (default: driver when the game's sound program is a known one)
     std::string stateSave, stateLoad; // FRAME:path
     uint64_t frames = 0;       // stop after this many (0: run on)
     uint64_t shotEvery = 0;
     uint64_t autoSeed = 0;     // --auto: made-up input from this seed
+    uint64_t soundTest = 0;    // --sound-test SEED[:EVERY]: every song and command sent to the sound side
+    unsigned soundTestEvery = 30;
     uint64_t autoFrom = 0;     // ... from this frame on
     int autoPlayers = 2;       // ... for this many players
     uint64_t testFrom = 0, testTo = 0; // --test-switch FROM:TO: the operator's test switch held over these frames
     bool autoPlay = false;
     bool headless = false, mute = false, unthrottled = false, fullscreen = false, stats = false;
     bool hashPicture = false; // --hash-log hashes the picture only
+    bool hashGame = false;     // --hash-game: the state hash without the Z80 and its own memory (to compare --sound driver and z80)
     int cpuSpeed = 1;         // --cpu-speed
     std::string renderer;     // --renderer sdl|gpu (gpu unless said)
     std::string presentTest;  // --present-test FILE.png: the last picture drawn by the GPU path with no window
@@ -97,6 +101,9 @@ struct Port {
     bool Init(std::string &error);
     // One frame: input (window, movie or made up), the machine, the per-frame outputs
     void RunFrame();
+    void SoundTest();
+    uint64_t soundTestState = 0;
+    uint16_t soundTestSong = 0;
     void Finish();
     uint32_t StateHash() const;
     bool SaveState(const std::string &path, std::string &error);

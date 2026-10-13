@@ -1,4 +1,6 @@
 #version 450
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Tommy McLeroy. Part of cps2recomp.
 // The picture fitted to the viewport with its pixels kept crisp: each pixel is a sharp block as wide as a
 // whole number of the screen's pixels would make it, and only the edges between blocks are blended (the
 // picture's pixels are not square, so it never fits a whole number of times across).

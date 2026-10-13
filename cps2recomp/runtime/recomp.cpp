@@ -71,6 +71,7 @@ namespace {
         const char *name;
         HookFn fn;
         RewriteFn rewrite = nullptr;
+        RewriteWhenFn when = nullptr; // (a rewrite) asked before each call: false, and the game's own code runs
         uint32_t free = 0;
         uint64_t calls = 0, differed = 0;
         // Time: what a call is charged (the 68000's cycles), and how the original's time compared in the check
@@ -285,6 +286,17 @@ void AddRewrite(uint32_t address, const char *name, RewriteFn fn, uint32_t free,
     Hooks().back().cycles = cycles;
 }
 
+void RewriteWhen(uint32_t address, RewriteWhenFn when) {
+    for (Hook &hook : Hooks()) {
+        if (hook.address == address && hook.rewrite) {
+            hook.when = when;
+            return;
+        }
+    }
+    fprintf(stderr, "RewriteWhen: there is no rewrite at %06X\n", address);
+    exit(1);
+}
+
 void Call(M68K &c, uint32_t address) {
     c.CallGuest(address);
 }
@@ -312,6 +324,9 @@ bool RunHook(M68K &c, uint32_t address) {
         if (skip.size() > 2 && skip.find(std::string(",") + hook.name + ",") != std::string::npos) {
             return false;
         }
+    }
+    if (hook.when && !hook.when(c)) {
+        return false;
     }
     if (g_checkRewrites && !g_inRewrite) {
         CheckRewrite(c, hook);

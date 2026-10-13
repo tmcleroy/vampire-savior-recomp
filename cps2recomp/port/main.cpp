@@ -131,6 +131,19 @@ bool Port::Init(std::string &error) {
         error = "--cpu: native, blocks, interp or check";
         return false;
     }
+    // The sound program as ordinary code where there is one for it, unless the Z80's code is what is being
+    // looked at
+    if (opt.sound.empty()) {
+        opt.sound = machine->soundDriver && opt.cpu == "native" && opt.recordEntries.empty() ? "driver" : "z80";
+    }
+    if (opt.sound == "z80") {
+        machine->soundSide = Machine::SoundSide::Z80;
+    } else if ((opt.sound == "driver" || opt.sound == "check") && machine->soundDriver) {
+        machine->soundSide = opt.sound == "driver" ? Machine::SoundSide::Driver : Machine::SoundSide::Check;
+    } else {
+        error = machine->soundDriver ? "--sound: driver, z80 or check" : "--sound: this game's sound program is not one there is a driver for";
+        return false;
+    }
     machine->soundCpu.recording = !opt.recordEntries.empty();
     SetRewrites(opt.checkRewrites, opt.noRewrites);
     machine->cpu.watchLow = opt.watchLow;
@@ -172,14 +185,23 @@ uint32_t Port::StateHash() const {
     add(m.ram.data(), m.ram.size());
     add(m.videoRam.data(), m.videoRam.size());
     add(m.objectRam.data(), m.objectRam.size());
-    add(m.soundRam, sizeof(m.soundRam));
-    add(m.soundRam2, sizeof(m.soundRam2));
-    add(m.soundCpu.r, sizeof(m.soundCpu.r));
-    add(m.soundCpu.r2, sizeof(m.soundCpu.r2));
-    const uint16_t sound[] = {m.soundCpu.pc, m.soundCpu.sp, m.soundCpu.ix, m.soundCpu.iy, m.soundCpu.f, m.soundCpu.f2,
-                              m.soundCpu.refresh};
-    add(sound, sizeof(sound));
-    add(&m.soundCpu.cycles, sizeof(m.soundCpu.cycles));
+    if (!opt.hashGame) {
+        add(m.soundRam, sizeof(m.soundRam));
+    } else {
+        // (byte 5 is the sound program's note of the last place it gave a sound, which it writes when it
+        // comes to it; the game does not read it)
+        add(m.soundRam, 5);
+        add(m.soundRam + 6, sizeof(m.soundRam) - 6);
+    }
+    if (!opt.hashGame) {
+        add(m.soundRam2, sizeof(m.soundRam2));
+        add(m.soundCpu.r, sizeof(m.soundCpu.r));
+        add(m.soundCpu.r2, sizeof(m.soundCpu.r2));
+        const uint16_t sound[] = {m.soundCpu.pc, m.soundCpu.sp, m.soundCpu.ix, m.soundCpu.iy, m.soundCpu.f, m.soundCpu.f2,
+                                  m.soundCpu.refresh};
+        add(sound, sizeof(sound));
+        add(&m.soundCpu.cycles, sizeof(m.soundCpu.cycles));
+    }
     add(m.cpsA, sizeof(m.cpsA));
     add(m.cpsB, sizeof(m.cpsB));
     add(m.objectRegs, sizeof(m.objectRegs));
@@ -394,6 +416,152 @@ bool Port::LoadState(const std::string &path, std::string &error) {
     return true;
 }
 
+// --sound-test: once the game has the sound side going, a command every so many frames in place of whatever
+// the game sends: each song in turn with made-up placing, and now and then one of the other commands with
+// made-up numbers. For --sound check: far more of the driver than a game's play reaches.
+void Port::SoundTest() {
+    uint8_t *shared = machine->soundRam;
+    machine->monoForTest = opt.soundTest % 4 == 0; // (every fourth seed)
+    // (not at once: the sound program takes the game's stereo setting in its first interrupts)
+    if (shared[0xFFD] != 0x88 || shared[0xFFF] != 0xFF || machine->frame < 400 || machine->frame % opt.soundTestEvery ||
+        shared[0x00F] != 0xFF) {
+        return;
+    }
+    auto random = [&]() {
+        soundTestState = soundTestState * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(soundTestState >> 33);
+    };
+    if (!soundTestState) {
+        soundTestState = opt.soundTest;
+        // Songs of the kinds this game's sound ROM may have none of, made up and put in the ROM's empty end
+        // under song numbers the game does not use: single samples, ADPCM samples, and sequences with the
+        // commands sequences seldom have (the driver's layout: sound/driver.cpp)
+        std::vector<uint8_t> &rom = roms.soundProgram;
+        const uint32_t table = static_cast<uint32_t>(rom[0x3FE0] | (rom[0x3FE1] << 8));
+        const unsigned songs = static_cast<unsigned>((rom[table] << 8) | rom[table + 1]);
+        uint32_t at = 0x30000;
+        unsigned slot = 0;
+        auto add = [&](const std::vector<uint8_t> &song) {
+            for (; slot < songs; slot++) {
+                uint8_t *entry = &rom[table + 5 + slot * 4];
+                if (!(entry[0] | entry[1] | entry[2]) && at + song.size() <= rom.size()) {
+                    entry[0] = static_cast<uint8_t>(at >> 16), entry[1] = static_cast<uint8_t>(at >> 8), entry[2] = static_cast<uint8_t>(at);
+                    memcpy(&rom[at], song.data(), song.size());
+                    at += static_cast<uint32_t>(song.size());
+                    slot++;
+                    return;
+                }
+            }
+        };
+        auto byte = [&](uint32_t range) {
+            return static_cast<uint8_t>(random() % range);
+        };
+        auto track = [&](bool music) {
+            std::vector<uint8_t> t = {0xC1, 0x01, byte(256), 0xC2, 0x00, 0xC4, byte(60), 0xC6, static_cast<uint8_t>(0x40 + byte(0x40)),
+                                      0xC8, static_cast<uint8_t>(0x40 + byte(0x40)), 0xDE, byte(256), 0xDF, byte(256), 0xDF, byte(256),
+                                      0xDC, byte(256), 0xDD, byte(256), 0xDD, byte(256), 0xC3, byte(256), 0xE1, byte(128), 0xC5, byte(128),
+                                      0xE2, byte(128), 0xE0, byte(2), 0xE3, byte(0x30), 0xC9, byte(128), 0xE6, byte(128)};
+            if (music) {
+                t.insert(t.end(), {0xC7, byte(128)});
+            }
+            auto note = [&](bool tied) {
+                t.insert(t.end(), {static_cast<uint8_t>(0x80 + byte(0x40)), static_cast<uint8_t>(0x24 + byte(0x30) + (tied ? 0x80 : 0))});
+                if (byte(4) == 0) {
+                    t.push_back(static_cast<uint8_t>(0x81 + byte(3)));
+                }
+                t.push_back(byte(128));
+                if (byte(5) == 0) {
+                    t.push_back(1);
+                }
+                t.push_back(static_cast<uint8_t>(1 + byte(60)));
+            };
+            auto jumpTo = [&](size_t operand, size_t target) {
+                const int offset = static_cast<int>(target) - static_cast<int>(operand + 2);
+                t[operand] = static_cast<uint8_t>(offset >> 8), t[operand + 1] = static_cast<uint8_t>(offset);
+            };
+            t.insert(t.end(), {0xC0, 0xD3});
+            note(false);
+            const size_t out = t.size() + 1;
+            t.insert(t.end(), {0xDB, 0, 0});
+            note(true);
+            note(false);
+            t.insert(t.end(), {0xD7, static_cast<uint8_t>(byte(4))});
+            if (t.back() == 0) {
+                t.back() = 2;
+            }
+            jumpTo(out, t.size());
+            const size_t second = t.size() + 1;
+            t.insert(t.end(), {0xCD, 0, 0, 0xCB});
+            note(false);
+            t.push_back(0xCA);
+            jumpTo(second, t.size());
+            note(false);
+            const size_t end = t.size() + 1;
+            t.insert(t.end(), {0xCC, 0, 0});
+            note(false);
+            jumpTo(end, t.size());
+            t.insert(t.end(), {0xCB, 0xFF});
+            return t;
+        };
+        // (and of the first table's instruments, some whose notes start again after a sound effect and take
+        // the game's pitch shift, and some that are silent once they have decayed)
+        const uint32_t instruments = static_cast<uint32_t>(rom[0x3FE4] | (rom[0x3FE5] << 8));
+        for (unsigned n = 40; n < 60; n++) {
+            if (n < 50) {
+                rom[instruments + n * 8 + 5] = 0;
+            } else {
+                rom[instruments + n * 8 + 1] |= 0x80;
+            }
+        }
+        for (int n = 0; n < 150; n++) {
+            const uint32_t kind = random() % 5;
+            if (kind < 2) {
+                const bool instrument = random() % 2;
+                add({static_cast<uint8_t>(0x80 + byte(16)), static_cast<uint8_t>(byte(0x20) | (byte(6) ? 0 : 0x80)), 0,
+                     static_cast<uint8_t>(1 + byte(120)), 0, byte(100), byte(128), static_cast<uint8_t>(instrument ? 0x80 + byte(2) : 0),
+                     byte(60), static_cast<uint8_t>(0x30 + byte(0x30)), byte(256)});
+            } else if (kind == 2) {
+                add({static_cast<uint8_t>(0x90 + byte(3)), static_cast<uint8_t>(byte(0x20) | (byte(4) ? 0 : 0x80)), byte(128), 0, byte(60)});
+            } else {
+                const bool music = kind == 4 && random() % 3 == 0;
+                std::vector<uint8_t> song(33, 0);
+                song[0] = music ? 0 : static_cast<uint8_t>(1 + byte(0x30));
+                for (unsigned voice = 0; voice < 16; voice++) {
+                    if (random() % 4 == 0) {
+                        song[1 + voice * 2] = static_cast<uint8_t>(song.size() >> 8), song[2 + voice * 2] = static_cast<uint8_t>(song.size());
+                        const std::vector<uint8_t> t = track(music);
+                        song.insert(song.end(), t.begin(), t.end());
+                    }
+                }
+                add(song);
+            }
+        }
+    }
+    uint8_t command[16] = {};
+    const uint32_t pick = random() % 16;
+    if (pick < 11) {
+        command[0] = static_cast<uint8_t>(soundTestSong >> 8);
+        command[1] = static_cast<uint8_t>(soundTestSong);
+        soundTestSong++;
+        command[6] = static_cast<uint8_t>(random() % 3 ? random() % 8 : 0);
+        command[7] = static_cast<uint8_t>(random() % 0x24);
+        command[8] = static_cast<uint8_t>(random() % 0x24);
+        command[9] = static_cast<uint8_t>(random() % 3);
+        command[10] = static_cast<uint8_t>(random());
+        command[11] = static_cast<uint8_t>(random() % 3);
+        command[12] = static_cast<uint8_t>(random());
+    } else {
+        static const uint8_t others[] = {0, 1, 2, 2, 3, 4, 5, 6, 7, 6, 7, 8, 9, 12, 13, 12, 13, 8, 9};
+        command[0] = 0xFF;
+        command[1] = others[random() % sizeof(others)];
+        command[2] = static_cast<uint8_t>(random());
+        command[3] = static_cast<uint8_t>(random() % 2 ? 0xFF : random() % 4);
+        command[4] = static_cast<uint8_t>(command[1] == 2 ? random() % 16 : command[1] == 4 ? random() % 3 : random());
+    }
+    memcpy(shared, command, 15);
+    shared[0x00F] = 0;
+}
+
 void Port::RunFrame() {
     if (!opt.moviePlay.empty()) {
         auto it = playMovie.changes.find(frame);
@@ -471,6 +639,9 @@ void Port::RunFrame() {
         TheGame().beforeFrame(*machine);
     }
     machine->RunFrame();
+    if (opt.soundTest) {
+        SoundTest();
+    }
     if (TheGame().frame) {
         TheGame().frame(*machine);
     }
@@ -583,6 +754,10 @@ void Usage() {
             "  --eeprom FILE          where the board's settings memory is kept\n"
             "  --cpu MODE             native (translated code), blocks (the interpreter run the same way),\n"
             "                         interp (the interpreter, an instruction at a time), check\n"
+            "  --sound SIDE           driver (the sound program as ordinary code), z80 (the program itself),\n"
+            "                         check (both, every write to the chip compared)\n"
+            "  --sound-test SEED[:N]  every N frames (30) a command to the sound side: each song in turn, placed\n"
+            "                         some made-up way, and the other commands (with --sound check)\n"
             "  --scale N              window size, times 384x224\n"
             "  --fullscreen  --mute  --unthrottled\n"
             "  --headless             no window, no sound, as fast as it goes\n"
@@ -590,6 +765,7 @@ void Usage() {
             "  --shot-every N:PFX     write PFX<frame>.png every N frames\n"
             "  --hash-log FILE        a line per frame with a hash of the game's state\n"
             "  --hash-picture         ... of the picture only (to compare runs whose timing is not the same)\n"
+            "  --hash-game            ... without the Z80 and its own memory (to compare --sound driver and z80)\n"
 "  --renderer sdl|gpu     how the picture gets to the window: SDL's GPU API unless said (or not there)\n"
             "  --present-test F.png   (headless) the run's last picture drawn 896x672 by the GPU path, no window\n"
                         "  --cpu-speed N          the 68000 N times as fast as the board's: the game is never short of time\n"
@@ -626,6 +802,14 @@ bool ParseArgs(int argc, char **argv, port::Options &o) {
             o.eepromPath = next();
         } else if (a == "--cpu") {
             o.cpu = next();
+        } else if (a == "--sound-test") {
+            const std::string v = next();
+            o.soundTest = strtoull(v.c_str(), nullptr, 10);
+            if (const size_t colon = v.find(':'); colon != std::string::npos) {
+                o.soundTestEvery = std::max(1u, static_cast<unsigned>(strtoul(v.c_str() + colon + 1, nullptr, 10)));
+            }
+        } else if (a == "--sound") {
+            o.sound = next();
         } else if (a == "--scale") {
             o.scale = atoi(next());
         } else if (a == "--fullscreen") {
@@ -645,6 +829,8 @@ bool ParseArgs(int argc, char **argv, port::Options &o) {
             o.shotPrefix = colon == std::string::npos ? "shot_" : v.substr(colon + 1);
         } else if (a == "--hash-log") {
             o.hashLog = next();
+        } else if (a == "--hash-game") {
+            o.hashGame = true;
         } else if (a == "--hash-picture") {
             o.hashPicture = true;
         } else if (a == "--renderer") {
@@ -802,6 +988,11 @@ int main(int argc, char **argv) {
             fprintf(stderr, "%llu instructions had no translation and ran in the interpreter (about %.3f%% of the run)\n",
                     static_cast<unsigned long long>(p.machine->cpu.interpreted),
                     100.0 * p.machine->cpu.interpreted * 12.0 / std::max<uint64_t>(1, p.machine->cpu.cycles));
+        }
+        if (p.machine->soundSide == Machine::SoundSide::Check) {
+            fprintf(stderr, "%llu writes to the sound chip the same from the driver and the Z80\n",
+                    static_cast<unsigned long long>(p.machine->soundWritesChecked));
+            p.machine->ReportSoundTimes();
         }
 #ifdef CPS2RECOMP_CHECK
         fprintf(stderr, "%llu translated blocks checked against the interpreter, and %llu of the sound driver's\n",

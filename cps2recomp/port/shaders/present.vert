@@ -1,4 +1,6 @@
 #version 450
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Tommy McLeroy. Part of cps2recomp.
 // The whole viewport from three corners; uv 0-1 across it
 layout(location = 0) out vec2 uv;
 void main() {
