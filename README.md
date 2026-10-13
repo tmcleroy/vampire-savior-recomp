@@ -113,7 +113,7 @@ Steam" button puts it in your library.
 | Start | `1` or Return | Start |
 | Coin | `5` | Back (Select) |
 | In-game menu | Esc or `F1` | Left stick click, or Start and Select together |
-| Stop the game / one frame on | `P` / `O` | Right stick click / left trigger |
+| Stop the game (and start it again) / one frame on | `P` / `O` | Right stick click / left trigger, once stopped |
 | Speed | `-` `=` | |
 | Start over (training) | Backspace | Left shoulder |
 | Save / load a state, slot | `F5` / `F9`, `F6` `F7` | |

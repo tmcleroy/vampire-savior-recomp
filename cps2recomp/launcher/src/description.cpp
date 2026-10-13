@@ -86,7 +86,7 @@ const launcher::Description& launcher::describe() {
         d.display = {{"fullscreen", "Full screen", "F11 switches while playing.", false, nullptr}};  // (a window unless asked)
         d.bindings = port::BindingTable();
         d.controls_heading = "WHILE PLAYING";
-        d.controls = {{"Keys", "Esc, F1, the left stick's click, or Start and Select together: menu (training mode, save states, coin, cheats, quit)   P / O: stop, one frame on   - / =: speed   Backspace: start over (training)   F5 / F9: save and load a state   F6 / F7: slot   F2: operator's test switch   F11: full screen. On a gamepad: right stick's click stops the game, left trigger goes on a frame, left shoulder starts over. (A key or button given to the game above does only that.)"}};
+        d.controls = {{"Keys", "Esc, F1, the left stick's click, or Start and Select together: menu (training mode, save states, coin, cheats, quit)   P / O: stop, one frame on   - / =: speed   Backspace: start over (training)   F5 / F9: save and load a state   F6 / F7: slot   F2: operator's test switch   F11: full screen. On a gamepad: right stick's click stops the game and starts it again, left trigger goes on a frame while it is stopped, left shoulder starts over. (A key or button given to the game above does only that.)"}};
         return d;
     }();
     return about;
