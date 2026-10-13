@@ -33,7 +33,7 @@ stage() { # stage (1-12), rewrites to leave out
     echo "== stage $1${2:+ (without the outer ones)}"
     # (training's own changes to the round's rules differ from the game's, as they are meant to: only the
     # stage's rewrites are looked at)
-    out=$(echo "$out" | grep -E "^rewrite|did not" | grep -E "Camera|Players(Across|Up)|Back8|Far32|Rows|Drawn|Piece|Plane(Of|AndRow)|PlaceOf|Animat|GiveBack|ThrownGone|KeepIn|KeepBothIn|did not" | grep -v " 0 calls")
+    out=$(echo "$out" | grep -E "^rewrite|did not" | grep -E "Camera|Players(Across|Up)|Back8|Far32|Rows|Drawn|Piece|Script[0-9]|Plane(Of|AndRow)|PlaceOf|Animat|GiveBack|ThrownGone|KeepIn|KeepBothIn|did not" | grep -v " 0 calls")
     echo "$out"
     echo "$out" | grep -q "CameraPlaced" || status=1
     echo "$out" | grep -E "differs|did not|calls, [1-9][0-9]* differed" >/dev/null && status=1
