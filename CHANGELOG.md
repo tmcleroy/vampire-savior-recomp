@@ -5,6 +5,10 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- A gamepad's left trigger goes on by a frame only once the game has been stopped (`P`, the right
+  stick's click); it no longer stops the game itself, which a touch of it while playing did, with
+  nothing on the trigger to start it again.
+
 ## 0.1.0-beta.3 - 2026-10-13
 
 - Three more modes under "Alternative modes". Survival: one opponent after another on the health

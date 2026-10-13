@@ -254,8 +254,9 @@ int RunWindowed(Port &port) {
                 both = both || (SDL_GetGamepadButton(gamepads[i], SDL_GAMEPAD_BUTTON_START) &&
                                 SDL_GetGamepadButton(gamepads[i], SDL_GAMEPAD_BUTTON_BACK));
             }
-            // The left trigger goes on by one frame (held: frame after frame, after a moment)
-            triggerHeld = trigger ? triggerHeld + 1 : 0;
+            // The left trigger goes on by one frame (held: frame after frame, after a moment), once the game
+            // has been stopped: it does not stop it, so a touch of it while playing does nothing
+            triggerHeld = trigger && port.paused ? triggerHeld + 1 : 0;
             if (!port.menu.IsOpen() && (triggerHeld == 1 || (triggerHeld > 24 && triggerHeld % 4 == 0))) {
                 port.Key('o');
             }
