@@ -217,6 +217,14 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   both ends and on the way, and the records looked at with the switch turned off and on. The lady was
   seen in the wide picture's right margin on the way (camera 417, 384, 353).
 
+- A piece with a long at `+28` (drawn only while the camera is one side of a place) is, in a wide picture,
+  drawn too whenever it is itself within 192 of the board's picture, by the place it is drawn at. The
+  places are each piece's own and take it to go by as fast as the camera; one that rides a row or a plane
+  going more slowly was still in the wide picture when they said it had left. Found from the owner's
+  pictures: the lady's body is such a piece (record 7, script 0, camera above 384), her fan arm another
+  record (script 3); the body went at camera 333 with 20 columns of her still in the picture. Every
+  stage has such pieces (listed with a dump of `FFC800` on each stage: about a hundred between them).
+
 Open: in the same made-up play the pieces' animations step on 75% of the frames with the board's picture
 and 62% with the wide one, the same before and after the rewrites. The fights are not the same fights
 (the players stand further apart), so this may be nothing; whether the wide picture leaves the game short
