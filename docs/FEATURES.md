@@ -11,8 +11,7 @@ This list is what `vampire_savior --list-features` prints. How features are writ
 ## Alternative modes
 
 "Alternative modes", the first row of the in-game menu, has ways of running the game that the
-board does not have. Training mode, attract mode and the stage viewer each have a page there with a Start row
-and their choices. Each mode ends when another is started or with the menu's Reset.
+board does not have. Each mode has a page there with a Start row and its choices. Each mode ends when another is started or with the menu's Reset.
 
 - **Training mode**: straight to the character choice with two players and a fight with no clock
   that nobody loses (the README says more; the Training and Dummy features below are its aids).
@@ -21,8 +20,23 @@ and their choices. Each mode ends when another is started or with the menu's Res
 - **Stage viewer**: the stage chosen with nobody on it and no panel. The stage's own pieces move
   as in a fight. Left and right scroll it, or it scrolls by itself from end to end and back.
 
+- **Survival**: choose a character, then one opponent after another, each beaten by one
+  knock-down. Your health is what the last fight left you, and a little back. Over the first time
+  you go down, with the count of opponents beaten.
+- **Endless battle**: two fighters played by the game, with no bars and no clock; the one knocked
+  down is replaced. Pressing anything on a player's controls takes that fighter over, and ten
+  seconds without a press gives it back.
+- **Ring out**: choose a character. Nobody loses health: the ends of a stage are open, and a
+  fighter knocked over one (while reeling from a hit, guarding one or thrown) falls. Put your
+  opponent out and you jump down to the next stage and the next opponent; over when you fall, with
+  the count of ring outs.
+
 | Feature | Name in `settings.ini` | What it does |
 | --- | --- | --- |
+| Survival: Best | `survival_best` | The most opponents beaten in one survival, kept here. Choosing a preset in the launcher puts it back to 0. |
+| Ring out: Best | `ringout_best` | The most ring outs in one go, kept the same way. |
+| Endless battle: Fighter 1, Fighter 2 | `endless_one`, `endless_two` | Who is on each side: Random (someone new each time), or one of the fifteen characters. |
+| Endless battle: Stage | `endless_stage` | Shuffle: a stage that fades into another, at random, every two minutes. Scroll: the stages go by one after another at a steady pace and the fighters are carried along with the floor, the picture's left edge pushing them on. Or one of the twelve stages. |
 | Attract mode: Shows | `attract_show` | What attract mode plays. Choices: Everything, The intro only (the introduction to the title, over and over), The fights only (one of the game's eight demonstration fights after another). |
 | Stage viewer: Stage | `viewer_stage` | The stage the viewer shows: any of the twelve, or Infinite: every stage in turn, each scrolled from end to end and then out of the picture as the next comes in, its tune fading into the next one's. Changing it while viewing goes to the new one. |
 | Stage viewer: Scrolling | `viewer_scroll` | How the viewer moves across the stage. Choices: With the stick, Slow (a pixel every four frames), Medium, Fast (a pixel a frame). |

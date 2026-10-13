@@ -130,7 +130,38 @@ has yet used them in a window or listened.
 - **The menu** (2026-10-13): Training mode's Start, Start over and aids, and the dummy's page, are
   under Alternative modes too.
 
+- **Survival, the endless battle, the ring out** (2026-10-13, `src/battle.cpp`, `src/machines.cpp`,
+  `src/modes.h`). Each is a two-player match that the mode sets up and follows with another. The
+  next match is made ready on a spare machine (a save state run in the port's machine) while the
+  last one's ending plays, and then takes its place: the game's own match set-up does all the
+  loading of a character. Who fights is put in where the game chooses the stage; who the game
+  plays is a byte of the player's record, changed while fighting. The endless battle's changing
+  stages and the ring out draw the fighters alone on the port's machine (objects only, marked:
+  `Video::markObjects`) and lay them over a stage that another machine shows with its camera put
+  where the fighters' is (hooks on the camera's two routines). Up to four machines run in a frame;
+  with three, 737 frames a second on the Mac. Checked with no window: pictures, traces, sound
+  dumps. Nobody has played them yet.
+- Known of them: with the stage behind, a stage's pieces that belong in front of the fighters are
+  behind them, and a super move's own backdrop is not shown; a fighter that has fallen leaves its
+  shadow; the two "Best" counts are features, so a preset chosen in the launcher clears them.
+
 Facts found for these:
+- A "round" is one of a player's two lives: `FF810C` (the round's result) is set at each
+  knock-down, and the health of the one knocked down comes back for the next.
+- In a player's record: `+382` the character (0 Bulleta, 1 Demitri, 2 Gallon, 3 Victor, 4 Zabel,
+  5 Morrigan, 6 Anakaris, 7 Felicia, 8 Bishamon, 9 Aulbath, 10 Sasquatch, 12 Q-Bee, 13 Lei-Lei,
+  14 Lilith, 15 Jedah; kept again at `+3E0`), `+3AE` its colours, `+3B4` 1 when the game plays it
+  (225 places read it; changing it in a fight hands the fighter over at once), `+380` 2 for a
+  player in the game (0: the panel counts down for that side). `+40`/`+44` speed, `+48`/`+4C` its
+  change each frame.
+- The camera's record is at `FF8280`: `+20`/`+24` where it wants to be, `+5C`/`+5E` the most it
+  moves in a frame, `+44`/`+46` the ends. `01E36E` (across) and `01E3F2` (up) work those out and
+  hand them to `01E450` and `01E4A0`.
+- `028192` keeps the player at A6 inside the picture (`+132` half its width; `+116` 1 or 2 at an
+  edge), and passes a cornered player's push back to the attacker. The stage's ends are only the
+  camera's ends: a player is kept in the picture, not in the stage.
+- The panel's objects: colour sets 0-4, and the faces beside the bars in the players' own sets,
+  tiles `13800`-`143FF`. A player's own objects: sets 10-15 (the first) and 16-21.
 
 - With no coin in, the word at `FF8000` steps through the show: `0C` its start, `10` the sound
   notice, `12`-`14` the maker's, `16`-`18` the introduction and title, `1A`-`20` a fight, `22`-`24`

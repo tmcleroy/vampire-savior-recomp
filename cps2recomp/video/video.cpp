@@ -308,6 +308,11 @@ void Video::RenderLine(int line, uint32_t *out) {
     for (int x = 0; x < kWidth; x++) {
         out[x] = m_palette[pens[x]];
     }
+    if (markObjects) {
+        for (int x = 0; x < kWidth; x++) {
+            out[x] |= priority[x] == 31 ? 0x80000000u | (static_cast<uint32_t>(pens[x] >> 4) & 0x1F) << 24 : 0;
+        }
+    }
 }
 
 void Video::Serialize(Archive &ar) {

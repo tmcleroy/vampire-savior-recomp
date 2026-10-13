@@ -9,6 +9,7 @@
 #include "boxes.h"
 #include "frames.h"
 #include "machine.h"
+#include "modes.h"
 #include "state.h"
 #include "vsav.h"
 
@@ -21,9 +22,6 @@ namespace cps2recomp {
 void BootToChoice(Machine &machine);
 bool AttackInRange(M68K &c, uint32_t player); // fight.cpp
 bool GuardStanding(M68K &c, uint32_t player);
-bool StageViewer();      // modes.cpp: the stage viewer is on (no players, no readouts)
-int StageViewerStage();  //   and the stage it shows (1-12), or 0
-void EndModes();         //   attract mode and the stage viewer are over
 
 namespace {
     using namespace vsav;
@@ -122,6 +120,7 @@ namespace {
     // The menu's "Training mode": the board switched off and on, and the way to the character choice worked
     void Start(Machine &machine) {
         EndModes();
+        EndBattle();
         SetFeature("training_mode", true);
         BootToChoice(machine);
     }
@@ -200,8 +199,25 @@ namespace {
     // The game is choosing the stage for a match (vsav.h, kChooseStage). In a training session with a stage
     // asked for, that one is used and the game's routine is left out.
     bool ChooseStage(M68K &c) {
+        // The characters a mode wants, in place of the ones chosen (two alike: the second in its other colours)
+        const MatchWanted &wanted = Wanted();
+        for (int n = 0; n < 2; n++) {
+            if (wanted.characters[n] >= 0) {
+                SetRam8(Player(n) + kCharacter, static_cast<uint8_t>(wanted.characters[n]));
+                SetRam8(Player(n) + kCharacterAgain, static_cast<uint8_t>(wanted.characters[n]));
+            }
+        }
+        for (int n = 0; n < 2; n++) {
+            if (wanted.colours[n] >= 0) {
+                SetRam8(Player(n) + kColours, static_cast<uint8_t>(wanted.colours[n]));
+            }
+        }
+        if (wanted.characters[0] >= 0 && Ram8(Player(0) + kCharacter) == Ram8(Player(1) + kCharacter) &&
+            Ram8(Player(0) + kColours) == Ram8(Player(1) + kColours)) {
+            SetRam8(Player(1) + kColours, Ram8(Player(1) + kColours) ^ 1);
+        }
         // (0: the game's choice)
-        const int stage = StageViewer() ? StageViewerStage() : FeatureOn("training_mode") ? FeatureValue("training_stage") : 0;
+        const int stage = wanted.stage ? wanted.stage : FeatureOn("training_mode") ? FeatureValue("training_stage") : 0;
         if (stage < 1 || stage > kStages || Ram8(kPlayersThen) != 3) {
             return false;
         }
@@ -458,7 +474,7 @@ namespace {
     }
 
     void Frame(Machine &machine) {
-        if (StageViewer()) {
+        if (StageViewer() || BattleMode()) {
             // (nothing of training's is shown, or kept)
             g.fighting = false;
             g_roundFought = false;
@@ -622,7 +638,7 @@ void TrainingState(Archive &ar) {
 
 // A training session is on, or the stage viewer: no clock and no knockouts (fight.cpp)
 bool TrainingMode() {
-    return FeatureOn("training_mode") || StageViewer();
+    return FeatureOn("training_mode") || StageViewer() || BattleNoKnockOut();
 }
 
 // "Training mode" on the menu's Alternative modes page (modes.cpp)

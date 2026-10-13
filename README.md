@@ -74,6 +74,13 @@ gauge, infinite time). [docs/FEATURES.md](docs/FEATURES.md) has the whole list.
   from end to end. "Infinite" is all twelve in turn, each stage scrolling into the next as its
   tune fades into the next one's.
 
+- **Survival**: one opponent after another on the health you have left. How many can you beat?
+- **Endless battle**: two fighters the game plays, for as long as you like, with no bars and no
+  clock, on one stage, on stages that fade one into another, or on a floor that scrolls through
+  them all. Touch the controls to take a fighter over.
+- **Ring out**: no health. Knock your opponent over the end of the stage and jump down to the
+  next one.
+
 ## What you need
 
 - The ROM set `vsavj` (*Vampire Savior: The Lord of Vampire*, Japan 970519): `vsavj.zip` (with
