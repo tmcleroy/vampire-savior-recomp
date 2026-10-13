@@ -7,6 +7,7 @@
 // that what is further back goes by more slowly, or follows a row of the stage's row scroll table (the
 // floor, whose rows each go at their own rate). Which rate is the stage's choice (the table at the end).
 #include "stage.h"
+#include "widescreen.h"
 
 namespace cps2recomp {
 
@@ -15,6 +16,12 @@ using namespace vsav;
 const Layer kLayer8 = {0x20, 0x01EEFA, 0x01EE22, 0x01EE58, 0x01EF16, 0x01EFA0, 0x22, 0x24, 0x1FF};
 const Layer kLayer16 = {0x10, 0x01F31E, 0x01F280, 0x01F2B6, 0x01F33A, 0x01F3C4, 0x26, 0x28, 0x3FF};
 const Layer kLayer32 = {0x20, 0x01F71C, 0x01F64E, 0x01F682, 0x01F73A, 0x01F7C2, 0x2A, 0x2C, 0x7FF};
+
+int64_t WideLag(int64_t lag) {
+    const int side = WideMargin();
+    const int wide = static_cast<int16_t>(Ram16(kCameraRecord + kCameraEndRight) - Ram16(kCameraRecord + kLayerStartX));
+    return side && wide > 0 ? lag * (wide + side) / wide : lag;
+}
 
 namespace {
     int16_t Signed(uint32_t word) {
@@ -100,7 +107,11 @@ namespace {
             SetLow16(c.d[0], c.d[0] + Mem16(c, c.a[0] + static_cast<uint32_t>(Signed(c.d[1]) + row)) - 0xC0);
         } else {
             SetLow16(c.d[0], c.d[0] + Ram16(Var(c, kRowsLead)));
+            const int16_t travel = Signed(c.d[0]);
             AtRate(c, rate);
+            if (WideMargin()) {
+                SetLow16(c.d[0], travel - WideLag(travel - Signed(c.d[0]))); // (stage.h)
+            }
         }
         SetLow16(c.d[0], c.d[0] + Ram16(record + kLayerStartX));
         PlaceLayerAcross(c, layer);

@@ -32,6 +32,16 @@ constexpr uint32_t kLayerRecords[4] = {0x000030, vsav::kBackLayer, vsav::kCamera
 void PlaceLayerAcross(M68K &c, const Layer &layer);
 void PlaceLayerUp(M68K &c, const Layer &layer);
 
+// A wide picture and what goes by more slowly than the camera. The board paints a plane, and a row of the
+// stage's own, as far as its picture shows them with the camera at its ends. A wide picture's camera stops
+// 64 short of those ends and shows 64 more, so anything slower than the camera would be seen beyond its
+// painting there (a black band at the stage's end). What is slower is therefore that much slower again:
+// how far it lags behind the camera is made greater in the proportion of the board's camera's travel to
+// the wide one's (three to two on most stages), so that at the wide camera's ends the wide picture's edges
+// are where the board's picture's edges are at its ends. Given a lag (any units), the lag for the picture
+// being played in: the same on the board.
+int64_t WideLag(int64_t lag);
+
 // How far right of the board's picture's left edge the object is, where it is drawn (the place the list's
 // making gives it: its scroll screen's, and its row's when it rides one). False for an object that rides
 // no scroll screen. Nothing of the CPU's is changed.

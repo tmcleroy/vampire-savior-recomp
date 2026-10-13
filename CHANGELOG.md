@@ -18,6 +18,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Endless battle, the stages scrolling by: the next stage is made ready in time for the end of
   the one shown (in the wide picture a stage is crossed sooner, and at the fast speed the
   scrolling waited about a second at each stage's end).
+- 48 of the 58 scripts of the stages' pieces are readable C++ too, each checked against the game's own
+  on its stage.
 - The stage's code is readable C++ (58 routines: the camera, the scroll screens' placing, the row
   scroll table, what is in the picture, the players' edges, the stage's pieces), each checked
   against the game's own on every stage; widescreen is lines in it. With widescreen on, the lady
@@ -25,6 +27,10 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Widescreen: a piece of a stage that the game shows only while the camera is one side of a place
   (most of the people and things in the backgrounds) is shown whenever it is in the wide picture; the
   lady on Feast of the Damned went while part of her was still in it.
+- Widescreen: no black bands at a stage's ends, or between stages in the viewer's infinite stage and
+  the endless battle's scrolling stages: the wall and the planes behind keep inside their painting
+  (what goes by more slowly than the camera goes by more slowly still), and the building under the
+  helicopter on the Tower of Arrogance is where it belongs.
 - Widescreen: on every stage, the pieces that the game leaves alone until the camera is near them
   are animated and shown whenever they are near the wide picture, and the three other pieces that
   are one thing or another by the camera's side (Concrete Cave, Tower of Arrogance, Abaraya) are
