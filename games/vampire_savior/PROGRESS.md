@@ -128,8 +128,9 @@ played in it, the same day.)
   by a hook with the wider numbers). A piece of the stage is always drawn: the comparisons that
   would leave it out (`015512`, `01552E`; `0154E2` and `0154F4`, by the camera's place) always say
   it is in.
-- The stages' own scripts (`07D4xx`-`080Axx`) compare the camera with a place too. Eleven such
-  comparisons only draw or move a piece while the camera is on one side (`07DF4C`, `07E05E`,
+- The stages' own scripts (`07D4xx`-`080Axx`) compare the camera with a place too. Twelve such
+  comparisons only draw or move a piece while the camera is on one side (`07D4DA`: the lady under
+  the bird cage on Feast of the Damned, whose record was not drawn or moved left of it; `07DF4C`, `07E05E`,
   `07E0BA`, `07F26E`, `07F896`, `07FB22`, `07FD4A`, `07FE26`, `0803B4`, `080424`, `0808A6`): they
   are answered the way that keeps the piece. Four scripts keep two pieces in one record, which is
   the left one while the camera is left of a place and the right one otherwise (`07D438`: Feast

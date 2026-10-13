@@ -245,7 +245,7 @@ namespace {
         return g_play && Answered(c, kAt, kLength, kLower);
     }
     [[maybe_unused]] constexpr uint32_t kScriptsGoOnAt[] = {
-        HookAt(0x07D444), HookAt(0x07D494), HookAt(0x07DF52), HookAt(0x07E064), HookAt(0x07E0C0), HookAt(0x07F89C), HookAt(0x07FB28),
+        HookAt(0x07D444), HookAt(0x07D494), HookAt(0x07D4E0), HookAt(0x07DF52), HookAt(0x07E064), HookAt(0x07E0C0), HookAt(0x07F89C), HookAt(0x07FB28),
         HookAt(0x07FD50), HookAt(0x07FE2C), HookAt(0x0808AC), HookAt(0x0803B8), HookAt(0x080428), HookAt(0x07F272)};
 
     // When the board has taken the list: after each twin's entries, the other piece's, put where it is with
@@ -585,6 +585,7 @@ void RegisterWidescreen() {
     AddHook(0x080A20, "TwinScript4", TwinScript<0x0A>);
     AddHook(0x07D43E, "KeepTheDancers", KeepTheDancers<0x07D43E>);
     AddHook(0x07D48E, "KeepTheDancers2", KeepTheDancers<0x07D48E>);
+    AddHook(0x07D4DA, "KeepThePiece0", KeepThePiece<0x07D4DA, 6, false>);
     AddHook(0x07DF4C, "KeepThePiece", KeepThePiece<0x07DF4C, 6, true>);
     AddHook(0x07E05E, "KeepThePiece2", KeepThePiece<0x07E05E, 6, false>);
     AddHook(0x07E0BA, "KeepThePiece3", KeepThePiece<0x07E0BA, 6, false>);
