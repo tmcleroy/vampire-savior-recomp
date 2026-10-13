@@ -382,9 +382,7 @@ namespace {
     //
     // A piece that is in the board's picture only with the camera to one side of a place has, in several
     // scripts, a frame that begins by looking at the camera: the other side of the place, and nothing of
-    // the frame is done: no animation, no movement, nothing drawn (the lady above is one). The test is all
-    // that is written again of these: the rest of the frame is the game's own code still, from where the
-    // test ends. In a wide picture the place is 64 further off, and a piece that is itself near the
+    // the frame is done: no animation, no movement, nothing drawn (the lady above is one). In a wide picture the place is 64 further off, and a piece that is itself near the
     // picture is not out whatever the camera's place (it may ride something slower than the camera).
     bool OutOfView(M68K &c, uint16_t place, bool rightOfPlace, bool placedByFrame = false) {
         const uint16_t camera = Ram16(kCameraX);
@@ -395,13 +393,6 @@ namespace {
         // (a piece whose frame works its place out from the camera's has no place to go by while out)
         int across = 0;
         return !(side && !placedByFrame && AcrossInPicture(c, c.a[6] & 0xFFFFFF, across) && across >= -192 && across < 0x180 + 192);
-    }
-    // (kAfter: where the game's code goes on when the piece is not out)
-    template <uint16_t kPlace, bool kRightOfPlace, uint32_t kAfter, bool kPlacedByFrame = false>
-    void WhileInView(M68K &c) {
-        if (!OutOfView(c, kPlace, kRightOfPlace, kPlacedByFrame)) {
-            Call(c, kAfter);
-        }
     }
     // --- pieces that work their own place out from the camera's ---
     //
@@ -1814,6 +1805,169 @@ namespace {
         }
     }
 
+    // A piece made by the one at A6, on the same scroll screen and row
+    void LikeMaker(M68K &c, uint32_t made, uint32_t piece) {
+        SetRam8(made + kIsRiding, Ram8(piece + kIsRiding));
+        SetRam16(made + kRow, Ram16(piece + kRow));
+        SetRam32(made + kPlaces, Ram32(piece + kPlaces));
+        (void)c;
+    }
+
+    // 07FCF0 (script 38, the train): there only with the camera right of a place. Eight animations in
+    // turn; an event of a frame above nothing copies in a set of colours (by the event, and the game's
+    // word for which colours a stage has), and one below nothing lets a piece go (script 39). It makes a
+    // piece that goes with it (script 55).
+    constexpr uint32_t kScript38Colours[10] = {0, 0, 0x3A0B20, 0x3A2640, 0x3A1660, 0x3A3180, 0x3A1680, 0x3A31A0, 0x3A16A0, 0x3A31C0};
+    void Script38(M68K &c) {
+        static constexpr Steps kSteps = {0x07FCF0, {0x07FD04, 0x07FD4A, 0x07FE00, 0x07FE00}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetRam8(piece + kHalf, 0);
+            if (Take(c)) {
+                const uint32_t made = c.a[4] & 0xFFFFFF;
+                SetRam32(made, 0x01003700);
+                SetRam16(made + kStartedX, Ram16(piece + kX));
+                SetRam16(made + kStartedY, Ram16(piece + kY));
+                LikeMaker(c, made, piece);
+                SetRam16(made + kMaker, static_cast<uint16_t>(c.a[6]));
+            }
+            SetStageAnimation(c, 0x19 + Ram8(piece + kHalf));
+            break;
+        case 2:
+            if (OutOfView(c, 0x1E8, true)) {
+                break;
+            }
+            if (!Frozen(c)) {
+                if (Ram8(piece + kOver) & 0x80) {
+                    SetRam8(piece + kHalf, (Ram8(piece + kHalf) + 1) & 7);
+                    SetStageAnimation(c, 0x19 + Ram8(piece + kHalf));
+                } else {
+                    c.d[0] = Ram8(piece + kEvent);
+                    if (!c.d[0]) {
+                        Animate(c);
+                    } else if (c.d[0] & 0x80) {
+                        SetRam8(piece + kEvent, 0);
+                        if (Take(c)) {
+                            const uint32_t made = c.a[4] & 0xFFFFFF;
+                            SetRam32(made, 0x01002700);
+                            SetRam16(made + kX, 0x370);
+                            SetRam16(made + kY, 0x78);
+                            SetRam8(made + kDepth, 2);
+                            LikeMaker(c, made, piece);
+                            Animate(c);
+                        }
+                    } else {
+                        SetRam8(piece + kEvent, 0);
+                        SetLow16(c.d[0], c.d[0] + Ram16(Var(c, kColoursOf)));
+                        c.a[0] = kScript38Colours[((c.d[0] & 0xFFFF) >> 2) % 10];
+                        c.a[1] = 0x90C3A0;
+                        c.d[7] = 0;
+                        Call(c, kCopyColours);
+                    }
+                }
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07DF9C (script 11, Concrete Cave): a piece with two others it makes (scripts 51 and 52). Awake only
+    // with the camera right of a place. At an event of its animation it looks at the first of the two: if
+    // that one's event is set it goes through another animation (13) and then a third (14); otherwise,
+    // one time in four, its own again from the start. In the third it waits on two longs of memory that
+    // the game reads from below its own record (a slip for the players' states, by the look of it; kept).
+    void Script11(M68K &c) {
+        static constexpr Steps kSteps = {0x07DF9C, {0x07DFB0, 0x07E040, 0x07E108, 0x07E108}};
+        static constexpr uint32_t kInnerAt[3] = {0x07E05E, 0x07E0A2, 0x07E0BA};
+        constexpr uint16_t kAwakeFrom = 0x1D0;
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            if (Ram8(Var(c, kFreePiecesCount)) >= 2) {
+                for (int n = 0; n < 2; n++) {
+                    Call(c, kTakePiece);
+                    const uint32_t made = c.a[4] & 0xFFFFFF;
+                    SetRam32(made, n == 0 ? 0x01003300 : 0x01003400);
+                    SetRam16(made + kX, n == 0 ? Ram16(piece + kX) : 0x373);
+                    SetRam16(made + kY, n == 0 ? Ram16(piece + kY) : 0x37);
+                    SetRam8(made + kFacesRight, Ram8(piece + kFacesRight));
+                    LikeMaker(c, made, piece);
+                    SetRam32(made + 0x28, 0x800001C0);
+                    SetRam16(made + kMaker, static_cast<uint16_t>(c.a[6]));
+                    if (n == 0) {
+                        SetRam16(piece + 0x40, static_cast<uint16_t>(c.a[4]));
+                    }
+                }
+            }
+            SetStageAnimation(c, 8);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                switch (InnerStepOf(c, 0x07E058, kInnerAt)) {
+                case 0:
+                    if (OutOfView(c, kAwakeFrom, true)) {
+                        break;
+                    }
+                    Animate(c);
+                    if (!Ram8(piece + kEvent)) {
+                        break;
+                    }
+                    SetRam8(piece + kEvent, 0);
+                    c.a[4] = 0xFFFF0000u | Ram16(piece + 0x40);
+                    if (Ram8((c.a[4] & 0xFFFFFF) + kEvent)) {
+                        SetRam8(piece + kInner, 2);
+                        SetStageAnimation(c, 0x0D);
+                    } else {
+                        Chance(c, false);
+                        if (!(c.d[0] & 0xFF)) {
+                            SetStageAnimation(c, 8);
+                        }
+                    }
+                    break;
+                case 2:
+                    if (Ram8(piece + kOver) & 0x80) {
+                        SetRam8(piece + kInner, 4);
+                        SetStageAnimation(c, 0x0E);
+                    } else {
+                        Animate(c);
+                    }
+                    break;
+                default:
+                    if (OutOfView(c, kAwakeFrom, true)) {
+                        SetRam8(piece + kInner, 0);
+                        SetRam8(piece + kEvent, 0);
+                        SetStageAnimation(c, 8);
+                        break;
+                    }
+                    c.d[1] = 0xFFFFFF00;
+                    c.d[2] = 0x02001200;
+                    c.d[0] = Ram32(piece - 0x7BFC) & c.d[1];
+                    if (c.d[0] != c.d[2]) {
+                        c.d[0] = Ram32(piece - 0x77FC) & c.d[1];
+                    }
+                    if (c.d[0] == c.d[2]) {
+                        SetRam8(piece + kInner, 2);
+                        SetStageAnimation(c, 0x0F);
+                    } else {
+                        Animate(c);
+                    }
+                    break;
+                }
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
     // The scripts, by a record's kScript: where each is in the game's program
     constexpr uint32_t kScripts[58] = {
         0x07D354, 0x07D3A2, 0x07D3F6, 0x07D4BA, 0x07D534, 0x07D59C, 0x07D710, 0x07DDD8, 0x07DE32, 0x07DECE, 0x07DF1E, 0x07DF9C,
@@ -1880,6 +2034,8 @@ void RegisterPieces() {
     AddRewrite(0x07D4BA, "PieceLady", Lady, kFreeFlags, 166);
     AddRewrite(0x07D534, "PieceThrower", Thrower, kFreeFlags, 134);
     AddRewrite(0x07D240, "AllPieces", AllPieces, kFreeFlags);
+    AddRewrite(0x07FCF0, "Script38", Script38, kFreeFlags, 150);
+    AddRewrite(0x07DF9C, "Script11", Script11, kFreeFlags, 150);
     AddRewrite(0x07D59C, "Script5", Script5, kFreeFlags, 200);
     AddRewrite(0x07F202, "Script26", Script26, kFreeFlags, 250);
     AddRewrite(0x07FC0C, "Script37", Script37, kFreeFlags, 150);
@@ -1916,7 +2072,6 @@ void RegisterPieces() {
     AddRewrite(0x07FA82, "Script33", Script33, kFreeFlags, 120);
     AddRewrite(0x0807C0, "Script53", Script53, kFreeFlags, 120);
     // (the frames that begin with a test of the camera: the script, the place, which side, where it goes on)
-    AddRewrite(0x07FD4A, "Piece38InView", WhileInView<0x1E8, true, HookAt(0x07FD54)>, kFreeFlags, 30);
 }
 
 } // namespace cps2recomp
