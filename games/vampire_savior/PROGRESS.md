@@ -258,10 +258,12 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   wide, is the same but for moving colours and the floor; 450 frames of the infinite stage (every 20th
   of 9,000, fast) have no column that is black above the floor, where 24 of 130 had before.
 
-- Piece scripts written again whole so far (`pieces.cpp`), each checked on its stage: 0-4, 7, 9, 12, 13,
-  15, 21, 22, 25, 29-36, 39, 41, 44, 51-54. In part (the test of the camera, the placing, or the frame of
-  a piece that is two by turns): 8, 10, 26, 38, 43, 46, 47, 55, 56, 57. The game's own code still: 5, 6,
-  11, 14, 16-18, 24, 27, 28, 37, 40, 45, 48, and 19, 20, 23, 42, 49, 50, which no stage was seen to use.
+- Piece scripts written again whole so far (`pieces.cpp`), each checked on its stage: 0-4, 7-10, 12, 13,
+  15, 21, 22, 25, 29-36, 39, 41, 44, 46, 47, 51-54, 56, 57 (39 of the 58). In part (the test of the
+  camera, or the placing): 26, 38, 43, 55. The game's own code still: 5, 6, 11, 14, 16-18, 24, 27, 28, 37,
+  40, 45, 48, and 19, 20, 23, 42, 49, 50, which no stage was seen to use. The two pieces the finder
+  still names are explained by their scripts: 41 (the train) is not there until the round is on, and 29
+  (War Agony) waits, not drawn, on a byte of the piece that made it.
 - More of a piece's record: `+05` a step within the frame's step; `+30` the record that made it (a word);
   `+0D` set by pieces made by others; `+40`/`+44`/`+48`/`+4C` speed and pull (longs) for the ones that
   move by `015466`. From A5: `107` not zero once the round's fighting has begun, `B4` bit 0 turning over

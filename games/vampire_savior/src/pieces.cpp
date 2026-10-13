@@ -403,15 +403,6 @@ namespace {
             Call(c, kAfter);
         }
     }
-    // ... and the same for the two scripts whose frame takes the camera's place into D1 first
-    template <uint16_t kPlace, uint32_t kAfter>
-    void WhileLeftOf(M68K &c) {
-        SetLow16(c.d[1], Ram16(kCameraX));
-        if (!OutOfView(c, kPlace, false, true)) {
-            Call(c, kAfter);
-        }
-    }
-
     // 07F26A (script 26, Vanity Paradise's floating things): the place is the record's own
     void FloaterFrame(M68K &c) {
         const uint16_t place = Ram16((c.a[6] & 0xFFFFFF) + 0x2A);
@@ -420,12 +411,6 @@ namespace {
         if (!OutOfView(c, static_cast<uint16_t>(place + 1), true)) {
             Call(c, HookAt(0x07F274));
         }
-    }
-
-    // 07DF4C (script 10, Concrete Cave): a thing that goes left in jumps while the camera is left of a
-    // place; right of it, it is put back at its start
-    void RunnerFrame(M68K &c) {
-        Call(c, OutOfView(c, 0x1BF, false) ? 0x07DF82 : HookAt(0x07DF54));
     }
 
     // --- pieces that work their own place out from the camera's ---
@@ -538,11 +523,6 @@ namespace {
                                     SetRam8(piece + kFacesRight, right);
                                     SetRam16(piece + kX, Ram16(piece + (right ? 0x42 : 0x40)));
                                 }};
-    template <const Turns &turns>
-    void ByTurns(M68K &c) {
-        TurnsFrame(c, turns);
-    }
-
     // --- more scripts, whole ---
     //
     // Small ones, most of them a plain piece with one thing of its own. `StepAt` is `Step` for a script
@@ -1390,6 +1370,134 @@ namespace {
         }
     }
 
+    // 07DF1E (script 10, Concrete Cave): with the camera left of a place it goes left 48 at each end of
+    // its animation, as far as 192; with the camera right of the place it is put back at its start
+    void Script10(M68K &c) {
+        static constexpr Steps kSteps = {0x07DF1E, {0x07DF32, 0x07DF4C, 0x07DF96, 0x07DF96}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, 6);
+            SetRam32(piece + kKeptFrame, Ram32(piece + kFrame));
+            SetRam32(piece + kKeptFrame2, Ram32(piece + kTimer));
+            break;
+        case 2:
+            if (OutOfView(c, 0x1BF, false)) {
+                SetRam16(piece + kX, 0x188);
+                SetRam32(piece + kFrame, Ram32(piece + kKeptFrame));
+                SetRam32(piece + kTimer, Ram32(piece + kKeptFrame2));
+                break;
+            }
+            if (!Frozen(c)) {
+                Animate(c);
+                if (Ram8(piece + kOver)) {
+                    SetRam16(piece + kX, static_cast<uint16_t>(Ram16(piece + kX) - 0x30));
+                    if (Ram16(piece + kX) < 0xC0) {
+                        SetRam16(piece + kX, 0xC0);
+                        break; // (and it is not drawn that frame)
+                    }
+                }
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 080378, 0803E8 (scripts 46 and 47): the pieces that work their place out from the camera's (above),
+    // there only with the camera left of a place
+    void SelfPlaced(M68K &c, const Steps &steps, uint32_t animation, uint16_t place, void (*put)(M68K &)) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, steps)) {
+        case 0:
+            SetRam32(piece + kStartedX, Ram32(piece + kX));
+            SetRam32(piece + kStartedY, Ram32(piece + kY));
+            StartAs(c, animation);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                Animate(c);
+            }
+            SetLow16(c.d[1], Ram16(kCameraX));
+            if (!OutOfView(c, place, false, true)) {
+                put(c);
+            }
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+    void Script46(M68K &c) {
+        static constexpr Steps kSteps = {0x080378, {0x08038C, 0x0803A4, 0x0803E2, 0x0803E2}};
+        SelfPlaced(c, kSteps, 0x10, 0x278, PlaceAQuarter);
+    }
+    void Script47(M68K &c) {
+        static constexpr Steps kSteps = {0x0803E8, {0x0803FC, 0x080414, 0x08045C, 0x08045C}};
+        SelfPlaced(c, kSteps, 3, 0x1E0, PlaceThreeQuarters);
+    }
+
+    // 07DE32, 0809E4, 080970 (scripts 8, 57 and 56): the pieces that are two by turns (above), whole
+    constexpr int32_t kScript8Other = 0x90; // from A5, a word: at 8, the right one's picture is another
+    void Script8(M68K &c) {
+        static constexpr Steps kSteps = {0x07DE32, {0x07DE46, 0x07DE78, 0x07DEC8, 0x07DEC8}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + kHalf, 1);
+            StartAs(c, 0);
+            SetRam32(piece + kKeptFrame, Ram32(piece + kFrame));
+            SetStageAnimation(c, Ram16(Var(c, kScript8Other)) == 8 ? 5 : 4);
+            SetRam32(piece + kKeptFrame2, Ram32(piece + kFrame));
+            break;
+        case 2:
+            TurnsFrame(c, kTurns8);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+    void Script57(M68K &c) {
+        static constexpr Steps kSteps = {0x0809E4, {0x0809F8, 0x080A20, 0x080A7A, 0x080A7A}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + kHalf, 1);
+            StartAs(c, 0);
+            SetRam32(piece + kKeptFrame, Ram32(piece + kFrame));
+            SetStageAnimation(c, 2);
+            SetRam32(piece + kKeptFrame2, Ram32(piece + kFrame));
+            break;
+        case 2:
+            TurnsFrame(c, kTurns57);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+    void Script56(M68K &c) {
+        static constexpr Steps kSteps = {0x080970, {0x080984, 0x0809A6, 0x0809DE, 0x0809DE}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam16(piece + 0x40, Ram16(piece + kX));
+            SetRam16(piece + 0x42, Ram16(piece + kY)); // (the other place across is given as the height)
+            SetRam16(piece + kY, 0x38);
+            StartAs(c, Ram8(piece + kWhich));
+            break;
+        case 2:
+            TurnsFrame(c, kTurns56);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
     // The scripts, by a record's kScript: where each is in the game's program
     constexpr uint32_t kScripts[58] = {
         0x07D354, 0x07D3A2, 0x07D3F6, 0x07D4BA, 0x07D534, 0x07D59C, 0x07D710, 0x07DDD8, 0x07DE32, 0x07DECE, 0x07DF1E, 0x07DF9C,
@@ -1456,6 +1564,12 @@ void RegisterPieces() {
     AddRewrite(0x07D4BA, "PieceLady", Lady, kFreeFlags, 166);
     AddRewrite(0x07D534, "PieceThrower", Thrower, kFreeFlags, 134);
     AddRewrite(0x07D240, "AllPieces", AllPieces, kFreeFlags);
+    AddRewrite(0x07DF1E, "Script10", Script10, kFreeFlags, 120);
+    AddRewrite(0x080378, "Script46", Script46, kFreeFlags, 150);
+    AddRewrite(0x0803E8, "Script47", Script47, kFreeFlags, 180);
+    AddRewrite(0x07DE32, "Script8", Script8, kFreeFlags, 100);
+    AddRewrite(0x0809E4, "Script57", Script57, kFreeFlags, 100);
+    AddRewrite(0x080970, "Script56", Script56, kFreeFlags, 100);
     AddRewrite(0x08083A, "Script54", Script54, kFreeFlags, 120);
     AddRewrite(0x07EEEC, "Script22", Script22, kFreeFlags, 120);
     AddRewrite(0x07E162, "Script13", Script13, kFreeFlags, 150);
@@ -1479,19 +1593,11 @@ void RegisterPieces() {
     AddRewrite(0x080094, "Script44", Script44, kFreeFlags, 120);
     AddRewrite(0x07FA82, "Script33", Script33, kFreeFlags, 120);
     AddRewrite(0x0807C0, "Script53", Script53, kFreeFlags, 120);
-    AddRewrite(0x07DE78, "Piece8ByTurns", ByTurns<kTurns8>, kFreeFlags, 60);
-    AddRewrite(0x080A20, "Piece57ByTurns", ByTurns<kTurns57>, kFreeFlags, 60);
-    AddRewrite(0x0809A6, "Piece56ByTurns", ByTurns<kTurns56>, kFreeFlags, 60);
     // (the frames that begin with a test of the camera: the script, the place, which side, where it goes on)
     AddRewrite(0x07FD4A, "Piece38InView", WhileInView<0x1E8, true, HookAt(0x07FD54)>, kFreeFlags, 30);
     AddRewrite(0x0808A6, "Piece55InView", WhileInView<0x1E8, true, HookAt(0x0808AE)>, kFreeFlags, 30);
-    AddRewrite(0x0803B0, "Piece46InView", WhileLeftOf<0x278, 0x0803BA>, kFreeFlags, 30);
-    AddRewrite(0x080420, "Piece47InView", WhileLeftOf<0x1E0, 0x08042A>, kFreeFlags, 30);
-    AddRewrite(0x0803BA, "Piece46Place", PlaceAQuarter, kFreeFlags, 80);
-    AddRewrite(0x08042A, "Piece47Place", PlaceThreeQuarters, kFreeFlags, 110);
     AddRewrite(0x080066, "Piece43Place", PlaceASixteenthMore, kFreeFlags, 110);
     AddRewrite(0x07F26A, "Piece26InView", FloaterFrame, kFreeFlags, 30);
-    AddRewrite(0x07DF4C, "Piece10InView", RunnerFrame, kFreeFlags, 30);
 }
 
 } // namespace cps2recomp
