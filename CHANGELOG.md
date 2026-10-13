@@ -5,6 +5,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+## 0.1.0-beta.2 - 2026-10-13
+
 - "Alternative modes" at the top of the in-game menu: Training mode and two new modes, each with
   a page of its own. Training's page has Start, Start over, its aids and the dummy's page, which
   were on the first page and on pages of their own.
@@ -14,6 +16,7 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
   (slow, medium, fast); the stage's own tune or any other stage's.
 - The viewer's "Infinite" stage: every stage in turn, each scrolling into the next, the tunes
   fading from one to the other.
+- More pictures of the game in the README.
 
 ## 0.1.0-beta.1 - 2026-10-12
 

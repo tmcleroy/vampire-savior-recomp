@@ -56,7 +56,11 @@ gauge, infinite time). [docs/FEATURES.md](docs/FEATURES.md) has the whole list.
 | | |
 | --- | --- |
 | ![A fight](docs/screenshots/fight.png) | ![Another fight](docs/screenshots/fight-2.png) |
-| ![The launcher: features](docs/screenshots/launcher-features.png) | ![The launcher: controllers](docs/screenshots/launcher-controls.png) |
+| ![A beam across the screen](docs/screenshots/action-1.png) | ![A Dark Force, the stage gone](docs/screenshots/action-2.png) |
+| ![Bats, in a Dark Force](docs/screenshots/action-3.png) | ![A hit in the forest](docs/screenshots/action-4.png) |
+| ![A hit lands](docs/screenshots/action-5.png) | ![A super move](docs/screenshots/action-6.png) |
+| ![Another Dark Force](docs/screenshots/action-7.png) | ![The launcher: features](docs/screenshots/launcher-features.png) |
+| ![The launcher: controllers](docs/screenshots/launcher-controls.png) | |
 
 ## Other modes
 
