@@ -22,6 +22,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
   scroll table, what is in the picture, the players' edges, the stage's pieces), each checked
   against the game's own on every stage; widescreen is lines in it. With widescreen on, the lady
   under the bird cage on Feast of the Damned is there whenever she is in the wide picture.
+- Widescreen: both groups of dancers on Feast of the Damned are there at once (the board shows one
+  or the other, by which side of a place the camera is).
 
 ## 0.1.0-beta.4 - 2026-10-13
 

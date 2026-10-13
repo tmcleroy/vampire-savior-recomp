@@ -192,6 +192,73 @@ namespace {
         SetRam8((c.a[6] & 0xFFFFFF) + kTurn, number);
         SetStageAnimation(c);
     }
+    // In a wide picture (widescreen.h) both can be in it at once, so there the record is the left ones for
+    // good and a second record, made from it, is the right ones: kWideHalf says which a record is. With
+    // the board's picture again, the second is given back and the first goes by the camera as before.
+    constexpr uint32_t kWideHalf = 0x27; // byte (the script's own, 0 on the board)
+    enum : uint8_t { kByTurns = 0, kLeftForGood = 1, kRightForGood = 2 };
+
+    void DancersLeft(M68K &c, uint32_t piece) {
+        SetRam8(piece + kHalf, 0);
+        SetRam32(piece + kFrame, Ram32(piece + kKeptFrame2));
+        SetRam16(piece + kX, kDancersLeft[0]);
+        SetRam16(piece + kY, kDancersLeft[1]);
+    }
+    void DancersRight(M68K &c, uint32_t piece) {
+        SetRam8(piece + kHalf, 1);
+        SetRam32(piece + kKeptFrame2, Ram32(piece + kFrame));
+        SetRam32(piece + kFrame, Ram32(piece + kKeptFrame));
+        SetRam16(piece + kX, kDancersRight[0]);
+        SetRam16(piece + kY, kDancersRight[1]);
+    }
+    // (a frame of the ones on the left: their dances in turn)
+    void DancersDance(M68K &c, uint32_t piece) {
+        if (!Frozen(c)) {
+            if (Ram8(piece + kOver) & 0x80) {
+                SetLow8(c.d[0], Ram8(piece + kTurn) + 1);
+                Dance(c, (c.d[0] & 0xFF) == kDances + 1 ? 1 : c.d[0]);
+            }
+            Animate(c);
+        }
+        PieceDrawn(c);
+    }
+    // A frame of the dancers in a wide picture; false when the board's own rules are to go on
+    bool DancersWide(M68K &c, uint32_t piece) {
+        const uint8_t half = Ram8(piece + kWideHalf);
+        if (!WidePlay()) {
+            if (half == kRightForGood) {
+                GiveBack(c);
+                return true;
+            }
+            SetRam8(piece + kWideHalf, kByTurns);
+            return false;
+        }
+        if (half == kByTurns) {
+            if (!Ram8(Var(c, kFreePiecesCount))) {
+                return false; // (no record to spare: by turns, as on the board)
+            }
+            Call(c, kTakePiece);
+            const uint32_t made = c.a[4] & 0xFFFFFF;
+            for (uint32_t at = 0; at < kPieceSize; at++) {
+                SetRam8(made + at, Ram8(piece + at));
+            }
+            if (!Ram8(made + kHalf)) {
+                DancersRight(c, made);
+            }
+            SetRam8(made + kWideHalf, kRightForGood);
+            if (Ram8(piece + kHalf)) {
+                DancersLeft(c, piece);
+            }
+            SetRam8(piece + kWideHalf, kLeftForGood);
+        }
+        if (Ram8(piece + kWideHalf) == kLeftForGood) {
+            DancersDance(c, piece);
+        } else {
+            PieceDrawn(c);
+        }
+        return true;
+    }
+
     void Dancers(M68K &c) {
         static constexpr uint16_t kDistances[4] = {0x08, 0x36, 0xB2, 0xB2};
         const uint32_t piece = c.a[6] & 0xFFFFFF;
@@ -206,29 +273,17 @@ namespace {
             SetRam32(piece + kKeptFrame, Ram32(piece + kFrame));
             break;
         case 2:
+            if (DancersWide(c, piece)) {
+                break;
+            }
             if (!Ram8(piece + kHalf)) {
                 if (cameraRight) {
-                    // (the ones on the right take the record over, and are drawn from the next frame)
-                    SetRam8(piece + kHalf, 1);
-                    SetRam32(piece + kKeptFrame2, Ram32(piece + kFrame));
-                    SetRam32(piece + kFrame, Ram32(piece + kKeptFrame));
-                    SetRam16(piece + kX, kDancersRight[0]);
-                    SetRam16(piece + kY, kDancersRight[1]);
-                    break;
+                    DancersRight(c, piece); // (and they are drawn from the next frame)
+                } else {
+                    DancersDance(c, piece);
                 }
-                if (!Frozen(c)) {
-                    if (Ram8(piece + kOver) & 0x80) {
-                        SetLow8(c.d[0], Ram8(piece + kTurn) + 1);
-                        Dance(c, (c.d[0] & 0xFF) == kDances + 1 ? 1 : c.d[0]);
-                    }
-                    Animate(c);
-                }
-                PieceDrawn(c);
             } else if (!cameraRight) {
-                SetRam8(piece + kHalf, 0);
-                SetRam32(piece + kFrame, Ram32(piece + kKeptFrame2));
-                SetRam16(piece + kX, kDancersLeft[0]);
-                SetRam16(piece + kY, kDancersLeft[1]);
+                DancersLeft(c, piece);
             } else {
                 PieceDrawn(c);
             }

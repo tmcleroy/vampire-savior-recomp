@@ -211,6 +211,12 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   play with the camera going from end to end: her animation steps on exactly the frames the candles' do.
   Not looked at in a window, and no picture was taken with the camera at its left end.
 
+- The dancers on Feast of the Damned: in a wide picture the record is the left couples for good and a
+  second record, made from it, is the group on the right (a byte of the script's own, `+27`, says which);
+  switched off in a fight, the second is given back and the first goes by the camera again. Pictures at
+  both ends and on the way, and the records looked at with the switch turned off and on. The lady was
+  seen in the wide picture's right margin on the way (camera 417, 384, 353).
+
 Open: in the same made-up play the pieces' animations step on 75% of the frames with the board's picture
 and 62% with the wide one, the same before and after the rewrites. The fights are not the same fights
 (the players stand further apart), so this may be nothing; whether the wide picture leaves the game short
