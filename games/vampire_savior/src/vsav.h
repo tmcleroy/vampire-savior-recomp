@@ -150,6 +150,21 @@ constexpr int32_t kRoundTimeOver = 0x10D;    // not zero: the clock ran out
 constexpr int32_t kRoundClockStopped = 0x15D;
 constexpr int32_t kRoundPaused = 0x8A;
 
+// Who a player is: the character's number (kept twice), which of its sets of colours, and whether the game
+// itself plays it (kComputer 1). kPlays is 2 for a player that is in the game: at 0 the panel counts down
+// for that side to come back in.
+constexpr uint32_t kCharacter = 0x382, kCharacterAgain = 0x3E0, kColours = 0x3AE; // bytes
+constexpr uint32_t kPlays = 0x380, kComputer = 0x3B4;                              // bytes
+constexpr int kCharacters = 16; // numbers 0-15, of which 11 is nobody
+// How fast a player is moving, and how that changes each frame (longs: 65536 a pixel)
+constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;
+// The camera's record: where it wants the picture's left edge and bottom (words), the ends it stops at
+constexpr uint32_t kCameraRecord = 0xFF8280;
+constexpr uint32_t kCameraWantsX = 0x20, kCameraWantsY = 0x24, kCameraMostX = 0x5C, kCameraMostY = 0x5E;
+// ... worked out each frame at these, which end by handing the place (D0) to the code at the second address
+constexpr uint32_t kCameraAcross = 0x01E36E, kCameraAcrossSet = 0x01E450;
+constexpr uint32_t kCameraUp = 0x01E3F2, kCameraUpSet = 0x01E4A0;
+
 // More of a player's record:
 constexpr uint32_t kOpponent = 0x32;         // word: the other player's record (in FFxxxx)
 constexpr uint32_t kHealthFloor = 0x138;     // word: some attacks cannot take health below this

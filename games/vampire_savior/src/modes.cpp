@@ -19,9 +19,8 @@
 // picture as the next comes in. For the two to be seen and heard together there are two machines: the one
 // the port runs, and another kept as a save state, which this file loads into the port's machine, runs a
 // frame of and puts away again, every frame. The picture is then made of the two, and the sound mixed.
-#include "machine.h"
+#include "modes.h"
 #include "state.h"
-#include "vsav.h"
 
 #include <algorithm>
 #include <cstring>
@@ -60,7 +59,6 @@ namespace {
     std::vector<int16_t> g_otherSound; // sound the next stage has made and that has not been heard yet
     std::vector<int16_t> g_carry;      // sound to come before the next frame's
     size_t g_soundBefore = 0;          // how much sound the machine held before the frame
-    int g_choosing = 0;                // the stage of the machine that is running (for the game's choice of stage)
     bool g_fast = false; // this file asked for the game to run unseen
     int g_chosenStage = -1; // the menu's stage for the viewer when last looked at
 
@@ -74,9 +72,12 @@ namespace {
     }
 
     void End() {
+        if (g.mode == Mode::None) {
+            return;
+        }
         g = State();
         g_chosenStage = -1;
-        g_choosing = 0;
+        Wanted() = MatchWanted();
         g_other.clear();
         g_otherSound.clear();
         g_carry.clear();
@@ -97,6 +98,7 @@ namespace {
 
     void StartAttract(Machine &machine) {
         End();
+        EndBattle();
         SetFeature("training_mode", false);
         g.mode = Mode::Attract;
         g.starting = true;
@@ -142,13 +144,6 @@ namespace {
 
     // --- the stage viewer ---
 
-    // The objects that are not the stage's: the players, what they throw, sparks and the panel use colour
-    // sets 0-21 and a stage's own pieces 22-31; the players' shadows are in set 22 with some stages' pieces,
-    // and are told by their tiles
-    bool NotTheStage(uint32_t tile, uint16_t attributes) {
-        const unsigned colours = attributes & 0x1F;
-        return colours < 22 || (colours == 22 && tile >= 0xF8E0 && tile < 0xF920);
-    }
     constexpr uint16_t kApart = 0xC0;                  // the players stand this far apart (the camera then keeps their middle in the picture's)
     constexpr int32_t kStick = 384;                    // a frame's scrolling with the stick held, in 256ths of a pixel
     constexpr int32_t kScroll[] = {0, 64, 128, 256};   //   and by itself: slow, medium, fast
@@ -158,37 +153,7 @@ namespace {
     constexpr int kOnTheWay = 3;                       // frames a frame that the next stage runs until its round is on
     constexpr size_t kSoundAhead = 16;                 // samples of the next stage's sound kept in hand
 
-    // The tune of each stage, in the order of the stages' numbers, and the others offered
-    constexpr uint16_t kStageTune = 0x09; // (a stage's own tune: this and its number)
-    constexpr uint16_t kOtherTunes[] = {0x02};
-    constexpr uint16_t kTuneOff = 0xFF05; // the game sends this before a new tune
-
-    void PlayTune(uint16_t code) {
-        const uint16_t at = Ram16(kSoundQueueEnd) & 0xFF0;
-        SetRam32(kSoundQueue + at, code);
-        SetRam32(kSoundQueue + at + 4, 0);
-        SetRam32(kSoundQueue + at + 8, 0);
-        SetRam16(kSoundQueueEnd, static_cast<uint16_t>((at + 0x10) & 0xFF0));
-    }
-
-    bool RoundFought() {
-        return Ram16(kMode) == 2 && Ram16(kGameStep) == kGameMatch && Ram16(kMatchStep) == kMatchRound && Ram16(kRoundStep) == kRoundFought;
-    }
-
-    // The controls of a machine on its way from switching on to a round of a two-player game: coins in, both
-    // Starts until both players are in, then the characters and their choices taken as they come. True once
-    // the round is being fought.
-    bool ToRound(Machine &machine, int32_t &frames) {
-        if (RoundFought()) {
-            return true;
-        }
-        if (Ram8(kCredits) < 2) {
-            SetRam8(kCredits, 2);
-        }
-        const bool press = frames++ % 16 < 6;
-        machine.players[0] = machine.players[1] = !press ? 0 : Ram8(kPlayersIn) == 3 ? kPunch1 : kStart;
-        return false;
-    }
+    constexpr uint16_t kOtherTunes[] = {0x02}; // the tunes offered besides the stages'
 
     // The players put where the camera then goes to `camera` (it keeps the middle of the two in the middle
     // of the picture)
@@ -200,6 +165,7 @@ namespace {
 
     void StartViewer(Machine &machine) {
         End();
+        EndBattle();
         SetFeature("training_mode", false);
         g.mode = Mode::Viewer;
         g.starting = true;
@@ -208,13 +174,13 @@ namespace {
         g.stage = g.infinite ? 1 : std::clamp(g_chosenStage, 0, kStages - 1) + 1;
         g.next = g.stage % kStages + 1;
         g.camera = g.infinite ? kLeftEnd : (kLeftEnd + kRightEnd) / 2;
-        g_choosing = g.stage;
+        Wanted().stage = g.stage;
         machine.Reset();
     }
 
     void ViewerBeforeFrame(Machine &machine) {
         g_soundBefore = machine.audio.size();
-        g_choosing = g.stage;
+        Wanted().stage = g.stage;
         if (g.starting) {
             Fast(true);
             if (ToRound(machine, g.frames)) {
@@ -281,7 +247,7 @@ namespace {
             Archive ar(g_other, false);
             machine.Serialize(ar);
         }
-        g_choosing = g.next;
+        Wanted().stage = g.next;
         machine.video.hideObject = NotTheStage;
         for (int n = 0; n < kOnTheWay; n++) {
             machine.audio.resize(g_soundBefore);
@@ -344,7 +310,7 @@ namespace {
             Archive ar(g_mine, false);
             machine.Serialize(ar);
         }
-        g_choosing = g.stage;
+        Wanted().stage = g.stage;
         machine.players[0] = held[0];
         machine.players[1] = held[1];
         memcpy(machine.Picture(), shown.data(), pixels * sizeof(uint32_t));
@@ -375,8 +341,8 @@ namespace {
             if (music != g.music) {
                 g.music = music;
                 const int stage = music == 0 ? g.stage : music;
-                PlayTune(kTuneOff);
-                PlayTune(stage <= kStages ? static_cast<uint16_t>(kStageTune + stage - 1) :
+                PlaySound(kTuneOff);
+                PlaySound(stage <= kStages ? static_cast<uint16_t>(kStageTune + stage - 1) :
                          kOtherTunes[std::min(stage - kStages - 1, static_cast<int>(std::size(kOtherTunes)) - 1)]);
             }
         }
@@ -397,7 +363,7 @@ bool StageViewer() {
 }
 // The stage the machine that is running is to fight on (the game's choice of stage: training.cpp)
 int StageViewerStage() {
-    return g.mode == Mode::Viewer ? g_choosing : 0;
+    return g.mode == Mode::Viewer ? Wanted().stage : 0;
 }
 void EndModes() {
     End();
@@ -447,7 +413,7 @@ void ModesState(Archive &ar) {
         g_otherSound.assign(kSoundAhead * 2, 0);
         g_carry.clear();
         g_chosenStage = -1;
-        g_choosing = g.stage;
+        Wanted().stage = g.stage;
     }
 }
 

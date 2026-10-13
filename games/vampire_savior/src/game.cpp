@@ -20,9 +20,16 @@ void RegisterModes(); // modes.cpp
 void ModesBeforeFrame(Machine &machine);
 void ModesFrame(Machine &machine);
 void ModesState(Archive &ar);
+void RegisterMachines(); // machines.cpp
+void RegisterBattle();   // battle.cpp
+void BattleBeforeFrame(Machine &machine);
+void BattleFrame(Machine &machine);
+void BattleState(Archive &ar);
 
 void RegisterGame() {
     RegisterModes();
+    RegisterBattle();
+    RegisterMachines();
     RegisterCheats();
     RegisterTraining();
     RegisterCollision();
@@ -32,16 +39,19 @@ void RegisterGame() {
     TheGame().beforeFrame = [](Machine &machine) {
         TrainingBeforeFrame(machine);
         ModesBeforeFrame(machine);
+        BattleBeforeFrame(machine);
     };
     // (the training aids see what the frame did before the cheats put things back)
     TheGame().frame = [](Machine &machine) {
         TrainingFrame(machine);
         ModesFrame(machine);
+        BattleFrame(machine);
         CheatsFrame(machine);
     };
     TheGame().state = [](Archive &ar) {
         TrainingState(ar);
         ModesState(ar);
+        BattleState(ar);
     };
 }
 

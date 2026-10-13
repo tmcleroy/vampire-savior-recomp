@@ -10,6 +10,7 @@ namespace cps2recomp {
 
 void TrainingHit(int player, unsigned forGood, unsigned besides); // training.cpp
 bool TrainingMode();
+bool BattleNoClock(); // battle.cpp
 void TrainingContact(int victim, bool guarded, uint8_t kind);
 
 namespace {
@@ -258,7 +259,7 @@ namespace {
             SetRam8(Var(c, kRoundClockPart), part);
             if (part == 0) {
                 Call(c, 0x00A3EA); // (the frames of the next second)
-                if (!FeatureOn("infinite_time") && !training) {
+                if (!FeatureOn("infinite_time") && !training && !BattleNoClock()) {
                     const uint8_t seconds = static_cast<uint8_t>(Ram8(Var(c, kRoundClock)) - 1);
                     SetRam8(Var(c, kRoundClock), seconds);
                     if (seconds & 0x80) {
