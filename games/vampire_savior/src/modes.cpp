@@ -12,26 +12,32 @@
 //
 // The stage viewer is a round of a two-player game on the stage chosen, in which nobody is drawn but the
 // stage: the players stand a fixed distance apart, are moved together, and the game's own camera follows
-// them; the objects of the players and of the panel are left out of the picture by their colour sets
-// (video.h, hiddenObjectColours). The stage's pieces move and its music plays as in a fight.
+// them; the objects of the players and of the panel are left out of the picture (video.h, hideObject). The
+// stage's pieces move and its music plays as in a fight.
+//
+// The viewer's "infinite stage" is every stage in turn, each scrolled from end to end and then out of the
+// picture as the next comes in. For the two to be seen and heard together there are two machines: the one
+// the port runs, and another kept as a save state, which this file loads into the port's machine, runs a
+// frame of and puts away again, every frame. The picture is then made of the two, and the sound mixed.
 #include "machine.h"
 #include "state.h"
 #include "vsav.h"
 
 #include <algorithm>
+#include <cstring>
 #include <iterator>
+#include <vector>
 
 namespace cps2recomp {
 
 void StartTraining(Machine &machine); // training.cpp
-void BootToChoice(Machine &machine);
-bool Booting();
 
 namespace {
     using namespace vsav;
 
     // The menu's pages
     constexpr const char *kModes = "Alternative modes", *kAttract = "Attract mode", *kViewer = "Stage viewer";
+    constexpr const char *kTraining = "Training mode", *kDummy = "Dummy"; // (training.cpp's categories)
 
     enum class Mode : int32_t { None, Attract, Viewer };
     struct State {
@@ -42,7 +48,19 @@ namespace {
         int32_t camera = 0;     //   where the picture's left edge is wanted, in 256ths of a pixel
         int32_t direction = 1;  //   which way it scrolls by itself
         int32_t music = 0;      //   the "Music" choice that is playing
+        // The infinite stage: the stage that comes next is kept running beside the one shown
+        bool infinite = false;
+        int32_t next = 0;        // the stage that comes next (1-12)
+        bool nextReady = false;  //   its round is being fought (until then it is on its way there)
+        int32_t nextFrames = 0;  //   frames it has run on the way
+        int32_t slide = 0;       // how far the next stage has come into the picture, in 256ths of a pixel
     } g;
+    std::vector<uint8_t> g_other;      // the machine of the stage that comes next, as a save state
+    std::vector<uint8_t> g_mine;       // (the shown stage's, while the other's runs)
+    std::vector<int16_t> g_otherSound; // sound the next stage has made and that has not been heard yet
+    std::vector<int16_t> g_carry;      // sound to come before the next frame's
+    size_t g_soundBefore = 0;          // how much sound the machine held before the frame
+    int g_choosing = 0;                // the stage of the machine that is running (for the game's choice of stage)
     bool g_fast = false; // this file asked for the game to run unseen
     int g_chosenStage = -1; // the menu's stage for the viewer when last looked at
 
@@ -58,6 +76,10 @@ namespace {
     void End() {
         g = State();
         g_chosenStage = -1;
+        g_choosing = 0;
+        g_other.clear();
+        g_otherSound.clear();
+        g_carry.clear();
         Fast(false);
     }
 
@@ -130,6 +152,11 @@ namespace {
     constexpr uint16_t kApart = 0xC0;                  // the players stand this far apart (the camera then keeps their middle in the picture's)
     constexpr int32_t kStick = 384;                    // a frame's scrolling with the stick held, in 256ths of a pixel
     constexpr int32_t kScroll[] = {0, 64, 128, 256};   //   and by itself: slow, medium, fast
+    constexpr int32_t kLeftEnd = kCameraLeft * 256, kRightEnd = kCameraRight * 256;
+    constexpr int kInfinite = kStages;                 // the "Stage" choice after the stages
+    constexpr int32_t kAcross = Video::kWidth * 256;   // the picture's width: how far a stage slides to be gone
+    constexpr int kOnTheWay = 3;                       // frames a frame that the next stage runs until its round is on
+    constexpr size_t kSoundAhead = 16;                 // samples of the next stage's sound kept in hand
 
     // The tune of each stage, in the order of the stages' numbers, and the others offered
     constexpr uint16_t kStageTune = 0x09; // (a stage's own tune: this and its number)
@@ -148,53 +175,180 @@ namespace {
         return Ram16(kMode) == 2 && Ram16(kGameStep) == kGameMatch && Ram16(kMatchStep) == kMatchRound && Ram16(kRoundStep) == kRoundFought;
     }
 
+    // The controls of a machine on its way from switching on to a round of a two-player game: coins in, both
+    // Starts until both players are in, then the characters and their choices taken as they come. True once
+    // the round is being fought.
+    bool ToRound(Machine &machine, int32_t &frames) {
+        if (RoundFought()) {
+            return true;
+        }
+        if (Ram8(kCredits) < 2) {
+            SetRam8(kCredits, 2);
+        }
+        const bool press = frames++ % 16 < 6;
+        machine.players[0] = machine.players[1] = !press ? 0 : Ram8(kPlayersIn) == 3 ? kPunch1 : kStart;
+        return false;
+    }
+
+    // The players put where the camera then goes to `camera` (it keeps the middle of the two in the middle
+    // of the picture)
+    void Place(int32_t camera) {
+        const uint32_t middle = static_cast<uint32_t>(camera / 256) + kApart;
+        SetRam32(Player(0) + kX, (middle - kApart / 2) << 16);
+        SetRam32(Player(1) + kX, (middle + kApart / 2) << 16);
+    }
+
     void StartViewer(Machine &machine) {
         End();
         SetFeature("training_mode", false);
         g.mode = Mode::Viewer;
         g.starting = true;
         g_chosenStage = FeatureValue("viewer_stage");
-        g.stage = std::clamp(g_chosenStage, 0, kStages - 1) + 1;
-        g.camera = (kCameraLeft + kCameraRight) / 2 * 256;
-        BootToChoice(machine);
+        g.infinite = g_chosenStage == kInfinite;
+        g.stage = g.infinite ? 1 : std::clamp(g_chosenStage, 0, kStages - 1) + 1;
+        g.next = g.stage % kStages + 1;
+        g.camera = g.infinite ? kLeftEnd : (kLeftEnd + kRightEnd) / 2;
+        g_choosing = g.stage;
+        machine.Reset();
     }
 
     void ViewerBeforeFrame(Machine &machine) {
-        uint16_t &one = machine.players[0], &two = machine.players[1];
+        g_soundBefore = machine.audio.size();
+        g_choosing = g.stage;
         if (g.starting) {
-            if (Booting()) {
-                return; // (training.cpp works the controls as far as the character choice)
-            }
-            // The characters and their choices taken as they come, and on through the match's start
             Fast(true);
-            one = two = (g.frames++ % 16 < 6) ? kPunch1 : 0;
-            if (RoundFought()) {
+            if (ToRound(machine, g.frames)) {
                 g.starting = false;
                 Fast(false);
             } else if (g.frames > kStartMost) {
                 End();
             }
-            return;
+            if (g.starting || g.mode != Mode::Viewer) {
+                return;
+            }
         }
-        const uint16_t stick = (one | two) & (kLeft | kRight);
-        one = two = 0;
+        const uint16_t stick = (machine.players[0] | machine.players[1]) & (kLeft | kRight);
+        machine.players[0] = machine.players[1] = 0;
         const int scroll = std::clamp(FeatureValue("viewer_scroll"), 0, static_cast<int>(std::size(kScroll)) - 1);
-        if (scroll == 0) {
-            g.camera += stick == kRight ? kStick : stick == kLeft ? -kStick : 0;
+        const int32_t byStick = stick == kRight ? kStick : stick == kLeft ? -kStick : 0;
+        if (g.infinite) {
+            // Always onwards by itself; with the stick, back as well, as far as this stage's start. The stage
+            // is scrolled to its end, and then slides out as the next comes in (if that one is ready).
+            int32_t by = scroll == 0 ? byStick : kScroll[scroll];
+            if (g.slide > 0 || (g.camera + by >= kRightEnd && by > 0)) {
+                by -= kRightEnd - g.camera;
+                g.camera = kRightEnd;
+                g.slide = g.nextReady ? std::clamp(g.slide + by, 0, kAcross) : 0;
+            } else {
+                g.camera = std::max(g.camera + by, kLeftEnd);
+            }
         } else {
-            g.camera += g.direction * kScroll[scroll];
+            g.camera += scroll == 0 ? byStick : g.direction * kScroll[scroll];
+            if (g.camera >= kRightEnd) {
+                g.camera = kRightEnd;
+                g.direction = -1;
+            } else if (g.camera <= kLeftEnd) {
+                g.camera = kLeftEnd;
+                g.direction = 1;
+            }
         }
-        if (g.camera >= kCameraRight * 256) {
-            g.camera = kCameraRight * 256;
-            g.direction = -1;
-        } else if (g.camera <= kCameraLeft * 256) {
-            g.camera = kCameraLeft * 256;
-            g.direction = 1;
+        Place(g.camera);
+    }
+
+    // The infinite stage, after the shown stage's frame: a frame of the next stage's machine (or a few, while
+    // it is on its way to its round), and the picture and the sound made of the two.
+    void RunNext(Machine &machine) {
+        const size_t pixels = static_cast<size_t>(Video::kWidth) * Video::kHeight;
+        static std::vector<uint32_t> shown;
+        shown.assign(machine.Picture(), machine.Picture() + pixels);
+        g_soundBefore = std::min(g_soundBefore, machine.audio.size());
+        std::vector<int16_t> sound(machine.audio.begin() + static_cast<std::ptrdiff_t>(g_soundBefore), machine.audio.end());
+        machine.audio.resize(g_soundBefore);
+        const uint16_t held[2] = {machine.players[0], machine.players[1]};
+
+        // The shown stage's machine put away, the next stage's taken out (or switched on)
+        g_mine.clear();
+        {
+            Archive ar(g_mine, true);
+            machine.Serialize(ar);
         }
-        // The players where the camera then goes (it keeps the middle of the two in the middle of the picture)
-        const uint32_t middle = static_cast<uint32_t>(g.camera / 256) + kApart;
-        SetRam32(Player(0) + kX, (middle - kApart / 2) << 16);
-        SetRam32(Player(1) + kX, (middle + kApart / 2) << 16);
+        if (g_other.empty()) {
+            machine.Reset();
+            g.nextReady = false;
+            g.nextFrames = 0;
+            g_otherSound.assign(kSoundAhead * 2, 0);
+        } else {
+            Archive ar(g_other, false);
+            machine.Serialize(ar);
+        }
+        g_choosing = g.next;
+        machine.video.hideObject = NotTheStage;
+        for (int n = 0; n < kOnTheWay; n++) {
+            machine.audio.resize(g_soundBefore);
+            g.nextReady = g.nextReady || ToRound(machine, g.nextFrames);
+            if (g.nextReady) {
+                machine.players[0] = machine.players[1] = 0;
+                Place(kLeftEnd);
+            }
+            machine.RunFrame();
+            if (g.nextReady || g.nextFrames > kStartMost) {
+                break;
+            }
+        }
+        if (g.nextReady) {
+            g_otherSound.insert(g_otherSound.end(), machine.audio.begin() + static_cast<std::ptrdiff_t>(g_soundBefore), machine.audio.end());
+        }
+        machine.audio.resize(g_soundBefore);
+
+        // The picture: the shown stage moved left by the slide, the next stage after it
+        const int slide = std::clamp(g.slide / 256, 0, static_cast<int>(Video::kWidth));
+        if (slide > 0) {
+            const uint32_t *next = machine.Picture();
+            for (int y = 0; y < Video::kHeight; y++) {
+                uint32_t *row = &shown[static_cast<size_t>(y) * Video::kWidth];
+                memmove(row, row + slide, static_cast<size_t>(Video::kWidth - slide) * sizeof(uint32_t));
+                memcpy(row + Video::kWidth - slide, next + static_cast<size_t>(y) * Video::kWidth, static_cast<size_t>(slide) * sizeof(uint32_t));
+            }
+        }
+        // The sound: one fades into the other as the next stage comes in. As many samples as the shown stage
+        // made are taken of the next stage's (the two machines' frames do not make quite the same number).
+        const size_t count = sound.size();
+        if (g_otherSound.size() < count) {
+            g_otherSound.resize(count, 0);
+        }
+        const int32_t nextGain = slide * 256 / Video::kWidth, shownGain = 256 - nextGain;
+        for (size_t i = 0; i < count; i++) {
+            const int32_t mixed = (sound[i] * shownGain + (g.nextReady ? g_otherSound[i] : 0) * nextGain) / 256;
+            sound[i] = static_cast<int16_t>(std::clamp(mixed, -32768, 32767));
+        }
+        g_otherSound.erase(g_otherSound.begin(), g_otherSound.begin() + static_cast<std::ptrdiff_t>(count));
+
+        if (g.slide >= kAcross) {
+            // The next stage has come all the way in: its machine is the one the port runs from here, and
+            // the stage after it is switched on
+            g.stage = g.next;
+            g.next = g.stage % kStages + 1;
+            g.camera = kLeftEnd;
+            g.slide = 0;
+            g.nextReady = false;
+            g.nextFrames = 0;
+            g_other.clear();
+            g_carry = g_otherSound; // (what it has made and was not yet heard comes first)
+            g_otherSound.clear();
+        } else {
+            g_other.clear();
+            {
+                Archive ar(g_other, true);
+                machine.Serialize(ar);
+            }
+            Archive ar(g_mine, false);
+            machine.Serialize(ar);
+        }
+        g_choosing = g.stage;
+        machine.players[0] = held[0];
+        machine.players[1] = held[1];
+        memcpy(machine.Picture(), shown.data(), pixels * sizeof(uint32_t));
+        machine.audio.insert(machine.audio.end(), sound.begin(), sound.end());
     }
 
     void ViewerFrame(Machine &machine) {
@@ -209,13 +363,22 @@ namespace {
             return;
         }
         g_chosenStage = chosen;
-        const int music = FeatureValue("viewer_music"); // 0: the stage's own; then the stages' tunes; then the others
-        if (music != g.music) {
-            g.music = music;
-            const int stage = music == 0 ? g.stage : music;
-            PlayTune(kTuneOff);
-            PlayTune(stage <= kStages ? static_cast<uint16_t>(kStageTune + stage - 1) :
-                     kOtherTunes[std::min(stage - kStages - 1, static_cast<int>(std::size(kOtherTunes)) - 1)]);
+        if (g.infinite) {
+            if (!g_carry.empty()) {
+                machine.audio.insert(machine.audio.begin() + static_cast<std::ptrdiff_t>(std::min(g_soundBefore, machine.audio.size())),
+                                     g_carry.begin(), g_carry.end());
+                g_carry.clear();
+            }
+            RunNext(machine); // (each stage with its own tune)
+        } else {
+            const int music = FeatureValue("viewer_music"); // 0: the stage's own; then the stages' tunes; then the others
+            if (music != g.music) {
+                g.music = music;
+                const int stage = music == 0 ? g.stage : music;
+                PlayTune(kTuneOff);
+                PlayTune(stage <= kStages ? static_cast<uint16_t>(kStageTune + stage - 1) :
+                         kOtherTunes[std::min(stage - kStages - 1, static_cast<int>(std::size(kOtherTunes)) - 1)]);
+            }
         }
         SetHud({});
         SetBoxes({});
@@ -232,8 +395,9 @@ bool AttractMode() {
 bool StageViewer() {
     return g.mode == Mode::Viewer;
 }
+// The stage the machine that is running is to fight on (the game's choice of stage: training.cpp)
 int StageViewerStage() {
-    return g.mode == Mode::Viewer ? g.stage : 0;
+    return g.mode == Mode::Viewer ? g_choosing : 0;
 }
 void EndModes() {
     End();
@@ -277,19 +441,26 @@ void ModesFrame(Machine &machine) {
 void ModesState(Archive &ar) {
     ar.Mark(0x4D4F4445);
     ar.Pod(g);
+    ar.Vec(g_other);
     if (!ar.Saving()) {
         Fast(false);
+        g_otherSound.assign(kSoundAhead * 2, 0);
+        g_carry.clear();
+        g_chosenStage = -1;
+        g_choosing = g.stage;
     }
 }
 
 void RegisterModes() {
     Game &game = TheGame();
-    // The page at the head of the menu, and a page under it for each mode that has choices
+    // The page at the head of the menu, and a page under it for each mode (and the dummy's under training's)
     game.pages.push_back({kModes, "", "Other ways to run the game: training, attract mode on a loop, a viewer for the stages.", true});
+    game.pages.push_back({kTraining, kModes, "A fight with no clock that nobody loses, and the aids for practising in it."});
+    game.pages.push_back({kDummy, kTraining, "What player 2 does in a training session."});
     game.pages.push_back({kAttract, kModes,
                           "The game's own show on a loop, with no coin in: the introduction, the title, fights and rankings."});
     game.pages.push_back({kViewer, kModes, "A stage with nobody on it, to look at and listen to."});
-    game.commands.push_back({"training_start", kModes, "Training mode",
+    game.commands.push_back({"training_start", kTraining, "Start",
                              "Straight to the character choice with two players (player 1's controls choose both), then a fight "
                              "with no clock that nobody loses.",
                              TrainingCommand});
@@ -303,13 +474,18 @@ void RegisterModes() {
                              "Shows the stage chosen below with nobody on it. Left and right scroll it, or it scrolls by itself. "
                              "Reset ends it.",
                              StartViewer});
-    game.features.push_back({"viewer_stage", kViewer, "Stage", "The stage the viewer shows. Changing it while viewing goes to the new one.", 0,
-                             {"Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau", "Abaraya",
-                              "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror", "Fetus of God"}});
+    game.features.push_back({"viewer_stage", kViewer, "Stage",
+                             "The stage the viewer shows, or Infinite: every stage in turn, each scrolling into the next with its "
+                             "own tune. Changing it while viewing goes to the new one.",
+                             0, {"Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau", "Abaraya",
+                                 "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror", "Fetus of God",
+                                 "Infinite"}});
     game.features.push_back({"viewer_scroll", kViewer, "Scrolling",
-                             "How the viewer moves across the stage: with the stick, or by itself from one end to the other and back.",
+                             "How the viewer moves across the stage: with the stick, or by itself from one end to the other and back "
+                             "(Infinite: always onwards).",
                              0, {"With the stick", "Slow", "Medium", "Fast"}});
-    game.features.push_back({"viewer_music", kViewer, "Music", "The tune that plays in the viewer: the stage's own, or another's.", 0,
+    game.features.push_back({"viewer_music", kViewer, "Music",
+                             "The tune that plays in the viewer: the stage's own, or another's. (Infinite plays each stage's own.)", 0,
                              {"The stage's own", "Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau",
                               "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                               "Fetus of God", "Character select"}});

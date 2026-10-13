@@ -33,8 +33,9 @@ ahead of time into C++ ([how it works](docs/PORT.md)).
 
 ## Training mode
 
-"Training mode", under "Alternative modes" at the top of the in-game menu, goes straight to the
-character choice with two players and into a fight with no clock that nobody loses.
+"Alternative modes" at the top of the in-game menu has a Training mode page: Start goes straight
+to the character choice with two players and into a fight with no clock that nobody loses, and
+the page holds the aids below.
 
 | Feature | What it does |
 | --- | --- |
@@ -66,7 +67,8 @@ gauge, infinite time). [docs/FEATURES.md](docs/FEATURES.md) has the whole list.
   another.
 - **Stage viewer**: any of the twelve stages with nobody on it and no panel, its own pieces
   moving and its music playing (or another stage's). Scroll it with the stick, or let it drift
-  from end to end.
+  from end to end. "Infinite" is all twelve in turn, each stage scrolling into the next as its
+  tune fades into the next one's.
 
 ## What you need
 

@@ -119,6 +119,16 @@ has yet used them in a window or listened.
   the only pixels that differ from the picture with shadows are the shadows'. The camera goes the
   whole way (256 to 640) at each speed.
 - **Music.** A tune is queued as the game queues one: `FF05`, then the tune's number.
+- **The infinite stage** (2026-10-13). Two machines: the port's own shows a stage; the next
+  stage's is kept as a save state (327 KB), loaded into the port's machine after every frame, run
+  for a frame (three, until its round is on: about 320 frames) and put away. The picture is the
+  shown stage moved left with the next beside it; the sound is the two mixed by how far the next
+  has come in, the next's samples kept in a short queue because two machines' frames do not make
+  quite the same number. When the next is all the way in, its machine becomes the port's. Over
+  4,200 frames at the fast speed: five stages in order, no silence, no jump in the sound larger
+  than a plain viewer run has; 1,016 frames a second on the Mac with both machines running.
+- **The menu** (2026-10-13): Training mode's Start, Start over and aids, and the dummy's page, are
+  under Alternative modes too.
 
 Facts found for these:
 

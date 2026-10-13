@@ -645,39 +645,39 @@ bool Booting() {
 void RegisterTraining() {
     Game &game = TheGame();
     AddHook(0x00AE7C, "ChooseStage", ChooseStage);
-    game.commands.push_back({"training_restart", "Training", "Start over",
+    game.commands.push_back({"training_restart", "Training mode", "Start over",
                              "In a training session: the round as it began, with the players where \"Start over at\" says. Backspace "
                              "or a gamepad's left shoulder does this while playing; the stick held as it is pressed chooses the place "
                              "(left, right: a corner; down: sides swapped; up: the middle).",
                              StartOver, kKeyRestart});
-    game.features.push_back({"restart_at", "Training", "Start over at",
+    game.features.push_back({"restart_at", "Training mode", "Start over at",
                              "Where \"Start over\" puts the players: the middle or a corner, player 1 on the left or (swapped) on the right.",
                              0, {"Middle", "Left corner", "Right corner", "Middle, swapped", "Left corner, swapped", "Right corner, swapped"}});
-    game.features.push_back({"training_stage", "Training", "Stage",
+    game.features.push_back({"training_stage", "Training mode", "Stage",
                              "Where a training session's fight is: the game's own choice (at random, from those that go with player "
                              "2's character) or a stage named here. Takes effect when the characters are next chosen.",
                              0, {"The game's choice", "Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau",
                                  "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                                  "Fetus of God"}});
-    game.features.push_back({"training_mode", "Training", "Training session",
-                             "The fight has no clock and nobody is knocked out. (\"Training mode\" under Alternative modes switches this "
+    game.features.push_back({"training_mode", "Training mode", "Training session",
+                             "The fight has no clock and nobody is knocked out. (\"Start\" above switches this "
                              "on and takes the game to the character choice; Reset ends it.)",
                              kFeatureSession});
-    game.features.push_back({"damage_readout", "Training", "Combo readout",
+    game.features.push_back({"damage_readout", "Training mode", "Combo readout",
                              "Under the bar of the player hit: what the hit took off; for a combo (hits landing before the player is free again) the "
                              "hits and the damage; how much of it is lost for good and how much comes back; the round's best."});
-    game.features.push_back({"input_display", "Training", "Input display",
+    game.features.push_back({"input_display", "Training mode", "Input display",
                              "Shows what each player presses and for how many frames: the stick as a keypad number (5 is the middle, 6 right, 2 down), then the buttons."});
-    game.features.push_back({"hit_boxes", "Training", "Hit boxes",
+    game.features.push_back({"hit_boxes", "Training mode", "Hit boxes",
                              "Draws the boxes the game tests: where a player can be hit (blue), attacks (red; orange for things thrown), and the boxes that keep the players apart (green)."});
-    game.features.push_back({"frame_data", "Training", "Frame data",
+    game.features.push_back({"frame_data", "Training mode", "Frame data",
                              "After a move: the step it can first hit on (startup), how many it can hit for (active) and how many "
                              "follow before the player can act (recovery). After a hit or a guarded one: who can act first, by how "
                              "many steps (+: the attacker)."});
-    game.features.push_back({"frame_meter", "Training", "Frame meter",
+    game.features.push_back({"frame_meter", "Training mode", "Frame meter",
                              "A row of cells for each player, one for every step of the game: green before a move can hit, red "
                              "while it can, blue after; yellow reeling from a hit, light blue from a guarded one; grey in the air."});
-    game.features.push_back({"health_refill", "Training", "Health refills",
+    game.features.push_back({"health_refill", "Training mode", "Health refills",
                              "A player's health comes back when they have not been hit for a moment."});
     game.features.push_back({"dummy_stand", "Dummy", "Stands", "Player 2 stands still, whatever its controls do.", kFeatureExclusive});
     game.features.push_back({"dummy_crouch", "Dummy", "Crouches", "Player 2 crouches.", kFeatureExclusive});

@@ -11,7 +11,7 @@ This list is what `vampire_savior --list-features` prints. How features are writ
 ## Alternative modes
 
 "Alternative modes", the first row of the in-game menu, has ways of running the game that the
-board does not have. Attract mode and the stage viewer each have a page there with a Start row
+board does not have. Training mode, attract mode and the stage viewer each have a page there with a Start row
 and their choices. Each mode ends when another is started or with the menu's Reset.
 
 - **Training mode**: straight to the character choice with two players and a fight with no clock
@@ -24,7 +24,7 @@ and their choices. Each mode ends when another is started or with the menu's Res
 | Feature | Name in `settings.ini` | What it does |
 | --- | --- | --- |
 | Attract mode: Shows | `attract_show` | What attract mode plays. Choices: Everything, The intro only (the introduction to the title, over and over), The fights only (one of the game's eight demonstration fights after another). |
-| Stage viewer: Stage | `viewer_stage` | The stage the viewer shows: any of the twelve. Changing it while viewing goes to the new one. |
+| Stage viewer: Stage | `viewer_stage` | The stage the viewer shows: any of the twelve, or Infinite: every stage in turn, each scrolled from end to end and then out of the picture as the next comes in, its tune fading into the next one's. Changing it while viewing goes to the new one. |
 | Stage viewer: Scrolling | `viewer_scroll` | How the viewer moves across the stage. Choices: With the stick, Slow (a pixel every four frames), Medium, Fast (a pixel a frame). |
 | Stage viewer: Music | `viewer_music` | The tune that plays in the viewer. Choices: The stage's own, any stage's, Character select. |
 
@@ -45,7 +45,7 @@ and their choices. Each mode ends when another is started or with the menu's Res
 | Full gauge, player 2 | `full_gauge_2` | Player 2 always has special gauges to spend. |
 | Infinite time | `infinite_time` | The round's clock stands still. |
 
-## Training
+## Training mode
 
 | Feature | Name in `settings.ini` | What it does |
 | --- | --- | --- |
