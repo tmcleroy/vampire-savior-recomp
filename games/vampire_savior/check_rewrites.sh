@@ -27,10 +27,10 @@ done
 # is visited: a training session on it, the players moved by made-up controls (no movie with them: a movie's
 # controls would be the only ones, and the camera has to go from end to end). The outer rewrites, then
 # with them left out the ones they use.
-stage() { # stage (1-12), rewrites to leave out
+stage() { # stage (1-12), rewrites to leave out, more of the port's options
     out=$(CPS2RECOMP_SKIP_REWRITES="$2" $port --rom "${ROM:-rom}" --headless --frames 6000 --auto 7:1500 \
-        --keys "5:ftraining_stage=$1,10:ctraining_start" --check-rewrites 2>&1)
-    echo "== stage $1${2:+ (without the outer ones)}"
+        --keys "5:ftraining_stage=$1,10:ctraining_start" $3 --check-rewrites 2>&1)
+    echo "== stage $1${2:+ (without the outer ones)}${3:+ ($3)}"
     # (training's own changes to the round's rules differ from the game's, as they are meant to: only the
     # stage's rewrites are looked at)
     out=$(echo "$out" | grep -E "^rewrite|did not" | grep -E "Camera|Players(Across|Up)|Back8|Far32|Rows|Drawn|Piece|Script[0-9]|Plane(Of|AndRow)|PlaceOf|Animat|GiveBack|ThrownGone|KeepIn|KeepBothIn|did not" | grep -v " 0 calls")
@@ -43,6 +43,9 @@ for n in 1 2 3 4 5 6 7 8 9 10 11 12; do
     stage $n ""
     stage $n "CameraAcross,CameraUp,$outer,$inPicture"
     stage $n "CameraAcross,CameraUp,$outer,$inPicture,$scripts,Drawn,SetStageAnimation"
+    # (many pieces' scripts do something else once a round is decided, which a training session's never
+    # is: the game's flag for it held on, for the game's code and the rewrites alike)
+    stage $n "CameraAcross,CameraUp,$outer,$inPicture" "--poke FF8107=01"
 done
 [ $status -eq 0 ] && echo "ok: every rewrite does what the game's code does" || echo "FAILED"
 exit $status

@@ -258,8 +258,9 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   wide, is the same but for moving colours and the floor; 450 frames of the infinite stage (every 20th
   of 9,000, fast) have no column that is black above the floor, where 24 of 130 had before.
 
-- Piece scripts written again whole so far (`pieces.cpp`), each checked on its stage: 0-13, 15-18, 21,
-  22, 24-26, 29-39, 41, 43-48, 51-57 (53 of the 58). The game's own code still: 14, 27, 28, 40, and 19, 20, 23, 42, 49, 50, which no stage was seen to use. The check is of the
+- Every piece script a stage was seen to use is written again whole (`pieces.cpp`), each checked on its
+  stage: 0-41, 43-48, 51-57 (55 of the 58). The game's own code still: 42, 49 and 50, which nothing was
+  seen to make or run. Scripts 19, 20 and 23 are for pieces that other pieces make (18 and 45; 22). The check is of the
   paths the made-up play reached: a script's rarer steps (script 11's second and third animations,
   script 38's events) may not have been among them. The two pieces the finder still names are explained
   by their scripts: 41 (the train) is not there until the round is on, and 29 (War Agony) waits, not
@@ -275,7 +276,9 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   rewrite.
 - More of a piece's record: `+05` a step within the frame's step; `+30` the record that made it (a word);
   `+0D` set by pieces made by others; `+40`/`+44`/`+48`/`+4C` speed and pull (longs) for the ones that
-  move by `015466`. From A5: `107` not zero once the round's fighting has begun, `B4` bit 0 turning over
+  move by `015466`. From A5: `107` not zero from a knock-out until the next round (the round is decided: many pieces
+  change then: the chateau's bats fly off, the train's and Fetus of God's pieces go to a last animation;
+  a training session never sets it, so the check holds it on for a run of each stage), `B4` bit 0 turning over
   each frame (pieces drawn every other frame: Vanity Paradise's flames, the train's), `10B` ends Green
   Scream's script 32.
 

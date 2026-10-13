@@ -18,7 +18,7 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Endless battle, the stages scrolling by: the next stage is made ready in time for the end of
   the one shown (in the wide picture a stage is crossed sooner, and at the fast speed the
   scrolling waited about a second at each stage's end).
-- 53 of the 58 scripts of the stages' pieces are readable C++ too, each checked against the game's own
+- 55 of the 58 scripts of the stages' pieces are readable C++ too: every one a stage was seen to use, each checked against the game's own
   on its stage.
 - The stage's code is readable C++ (58 routines: the camera, the scroll screens' placing, the row
   scroll table, what is in the picture, the players' edges, the stage's pieces), each checked
