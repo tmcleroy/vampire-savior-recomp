@@ -14,7 +14,7 @@ run() { # movie, frames, features, rewrites to leave out
     echo "== $1${4:+ (without $4)}"
     echo "$out" | grep -E "^rewrite|did not" | grep -v " 0 calls"
 }
-for skip in "" "AllHitTests" "AllHitTests,PlayersAgainstPlayers,ThrownAgainstPlayers,GuardRange" \
+for skip in "" "AllHitTests,CameraAcross,CameraUp" "AllHitTests,PlayersAgainstPlayers,ThrownAgainstPlayers,GuardRange" \
     "AllHitTests,PlayersAgainstPlayers,ThrownAgainstPlayers,HitTest,AttackAgainst"; do
     run versus_normals 3000 free_play "$skip"
     run versus_attacks 2600 free_play "$skip"

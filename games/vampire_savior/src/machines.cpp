@@ -19,35 +19,6 @@ namespace {
     MatchWanted g_wanted;
     CameraWanted g_camera;
     std::vector<uint8_t> g_mine; // the port's machine, while a spare runs in it
-
-    // 01E36E, 01E3F2. The camera works out where it wants to be, across and up, from where the players are.
-    // When a mode wants it somewhere, it goes there instead, no faster than the game lets it go (the stage's
-    // tiles are drawn in as it moves, a column or a row at a time).
-    bool CameraAcross(M68K &c) {
-        WideCameraEnds(c.a[6] & 0xFFFFFF);
-        if (g_camera.x < 0) {
-            return false;
-        }
-        const uint32_t camera = c.a[6] & 0xFFFFFF;
-        const int now = static_cast<int16_t>(Ram16(camera + kCameraWantsX)), most = std::max<int>(Ram16(camera + kCameraMostX), 1);
-        const int to = now + std::clamp(g_camera.x - now, -most, most);
-        SetRam16(camera + kCameraWantsX, static_cast<uint16_t>(to));
-        SetLow16(c.d[0], static_cast<uint16_t>(to));
-        c.pc = kCameraAcrossSet;
-        return true;
-    }
-    bool CameraUp(M68K &c) {
-        if (g_camera.y < 0) {
-            return false;
-        }
-        const uint32_t camera = c.a[6] & 0xFFFFFF;
-        const int now = static_cast<int16_t>(Ram16(camera + kCameraWantsY)), most = std::max<int>(Ram16(camera + kCameraMostY), 1);
-        const int to = now + std::clamp(g_camera.y - now, -most, most);
-        SetRam16(camera + kCameraWantsY, static_cast<uint16_t>(to));
-        SetLow16(c.d[0], static_cast<uint16_t>(to));
-        c.pc = kCameraUpSet;
-        return true;
-    }
 } // namespace
 
 MatchWanted &Wanted() {
@@ -189,8 +160,6 @@ void Promote(Machine &machine, Spare &spare) {
 }
 
 void RegisterMachines() {
-    AddHook(0x01E36E, "CameraAcross", CameraAcross);
-    AddHook(0x01E3F2, "CameraUp", CameraUp);
 }
 
 } // namespace cps2recomp

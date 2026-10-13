@@ -162,7 +162,6 @@ namespace {
 namespace {
     constexpr uint32_t kKeepsIn = 0x028192, kKeepsInDone = 0x02824A;
     constexpr uint32_t kKeepsBothIn = 0x02824C, kKeepsBothInDone = 0x0282B6;
-    constexpr uint32_t kHalfWidth = 0x132; // a player's record: half its width (a word)
     constexpr uint32_t kOther = 0x32;      // ... and the other player's record (a word: its address's low half)
 
     bool g_play = false;              // fights are played in the wide picture (WidePlay)

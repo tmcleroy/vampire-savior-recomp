@@ -11,6 +11,7 @@ void CheatsFrame(Machine &machine);
 void RegisterCollision(); // collision.cpp
 void RegisterFight();     // fight.cpp
 void RegisterInput();     // input.cpp
+void RegisterCamera();    // camera.cpp
 void RegisterFrames();    // frames.cpp
 void RegisterTraining(); // training.cpp
 void TrainingBeforeFrame(Machine &machine);
@@ -37,6 +38,7 @@ void RegisterGame() {
     RegisterCollision();
     RegisterFight();
     RegisterInput();
+    RegisterCamera();
     RegisterFrames();
     RegisterWidescreen();
     TheGame().beforeFrame = [](Machine &machine) {

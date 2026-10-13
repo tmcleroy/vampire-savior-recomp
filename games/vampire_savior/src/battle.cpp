@@ -49,7 +49,6 @@ namespace {
     enum { kStageOne, kStageShuffle, kStageScroll, kStageBehind }; // (the last: behind the fighters, and never changing by itself)
     // The ring out
     constexpr uint32_t kKeepIn = 0x028192;   // the game's routine that keeps the player at A6 inside the picture
-    constexpr uint32_t kHalfWidth = 0x132;   //   a player's record: half its width, as that routine takes it (a word)
     constexpr uint32_t kAtEdge = 0x116;      //   and what it leaves: 1 at the picture's left edge, 2 at its right
     constexpr int kOutBy = 4;                // a fighter is out when its middle is within this of the picture's edge
     constexpr int kFallFor = 44;             // frames a fighter that is out is seen falling for

@@ -174,9 +174,24 @@ constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;
 constexpr uint32_t kCameraRecord = 0xFF8280;
 constexpr uint32_t kCameraWantsX = 0x20, kCameraWantsY = 0x24, kCameraMostX = 0x5C, kCameraMostY = 0x5E;
 constexpr uint32_t kCameraEndLeft = 0x44, kCameraEndRight = 0x46; // words: kCameraLeft and kCameraRight on a stage
+constexpr uint32_t kCameraEndTop = 0x40, kCameraEndBottom = 0x42; // words: the ends it stops at, up and down
 // ... worked out each frame at these, which end by handing the place (D0) to the code at the second address
+// (camera.cpp)
 constexpr uint32_t kCameraAcross = 0x01E36E, kCameraAcrossSet = 0x01E450;
 constexpr uint32_t kCameraUp = 0x01E3F2, kCameraUpSet = 0x01E4A0;
+// The players' outer edges across the stage (D0 the left one, D1 the right), and their heights (D0 the
+// lower, D1 the higher), for the camera
+constexpr uint32_t kPlayersAcross = 0x01E8F4, kPlayersUp = 0x01E962;
+// More of the camera's record (the other scroll screens' records have the same fields):
+constexpr uint32_t kCameraShakeX = 0x50, kCameraShakeY = 0x54;   // words: added to its place (a stage shaking)
+constexpr uint32_t kCameraBeforeX = 0x28, kCameraBeforeY = 0x2C; // words: where it was the frame before
+// bytes: which way it went this frame (across: 0C right, 08 left; up: 00 up, 04 down), and the 16-pixel
+// line it last drew a strip of the map for (a bit, kept turned over)
+constexpr uint32_t kCameraGoingX = 0x3B, kCameraGoingY = 0x3A, kCameraStripX = 0x38, kCameraStripY = 0x39;
+constexpr uint32_t kCameraHeld = 0x60; // byte: not zero: the camera does not follow the players
+// A player's record: half its width as the camera and the picture's edges take it (a word); bit 7 of a
+// byte set when the camera is not to follow the player, unless the next byte is not zero
+constexpr uint32_t kHalfWidth = 0x132, kNotFollowed = 0x134, kFollowedAnyway = 0x19A;
 
 // More of a player's record:
 constexpr uint32_t kOpponent = 0x32;         // word: the other player's record (in FFxxxx)
