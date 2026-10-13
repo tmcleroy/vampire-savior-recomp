@@ -123,8 +123,11 @@ int RunWindowed(Port &port) {
     const bool audioLog = getenv("CPS2RECOMP_AUDIO_LOG") != nullptr;
     double audioLeast = 1;
     int audioDropped = 0;
+    // (--mute starts with no sound; the menu's Sound row switches it on, so the device is opened all the same)
     SDL_AudioStream *audio = nullptr;
-    if (!port.opt.mute) {
+    port.menu.muted = port.opt.mute;
+    bool silent = false;
+    {
         const SDL_AudioSpec spec{SDL_AUDIO_S16, 2, QSound::kSampleRate};
         audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
         if (audio) {
@@ -134,7 +137,6 @@ int RunWindowed(Port &port) {
                 int frames = 0;
                 SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(audio), &device, &frames);
                 fprintf(stderr, "audio: device %d Hz, %d channels, %d frames a buffer (%s)\n", device.freq, device.channels, frames, SDL_GetCurrentAudioDriver());
-                SDL_SetAudioStreamGain(audio, 0.0f);
             }
         } else {
             fprintf(stderr, "Audio: %s\n", SDL_GetError());
@@ -149,6 +151,7 @@ int RunWindowed(Port &port) {
     uint32_t menuWidth = 0, menuHeight = 0;
     bool menuDirty = false;
     uint16_t previousPad = 0, heldAtClose = 0;
+    unsigned previousMenu = 0;
     int triggerHeld = 0;
     bool bothHeld = false; // a gamepad's Start and Select (Back) together: the menu
     auto toggleMenu = [&]() {
@@ -270,9 +273,34 @@ int RunWindowed(Port &port) {
                 heldAtClose = previousPad;
             }
             bothHeld = both;
+            // The menu's buttons are the same whatever the game's are set to: the arrows, the d-pad and the
+            // left stick (and the game's own directions); Space, Enter and A choose; Backspace and B go back
+            unsigned menuNow = 0;
+            menuNow |= (previousPad & kUp) || keys[SDL_SCANCODE_UP] ? recomp::kMenuUp : 0;
+            menuNow |= (previousPad & kDown) || keys[SDL_SCANCODE_DOWN] ? recomp::kMenuDown : 0;
+            menuNow |= (previousPad & kLeft) || keys[SDL_SCANCODE_LEFT] ? recomp::kMenuLeft : 0;
+            menuNow |= (previousPad & kRight) || keys[SDL_SCANCODE_RIGHT] ? recomp::kMenuRight : 0;
+            menuNow |= keys[SDL_SCANCODE_SPACE] || (keys[SDL_SCANCODE_RETURN] && !(SDL_GetModState() & SDL_KMOD_ALT)) ? recomp::kMenuConfirm : 0;
+            menuNow |= keys[SDL_SCANCODE_BACKSPACE] ? recomp::kMenuBack : 0;
+            for (SDL_Gamepad *gp : gamepads) {
+                menuNow |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_UP) ? recomp::kMenuUp : 0;
+                menuNow |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_DOWN) ? recomp::kMenuDown : 0;
+                menuNow |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? recomp::kMenuLeft : 0;
+                menuNow |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? recomp::kMenuRight : 0;
+                menuNow |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_SOUTH) ? recomp::kMenuConfirm : 0;
+                menuNow |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_EAST) ? recomp::kMenuBack : 0;
+            }
+            unsigned menuPressed = menuNow & ~previousMenu;
+            previousMenu = menuNow;
+            if (both) {
+                menuPressed = 0;
+            }
             if (port.menu.IsOpen()) {
-                if (pressed) {
-                    port.MenuAct(port.menu.Buttons(pressed));
+                if (menuPressed) {
+                    port.MenuAct(port.menu.Press(menuPressed));
+                    menuDirty = true;
+                } else if (pressed) {
+                    port.menu.Note(""); // (a press of something else still takes the note away)
                     menuDirty = true;
                 }
                 if (!port.menu.IsOpen()) {
@@ -309,6 +337,10 @@ int RunWindowed(Port &port) {
         const int slowBy = port.paused ? 1 : port.menu.SlowBy();
         const bool ran = port.Tick();
 
+        if (audio && silent != (port.menu.muted || audioLog)) {
+            silent = port.menu.muted || audioLog;
+            SDL_SetAudioStreamGain(audio, silent ? 0.0f : 1.0f);
+        }
         std::vector<int16_t> &made = port.machine->audio;
         if (audio && ran && !made.empty()) {
             // The game makes sound at its own pace and the sound device takes it at its own, and the two
