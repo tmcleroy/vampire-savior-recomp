@@ -25,6 +25,10 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Widescreen: a piece of a stage that the game shows only while the camera is one side of a place
   (most of the people and things in the backgrounds) is shown whenever it is in the wide picture; the
   lady on Feast of the Damned went while part of her was still in it.
+- Widescreen: on every stage, the pieces that the game leaves alone until the camera is near them
+  are animated and shown whenever they are near the wide picture, and the three other pieces that
+  are one thing or another by the camera's side (Concrete Cave, Tower of Arrogance, Abaraya) are
+  both there.
 - Widescreen: both groups of dancers on Feast of the Damned are there at once (the board shows one
   or the other, by which side of a place the camera is).
 

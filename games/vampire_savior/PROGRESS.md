@@ -225,6 +225,22 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   record (script 3); the body went at camera 333 with 20 columns of her still in the picture. Every
   stage has such pieces (listed with a dump of `FFC800` on each stage: about a hundred between them).
 
+- The scripts' own tests of the camera (23 of them in 18 of the 58 scripts), by what they are:
+  - the piece does nothing at all while the camera is the other side of a place: scripts 3 (the lady),
+    10, 26, 30, 34, 38, 39, 46, 47, 55. The test is written again (`pieces.cpp`, "PieceNNInView"); in a
+    wide picture the place is 64 further off, and a piece that is itself within 192 of the picture is not
+    out. The rest of each frame is the game's own code, from where the test ends.
+  - the record is two things by turns: scripts 2 (the dancers), 8 (Concrete Cave), 56 (Tower of Arrogance,
+    two records), 57 (Abaraya). In a wide picture a second record is made for the right one.
+  - not done: 11 (Concrete Cave: a state of its own that the camera resets at `1D0`), 24 (Abaraya: colours
+    loaded with the camera left of `108`), 48 (Abaraya: by its own place, `1F0`), and 43 (Fetus of God: its
+    place worked out from the camera's, then the shared test).
+- `VSAV_PIECES=1` prints, for every piece whose own place is inside the wide picture, whether its script
+  drew it; counted up over a walk to both ends of each stage, what is left never drawn somewhere is
+  script 29 on War Agony (it waits on the piece that made it, not on the camera) and script 41 on the
+  train (no test of the camera in it). Pictures of both ends of Concrete Cave, Tower of Arrogance and
+  Abaraya were looked at; none of this has been played.
+
 Open: in the same made-up play the pieces' animations step on 75% of the frames with the board's picture
 and 62% with the wide one, the same before and after the rewrites. The fights are not the same fights
 (the players stand further apart), so this may be nothing; whether the wide picture leaves the game short

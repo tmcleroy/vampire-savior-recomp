@@ -14,6 +14,9 @@
 #include "stage.h"
 #include "widescreen.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace cps2recomp {
 
 namespace {
@@ -375,6 +378,122 @@ namespace {
         }
     }
 
+    // --- scripts that do nothing while the camera is the other side of a place ---
+    //
+    // A piece that is in the board's picture only with the camera to one side of a place has, in several
+    // scripts, a frame that begins by looking at the camera: the other side of the place, and nothing of
+    // the frame is done: no animation, no movement, nothing drawn (the lady above is one). The test is all
+    // that is written again of these: the rest of the frame is the game's own code still, from where the
+    // test ends. In a wide picture the place is 64 further off, and a piece that is itself near the
+    // picture is not out whatever the camera's place (it may ride something slower than the camera).
+    bool OutOfView(M68K &c, uint16_t place, bool rightOfPlace, bool placedByFrame = false) {
+        const uint16_t camera = Ram16(kCameraX);
+        const int side = WideMargin();
+        if (rightOfPlace ? camera + side >= place : static_cast<int>(camera) - side < place) {
+            return false;
+        }
+        // (a piece whose frame works its place out from the camera's has no place to go by while out)
+        int across = 0;
+        return !(side && !placedByFrame && AcrossInPicture(c, c.a[6] & 0xFFFFFF, across) && across >= -192 && across < 0x180 + 192);
+    }
+    // (kAfter: where the game's code goes on when the piece is not out)
+    template <uint16_t kPlace, bool kRightOfPlace, uint32_t kAfter, bool kPlacedByFrame = false>
+    void WhileInView(M68K &c) {
+        if (!OutOfView(c, kPlace, kRightOfPlace, kPlacedByFrame)) {
+            Call(c, kAfter);
+        }
+    }
+    // ... and the same for the two scripts whose frame takes the camera's place into D1 first
+    template <uint16_t kPlace, uint32_t kAfter>
+    void WhileLeftOf(M68K &c) {
+        SetLow16(c.d[1], Ram16(kCameraX));
+        if (!OutOfView(c, kPlace, false, true)) {
+            Call(c, kAfter);
+        }
+    }
+
+    // 07F26A (script 26, Vanity Paradise's floating things): the place is the record's own
+    void FloaterFrame(M68K &c) {
+        const uint16_t place = Ram16((c.a[6] & 0xFFFFFF) + 0x2A);
+        SetLow16(c.d[0], place);
+        // (the game's test is "the camera is right of the place": one more than the others')
+        if (!OutOfView(c, static_cast<uint16_t>(place + 1), true)) {
+            Call(c, HookAt(0x07F274));
+        }
+    }
+
+    // 07DF4C (script 10, Concrete Cave): a thing that goes left in jumps while the camera is left of a
+    // place; right of it, it is put back at its start
+    void RunnerFrame(M68K &c) {
+        Call(c, OutOfView(c, 0x1BF, false) ? 0x07DF82 : HookAt(0x07DF54));
+    }
+
+    // --- other pieces that are two by turns ---
+    //
+    // Three more scripts have a record that is one thing left of a place of the camera's and another right
+    // of it, as the dancers are: a still picture each side. In a wide picture they are done as the
+    // dancers: the record is the left one for good, and a second made from it the right one.
+    struct Turns {
+        uint16_t change;                        // the camera's place where the record changes
+        uint32_t which;                         // the record's byte that says which it is now (1: the right one)
+        void (*become)(uint32_t piece, bool right);
+    };
+    void TurnsFrame(M68K &c, const Turns &turns) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        const uint8_t half = Ram8(piece + kWideHalf);
+        if (!WidePlay() && half == kRightForGood) {
+            GiveBack(c);
+            return;
+        }
+        if (WidePlay() && half == kByTurns && Ram8(Var(c, kFreePiecesCount))) {
+            Call(c, kTakePiece);
+            const uint32_t made = c.a[4] & 0xFFFFFF;
+            if (Ram8(piece + turns.which)) {
+                turns.become(piece, false);
+            }
+            for (uint32_t at = 0; at < kPieceSize; at++) {
+                SetRam8(made + at, Ram8(piece + at));
+            }
+            turns.become(made, true);
+            SetRam8(made + kWideHalf, kRightForGood);
+            SetRam8(piece + kWideHalf, kLeftForGood);
+        } else if (!WidePlay()) {
+            SetRam8(piece + kWideHalf, kByTurns);
+        }
+        if (Ram8(piece + kWideHalf) == kByTurns) {
+            // (the board's rule)
+            const bool cameraRight = Ram16(kCameraX) >= turns.change;
+            if (cameraRight != (Ram8(piece + turns.which) != 0)) {
+                turns.become(piece, cameraRight);
+            }
+        }
+        PieceDrawn(c);
+    }
+    void Become(uint32_t piece, bool right, uint32_t frame, uint16_t x, uint16_t y) {
+        SetRam8(piece + kHalf, right);
+        SetRam32(piece + kFrame, Ram32(piece + frame));
+        SetRam16(piece + kX, x);
+        SetRam16(piece + kY, y);
+    }
+    // 07DE78 (script 8, Concrete Cave)
+    constexpr Turns kTurns8 = {0x170, kHalf, [](uint32_t piece, bool right) {
+                                   right ? Become(piece, true, kKeptFrame2, 0x32C, 0xC0) : Become(piece, false, kKeptFrame, 0x150, 0x54);
+                               }};
+    // 080A20 (script 57, Abaraya): the right one is drawn further back
+    constexpr Turns kTurns57 = {0x170, kHalf, [](uint32_t piece, bool right) {
+                                    right ? Become(piece, true, kKeptFrame2, 0x398, 0xFFFE) : Become(piece, false, kKeptFrame, 0x121, 0);
+                                    SetRam8(piece + kDepth, right ? 0 : 2);
+                                }};
+    // 0809A6 (script 56, Tower of Arrogance): one picture, turned about and at another place
+    constexpr Turns kTurns56 = {0x1C0, kFacesRight, [](uint32_t piece, bool right) {
+                                    SetRam8(piece + kFacesRight, right);
+                                    SetRam16(piece + kX, Ram16(piece + (right ? 0x42 : 0x40)));
+                                }};
+    template <const Turns &turns>
+    void ByTurns(M68K &c) {
+        TurnsFrame(c, turns);
+    }
+
     // The scripts, by a record's kScript: where each is in the game's program
     constexpr uint32_t kScripts[58] = {
         0x07D354, 0x07D3A2, 0x07D3F6, 0x07D4BA, 0x07D534, 0x07D59C, 0x07D710, 0x07DDD8, 0x07DE32, 0x07DECE, 0x07DF1E, 0x07DF9C,
@@ -384,8 +503,30 @@ namespace {
         0x080462, 0x0804D8, 0x0805A4, 0x0806FA, 0x080768, 0x0807C0, 0x08083A, 0x08087C, 0x080970, 0x0809E4,
     };
 
+    // For finding pieces that a wide picture should show and the game does not draw (VSAV_PIECES=1): for
+    // every piece whose own place is inside the wide picture, a line saying whether its script put anything
+    // on the frame's lists (to be counted up by whoever reads them: a step of the game's that draws
+    // nothing is not a find).
+    unsigned OnLists(M68K &c) {
+        unsigned n = 0;
+        for (int list = 0; list < 15; list++) {
+            n += Ram8(Var(c, 0x79C5 + list));
+        }
+        return n;
+    }
+    void Seen(M68K &c, uint32_t piece, bool drawn) {
+        int across = 0;
+        const int side = WideMargin();
+        if (!side || !Ram8(piece + kActive) || !AcrossInPicture(c, piece, across) || across < -side || across >= 0x180 + side) {
+            return;
+        }
+        fprintf(stderr, "piece %d %d %d %d %d %d %d\n", Ram16(kStage) / 2 + 1, static_cast<int>((piece - kPieces) / kPieceSize),
+                Ram8(piece + kScript), static_cast<int16_t>(Ram16(kCameraX)), Ram16(piece + kX), across, drawn);
+    }
+
     // 07D240. A frame of the stage's pieces: every record in use runs its script
     void AllPieces(M68K &c) {
+        static const bool check = getenv("VSAV_PIECES") != nullptr;
         c.a[6] = c.a[5] + (kPieces - 0xFF8000);
         SetRam8(Var(c, kPiecesLeft), kPieceRecords);
         do {
@@ -393,8 +534,12 @@ namespace {
             if (Ram8(piece + kActive)) {
                 c.a[0] = kScripts[Ram8(piece + kScript) % 58];
                 c.d[0] = 0;
+                const unsigned before = check ? OnLists(c) : 0;
                 Call(c, c.a[0]);
                 Spend(c, 90);
+                if (check) {
+                    Seen(c, piece, OnLists(c) != before);
+                }
             }
             Spend(c, 60);
             c.a[6] += kPieceSize;
@@ -415,6 +560,19 @@ void RegisterPieces() {
     AddRewrite(0x07D4BA, "PieceLady", Lady, kFreeFlags, 166);
     AddRewrite(0x07D534, "PieceThrower", Thrower, kFreeFlags, 134);
     AddRewrite(0x07D240, "AllPieces", AllPieces, kFreeFlags);
+    AddRewrite(0x07DE78, "Piece8ByTurns", ByTurns<kTurns8>, kFreeFlags, 60);
+    AddRewrite(0x080A20, "Piece57ByTurns", ByTurns<kTurns57>, kFreeFlags, 60);
+    AddRewrite(0x0809A6, "Piece56ByTurns", ByTurns<kTurns56>, kFreeFlags, 60);
+    // (the frames that begin with a test of the camera: the script, the place, which side, where it goes on)
+    AddRewrite(0x07F896, "Piece30InView", WhileInView<0x220, true, HookAt(0x07F89E)>, kFreeFlags, 30);
+    AddRewrite(0x07FD4A, "Piece38InView", WhileInView<0x1E8, true, HookAt(0x07FD54)>, kFreeFlags, 30);
+    AddRewrite(0x07FE26, "Piece39InView", WhileInView<0x1E0, true, HookAt(0x07FE2E)>, kFreeFlags, 30);
+    AddRewrite(0x0808A6, "Piece55InView", WhileInView<0x1E8, true, HookAt(0x0808AE)>, kFreeFlags, 30);
+    AddRewrite(0x07FB22, "Piece34InView", WhileInView<0x228, false, HookAt(0x07FB2A)>, kFreeFlags, 30);
+    AddRewrite(0x0803B0, "Piece46InView", WhileLeftOf<0x278, HookAt(0x0803BA)>, kFreeFlags, 30);
+    AddRewrite(0x080420, "Piece47InView", WhileLeftOf<0x1E0, HookAt(0x08042A)>, kFreeFlags, 30);
+    AddRewrite(0x07F26A, "Piece26InView", FloaterFrame, kFreeFlags, 30);
+    AddRewrite(0x07DF4C, "Piece10InView", RunnerFrame, kFreeFlags, 30);
 }
 
 } // namespace cps2recomp
