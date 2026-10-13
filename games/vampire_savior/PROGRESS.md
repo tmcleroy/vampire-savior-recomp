@@ -100,6 +100,38 @@ The Japanese arcade release of 1997-05-19 (ROM set `vsavj`), on Capcom's CPS-2 b
   feature in the game's menu now leaves the rest of `settings.ini` as it was. Not seen in a window;
   the dropdowns not clicked.
 
+## Widescreen (2026-10-13)
+
+`src/widescreen.cpp`, a feature on the menu's and the launcher's Display page, off unless switched
+on (in the Enhanced preset too: it shows more of the stage than the board does). A fight is 512
+columns wide where the board shows 384, 16:9 for 4:3, on the toolkit's wider picture
+(`Video::wide`).
+
+- Only the picture changes. `make check-widescreen` runs the ladder movie with it off and on and
+  compares the game's memory at three frames (work RAM, video and object memory, the registers):
+  the same. So the players can stand no further apart than on the board, and nothing that decides
+  a fight knows of it.
+- The view is the board's with 64 columns more on each side; within 64 of a stage's end it stays
+  where it was, and the stage (scroll screens, fighters, the stage's pieces, sparks, things thrown)
+  is drawn to the side instead. The panel's objects (bars, names, clock, gauges, the words of a
+  round) stay in the middle.
+- The sides of the 8-pixel scroll screen are read from the stage's plan in the ROM, as the game's
+  own routine reads it. The check compares the plan with what the game drew, where the board shows
+  it: 36 million tiles over the ladder movie, none differ.
+- While the red curtain is drawn, and wherever there is no stage, the picture is the board's.
+- Hit boxes and the frame meter are drawn where the stage and the middle are in the wide picture;
+  the readouts go to its edges.
+- Seen in pictures only (every stage from end to end in the stage viewer, the ladder movie, a
+  training session with the boxes on); not yet in a window, and nobody has played it.
+- Known: the planes behind move less than the camera, so the view shows up to 64 columns of them
+  that the board never shows. On the desert stage the tent (objects) ends about 30 columns short
+  of the picture's right edge at some places of the camera. Not looked at: where the game
+  takes away a thing thrown that has left the board's picture (if it is at the board's edge, it
+  goes 64 columns inside the wide one's). Survival,
+  the endless battle, the ring out and the viewer's infinite stage keep the board's picture (they
+  put theirs together 384 wide). A save state loaded in a fight can show the view a frame late
+  for one frame.
+
 ## Modes (2026-10-12)
 
 "Alternative modes", the first row of the menu (`src/modes.cpp`): training (moved there), attract
@@ -162,6 +194,26 @@ Facts found for these:
   camera's ends: a player is kept in the picture, not in the stage.
 - The panel's objects: colour sets 0-4, and the faces beside the bars in the players' own sets,
   tiles `13800`-`143FF`. A player's own objects: sets 10-15 (the first) and 16-21.
+
+- A stage's three scroll screens have a record each: `FF8200` the one of 8-pixel tiles, `FF8280`
+  the one of 16 (the camera's record; the stage's own plane), `FF8300` the one of 32. `+20` is
+  where its picture's left edge is in the stage (the scroll register is that less 64), `+08` its
+  middle, `+03` not zero when the game draws its picture into the map as the camera moves. The
+  routines at `01DE40`-`01DEEA` and `01E762`-`01E7F6` place a plane from the camera, one for each
+  rate (a half, three quarters, seven eighths...). The scroll screens of 16 and 32 are whole
+  pictures in the map on every stage. The one of 8 is only 512 columns there: on two stages (the
+  subway, the chateau) its picture is that wide and goes round; on the other ten it is up to 1,024
+  wide and is drawn a 32-pixel strip at a time (`01EE22`, `01EE58`, `01EF16`, `01F06E`) from the
+  stage's plan: eight bytes at `FF4302` (two rows of four 256-pixel blocks), blocks of 8 x 8 cells
+  at `35AD18`, cells of 4 x 4 tiles at `35C918`. The game keeps 64 columns up on each side of its
+  picture, in strips, so what is beyond the picture's edges in the map is not to be trusted.
+- The picture a frame shows is the one the game worked out the frame before: the scroll registers
+  written and the object list taken at the frame's start are for the camera as it was a frame ago
+  (the word at `FF804E` is the 16-pixel screen's register to come: the camera then, less 256).
+- The red curtain between a match's screens: objects of colour set 3, tiles `2C600`-`2FDFF`.
+- An object's place in the picture is worked out at `01BBC2` (against one of the three planes'
+  records, chosen by the object's `+0C`), `01BC3A` and `01BC88` (the panel: its own place, plus 64);
+  nothing there leaves an object out for being outside the picture.
 
 - With no coin in, the word at `FF8000` steps through the show: `0C` its start, `10` the sound
   notice, `12`-`14` the maker's, `16`-`18` the introduction and title, `1A`-`20` a fight, `22`-`24`

@@ -10,6 +10,7 @@
 #include "frames.h"
 
 #include "state.h"
+#include "widescreen.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -232,7 +233,8 @@ void FramesHud(bool numbers, bool meter, std::vector<HudLine> &lines, std::vecto
     }
     if (meter && g.meterLength) {
         // Two rows of cells above the gauges, player 1's on top
-        constexpr int kCell = 6, kLeft = (384 - kMeterCells * kCell) / 2, kTop = 193;
+        constexpr int kCell = 6, kTop = 193;
+        const int kLeft = (384 - kMeterCells * kCell) / 2 + WideSide(); // (in the middle of a wide picture too)
         static constexpr struct {
             uint8_t r, g, b;
         } kColors[] = {{40, 44, 56},    // free

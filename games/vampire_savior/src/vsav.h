@@ -31,6 +31,15 @@ constexpr uint32_t kStage = 0xFF8100, kChooseStage = 0x00AE7C, kPlayersThen = 0x
 constexpr int kStages = 12; // in the order of their numbers: Feast of the Damned (the castle's hall), Concrete Cave (the
 // subway), Tower of Arrogance, Red Thirst (the desert), Deserted Chateau, Abaraya, Vanity Paradise, War
 // Agony (the wooden town), Forever Torment, Green Scream, Iron Horse Iron Terror (the train), Fetus of God
+// A stage's scroll screens have a record each. The one of 8-pixel tiles (the furthest back on most stages):
+// where its picture's left edge is in the stage (a word: the scroll register is this less 64), and a byte
+// that is not zero when its picture is wider than the map's 512 columns and the game draws it into the map
+// as the camera moves, a 32-pixel strip at a time (routines 01EE22-01F06E). It is drawn from the stage's
+// plan: eight bytes, two rows of four 256-pixel blocks, the lower row second (copied here from the ROM when
+// the stage is made); a block is 8 x 8 words in the ROM, down then across, each the number of a 32-pixel
+// cell; a cell is 4 x 4 tiles, down then across, two words a tile as the map has them.
+constexpr uint32_t kBackLayer = 0xFF8200, kLayerDrawnAsItGoes = 0x03, kLayerX = 0x20;
+constexpr uint32_t kBackPlan = 0xFF4302, kBackBlocks = 0x35AD18, kBackCells = 0x35C918;
 // Who is playing: bit 0 player 1, bit 1 player 2
 constexpr uint32_t kPlayersIn = 0xFF808D;
 // In a player's record while choosing: a step (0 the character, 2 the speed and guard choices, 4 done)

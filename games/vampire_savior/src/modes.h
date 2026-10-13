@@ -87,6 +87,7 @@ void Promote(Machine &machine, Spare &spare);
 // Modes by the files that have them: whether one is on, and ending it
 bool AttractMode();  // modes.cpp
 bool StageViewer();
+bool PictureIsTwoStages(); // the viewer's infinite stage: the picture is put together from two machines'
 void EndModes();
 bool BattleMode();   // battle.cpp
 void EndBattle();

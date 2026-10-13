@@ -5,6 +5,11 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Widescreen (Display page; off unless switched on, in every preset): a fight is shown in 16:9 with
+  more of the stage on each side. Only the picture changes. The game runs as before, frame for
+  frame (`make check-widescreen`): the players can stand no further apart, and the bars stay where
+  they were. Not in survival, the endless battle, the ring out or the viewer's infinite stage,
+  which keep the board's picture.
 - Endless battle: how often the shuffled stage changes (1, 2, 3, 5 or 10 minutes; it was two) and
   how fast the scrolling stage goes by (slow, medium, fast) are chosen on its page.
 - A gamepad's left trigger goes on by a frame only once the game has been stopped (`P`, the right

@@ -361,6 +361,9 @@ bool AttractMode() {
 bool StageViewer() {
     return g.mode == Mode::Viewer;
 }
+bool PictureIsTwoStages() {
+    return g.mode == Mode::Viewer && g.infinite;
+}
 // The stage the machine that is running is to fight on (the game's choice of stage: training.cpp)
 int StageViewerStage() {
     return g.mode == Mode::Viewer ? Wanted().stage : 0;

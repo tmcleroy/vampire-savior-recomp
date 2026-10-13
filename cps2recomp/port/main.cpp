@@ -173,7 +173,7 @@ uint32_t Port::StateHash() const {
     uLong h = crc32(0, nullptr, 0);
     auto add = [&](const void *p, size_t size) { h = crc32(h, static_cast<const Bytef *>(p), static_cast<uInt>(size)); };
     if (opt.hashPicture) {
-        add(m.Picture(), sizeof(uint32_t) * Video::kWidth * Video::kHeight);
+        add(m.Picture(), sizeof(uint32_t) * m.PictureWidth() * Video::kHeight);
         return static_cast<uint32_t>(h);
     }
     add(m.cpu.d, sizeof(m.cpu.d));
@@ -205,7 +205,7 @@ uint32_t Port::StateHash() const {
     add(m.cpsA, sizeof(m.cpsA));
     add(m.cpsB, sizeof(m.cpsB));
     add(m.objectRegs, sizeof(m.objectRegs));
-    add(m.Picture(), sizeof(uint32_t) * Video::kWidth * Video::kHeight);
+    add(m.Picture(), sizeof(uint32_t) * m.PictureWidth() * Video::kHeight);
     return static_cast<uint32_t>(h);
 }
 
@@ -336,8 +336,9 @@ bool Port::Tick() {
 }
 
 void Port::Shown(std::vector<uint32_t> &pixels) const {
-    pixels.assign(machine->Picture(), machine->Picture() + Video::kWidth * Video::kHeight);
-    DrawHud(pixels.data(), Video::kWidth, Video::kHeight);
+    const int across = ShownWidth();
+    pixels.assign(machine->Picture(), machine->Picture() + across * Video::kHeight);
+    DrawHud(pixels.data(), across, Video::kHeight);
     // Stopped or slowed: said at the bottom, with the frame's number (for counting frames by stepping)
     if (paused || menu.SlowBy() > 1) {
         char status[64];
@@ -346,9 +347,9 @@ void Port::Shown(std::vector<uint32_t> &pixels) const {
         } else {
             snprintf(status, sizeof(status), "SPEED 1/%d", menu.SlowBy());
         }
-        const recomp::text::Canvas canvas{pixels.data(), Video::kWidth, Video::kHeight};
+        const recomp::text::Canvas canvas{pixels.data(), across, Video::kHeight};
         const float width = recomp::text::TextWidth(status, 1);
-        const float x = (Video::kWidth - width) / 2, y = Video::kHeight - 11;
+        const float x = (across - width) / 2, y = Video::kHeight - 11;
         canvas.Fill(x - 3, y - 2, width + 6, 12, {20, 22, 30, 220});
         canvas.Text(x, y, 1, 0, {255, 255, 255, 255}, status);
     }
@@ -357,14 +358,15 @@ void Port::Shown(std::vector<uint32_t> &pixels) const {
 void Port::MenuPicture(std::vector<uint32_t> &pixels, uint32_t &width, uint32_t &height) const {
     std::vector<uint32_t> shown;
     Shown(shown);
+    const uint32_t across = static_cast<uint32_t>(ShownWidth());
     height = Video::kHeight * 3;
-    width = height * 4 / 3;
+    width = height * 4 / 3 * across / Video::kWidth;
     pixels.resize(static_cast<size_t>(width) * height);
     for (uint32_t y = 0; y < height; y++) {
-        const uint32_t *from = &shown[static_cast<size_t>(y / 3) * Video::kWidth];
+        const uint32_t *from = &shown[static_cast<size_t>(y / 3) * across];
         uint32_t *to = &pixels[static_cast<size_t>(y) * width];
         for (uint32_t x = 0; x < width; x++) {
-            to[x] = from[x * Video::kWidth / width];
+            to[x] = from[x * across / width];
         }
     }
 }
@@ -695,7 +697,7 @@ void Port::RunFrame() {
         snprintf(shot, sizeof(shot), "%s%06llu.png", opt.shotPrefix.c_str(), static_cast<unsigned long long>(frame));
         std::vector<uint32_t> shown;
         Shown(shown);
-        WritePng(shot, shown.data(), Video::kWidth, Video::kHeight);
+        WritePng(shot, shown.data(), ShownWidth(), Video::kHeight);
     }
 }
 
@@ -957,8 +959,9 @@ int main(int argc, char **argv) {
             std::vector<uint32_t> shown, drawn;
             std::string error;
             p.Shown(shown);
-            if (SDL_Init(SDL_INIT_VIDEO) && port::Presenter::Render(shown.data(), Video::kWidth, Video::kHeight, 896, 672, drawn, error)) {
-                WritePng(p.opt.presentTest.c_str(), drawn.data(), 896, 672);
+            const int across = p.ShownWidth(), outWidth = 896 * across / Video::kWidth;
+            if (SDL_Init(SDL_INIT_VIDEO) && port::Presenter::Render(shown.data(), across, Video::kHeight, outWidth, 672, drawn, error)) {
+                WritePng(p.opt.presentTest.c_str(), drawn.data(), outWidth, 672);
             } else {
                 fprintf(stderr, "--present-test: %s\n", error.empty() ? SDL_GetError() : error.c_str());
                 result = 1;

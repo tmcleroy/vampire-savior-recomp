@@ -95,12 +95,14 @@ void Video::DrawScroll(int which, int rasterLine, uint16_t *pens, uint8_t *prior
     }
     const uint32_t y = (rasterLine + scrollY) & mapMask;
     const uint32_t row = y >> shift;
-    const uint32_t firstX = (kFirstColumn + scrollX) & mapMask;
+    const int width = Width();
+    const int ownLeft = wide.side + wide.scroll[which], ownRight = ownLeft + kWidth; // the board's own columns
+    const uint32_t firstX = static_cast<uint32_t>(kFirstColumn - wide.side - wide.scroll[which] + static_cast<int>(scrollX)) & mapMask;
     const uint16_t colourBase = static_cast<uint16_t>(0x20 * (which + 1));
 
     int out = -static_cast<int>(firstX & (size - 1)); // where the first (partly hidden) tile starts
     uint32_t column = firstX >> shift;
-    for (; out < kWidth; out += size, column = (column + 1) & 63) {
+    for (; out < width; out += size, column = (column + 1) & 63) {
         uint32_t index;
         switch (which) {
         case 0: index = (row & 0x1F) + (column << 5) + ((row & 0x20) << 6); break;
@@ -108,7 +110,15 @@ void Video::DrawScroll(int which, int rasterLine, uint16_t *pens, uint8_t *prior
         default: index = (row & 0x07) + (column << 3) + ((row & 0x38) << 6); break;
         }
         uint32_t code = Word(&map[index * 4]);
-        const uint16_t attr = Word(&map[index * 4 + 2]);
+        uint16_t attr = Word(&map[index * 4 + 2]);
+        if (wide.tile && (out < ownLeft || out + size > ownRight)) {
+            // (beyond the board's own columns the game's sources may know better than the map: video.h)
+            uint16_t itsCode = 0, itsAttr = 0;
+            if (wide.tile(which, static_cast<int>(column), static_cast<int>(row), out, itsCode, itsAttr)) {
+                code = itsCode;
+                attr = itsAttr;
+            }
+        }
         // Where the tile is in the graphics ROMs: the scroll screens' tiles are in the second 8 MB
         uint32_t at;
         int rowBytes;
@@ -140,7 +150,7 @@ void Video::DrawScroll(int which, int rasterLine, uint16_t *pens, uint8_t *prior
         }
         for (int k = 0; k < size; k++) {
             const int x = out + k;
-            if (x < 0 || x >= kWidth) {
+            if (x < 0 || x >= width) {
                 continue;
             }
             const uint8_t pen = pixels[flipX ? size - 1 - k : k];
@@ -159,6 +169,7 @@ void Video::DrawScroll(int which, int rasterLine, uint16_t *pens, uint8_t *prior
 void Video::DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const uint32_t *masks) {
     const int xOffset = 64 - m_src.objectRegs[kObjXOffset];
     const int yOffset = 16 - m_src.objectRegs[kObjYOffset];
+    const int width = Width();
     for (int i = m_lastObject; i >= 0; i -= 4) {
         int x = m_objects[i];
         int y = m_objects[i + 1];
@@ -176,6 +187,8 @@ void Video::DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const
         const bool flipX = attr & 0x20, flipY = attr & 0x40;
         const uint16_t colour = static_cast<uint16_t>((attr & 0x1F) * 16);
         const uint32_t mask = masks[level] | 0x80000000u;
+        // (where the first column drawn is in the object's own count across, which wraps at 1024)
+        const int first = kFirstColumn - wide.side - (wide.object ? wide.object(code, attr) : 0) - 16;
         for (int ty = 0; ty < down; ty++) {
             const int sy = (y + ty * 16 + yOffset) & 0x3FF;
             if (rasterLine < sy || rasterLine >= sy + 16) {
@@ -183,8 +196,8 @@ void Video::DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const
             }
             const int line = rasterLine - sy;
             for (int tx = 0; tx < across; tx++) {
-                const int sx = ((x + tx * 16 + xOffset) & 0x3FF) - kFirstColumn;
-                if (sx <= -16 || sx >= kWidth) {
+                const int sx = ((x + tx * 16 + xOffset - first) & 0x3FF) - 16;
+                if (sx >= width) {
                     continue;
                 }
                 uint32_t tile;
@@ -205,7 +218,7 @@ void Video::DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const
                 Unpack(&m_src.graphics[at + 4], pixels + 8);
                 for (int k = 0; k < 16; k++) {
                     const int px = sx + k;
-                    if (px < 0 || px >= kWidth) {
+                    if (px < 0 || px >= width) {
                         continue;
                     }
                     const uint8_t pen = pixels[flipX ? 15 - k : k];
@@ -223,9 +236,10 @@ void Video::DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const
 
 void Video::RenderLine(int line, uint32_t *out) {
     const int rasterLine = line + kFirstLine;
-    uint16_t pens[kWidth];
-    uint8_t priority[kWidth];
-    for (int x = 0; x < kWidth; x++) {
+    const int width = Width();
+    uint16_t pens[kMaxWidth];
+    uint8_t priority[kMaxWidth];
+    for (int x = 0; x < width; x++) {
         pens[x] = 0xBFF; // the backdrop colour
     }
     memset(priority, 0, sizeof(priority));
@@ -305,11 +319,11 @@ void Video::RenderLine(int line, uint32_t *out) {
     if (layerMask & 1) {
         DrawObjects(rasterLine, pens, priority, masks);
     }
-    for (int x = 0; x < kWidth; x++) {
+    for (int x = 0; x < width; x++) {
         out[x] = m_palette[pens[x]];
     }
     if (markObjects) {
-        for (int x = 0; x < kWidth; x++) {
+        for (int x = 0; x < width; x++) {
             out[x] |= priority[x] == 31 ? 0x80000000u | (static_cast<uint32_t>(pens[x] >> 4) & 0x1F) << 24 : 0;
         }
     }

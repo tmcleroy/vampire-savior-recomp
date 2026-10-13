@@ -25,6 +25,8 @@ void RegisterBattle();   // battle.cpp
 void BattleBeforeFrame(Machine &machine);
 void BattleFrame(Machine &machine);
 void BattleState(Archive &ar);
+void RegisterWidescreen(); // widescreen.cpp
+void WidescreenBeforeFrame(Machine &machine);
 
 void RegisterGame() {
     RegisterModes();
@@ -36,7 +38,10 @@ void RegisterGame() {
     RegisterFight();
     RegisterInput();
     RegisterFrames();
+    RegisterWidescreen();
     TheGame().beforeFrame = [](Machine &machine) {
+        // (first: the modes below may run other machines' frames, which are never wide)
+        WidescreenBeforeFrame(machine);
         TrainingBeforeFrame(machine);
         ModesBeforeFrame(machine);
         BattleBeforeFrame(machine);

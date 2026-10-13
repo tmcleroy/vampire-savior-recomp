@@ -50,6 +50,12 @@ board does not have. Each mode has a page there with a Start row and its choices
 | --- | --- | --- |
 | Free play | `free_play` | Start works without a coin. |
 
+## Display
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| Widescreen | `widescreen` | A fight is shown in 16:9 (512 columns where the board shows 384) with more of the stage on each side. Off unless switched on, in every preset. Only the picture changes: the game runs as it does without it, the players can stand no further apart, and the bars stay in the middle. Everything else (the character choice, the screens between fights, the red curtain) keeps the board's 4:3. |
+
 ## Cheats
 
 | Feature | Name in `settings.ini` | What it does |
