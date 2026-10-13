@@ -5,6 +5,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Endless battle: how often the shuffled stage changes (1, 2, 3, 5 or 10 minutes; it was two) and
+  how fast the scrolling stage goes by (slow, medium, fast) are chosen on its page.
 - A gamepad's left trigger goes on by a frame only once the game has been stopped (`P`, the right
   stick's click); it no longer stops the game itself, which a touch of it while playing did, with
   nothing on the trigger to start it again.

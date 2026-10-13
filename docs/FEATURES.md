@@ -36,7 +36,9 @@ board does not have. Each mode has a page there with a Start row and its choices
 | Survival: Best | `survival_best` | The most opponents beaten in one survival, kept here. Choosing a preset in the launcher puts it back to 0. |
 | Ring out: Best | `ringout_best` | The most ring outs in one go, kept the same way. |
 | Endless battle: Fighter 1, Fighter 2 | `endless_one`, `endless_two` | Who is on each side: Random (someone new each time), or one of the fifteen characters. |
-| Endless battle: Stage | `endless_stage` | Shuffle: a stage that fades into another, at random, every two minutes. Scroll: the stages go by one after another at a steady pace and the fighters are carried along with the floor, the picture's left edge pushing them on. Or one of the twelve stages. |
+| Endless battle: Stage | `endless_stage` | Shuffle: a stage that fades into another, at random, every so often. Scroll: the stages go by one after another at a steady pace and the fighters are carried along with the floor, the picture's left edge pushing them on. Or one of the twelve stages. |
+| Endless battle: Shuffle every | `endless_shuffle` | How long the fight stays on a stage before Shuffle fades it into another: 1, 2, 3, 5 or 10 minutes. |
+| Endless battle: Scroll speed | `endless_scroll` | How fast Scroll's stages go by: Slow, Medium or Fast. |
 | Attract mode: Shows | `attract_show` | What attract mode plays. Choices: Everything, The intro only (the introduction to the title, over and over), The fights only (one of the game's eight demonstration fights after another). |
 | Stage viewer: Stage | `viewer_stage` | The stage the viewer shows: any of the twelve, or Infinite: every stage in turn, each scrolled from end to end and then out of the picture as the next comes in, its tune fading into the next one's. Changing it while viewing goes to the new one. |
 | Stage viewer: Scrolling | `viewer_scroll` | How the viewer moves across the stage. Choices: With the stick, Slow (a pixel every four frames), Medium, Fast (a pixel a frame). |
