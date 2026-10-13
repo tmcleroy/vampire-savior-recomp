@@ -24,53 +24,11 @@ bool WidePlay();
 // How many columns the picture fights are played in has on each side of the board's (64, or 0): the picture's
 // left edge is that far left of the camera's place, and the camera stops that far short of each of its ends
 int WideMargin();
-// Which of the stage's planes each entry of a machine's object list rides on, as the game said while it
-// made the list (widescreen.cpp). It belongs to a machine and is not in its save state, so whoever keeps
-// more than one machine keeps one of these for each.
-struct WidePlanes {
-    uint8_t rides[0x400] = {}; // 0: not known; 1-3: the scroll screen of 8-, 16-, 32-pixel tiles; 4: none (the panel)
-    int last = 0;              // the entry the game last said it of
-    int16_t planeX[3] = {}, planeY[3] = {}; // where each plane was when the list was made
-    // A record of the stage's that is one of two pieces, by the camera's side of a place (widescreen.cpp):
-    // each piece's entries as the game last put them in the list, their places counted from the plane's;
-    // and in the list being made, which piece the record is, and where its entries are
-    static constexpr int kTwins = 4, kTwinEntries = 32;
-    struct Twin {
-        uint32_t record = 0; // (0: none)
-        uint8_t stateAt = 0; //   the byte of the record that says which piece it is
-        uint8_t plane = 0;   //   the plane it rides on (1-3)
-        struct Piece {
-            int count = 0;
-            uint16_t entries[kTwinEntries][4] = {};
-        } piece[2];
-        int is = -1, at = 0, count = 0;
-        int16_t ahead = 0;   //   what the game took off its place for its row, in the list being made
-    } twins[kTwins];
-    int filling = -1; // the twin whose entries the game is putting in the list just now
-    // The scroll screen of 16-pixel tiles has a place of its own on every line (the board's row scroll),
-    // and so a rate of its own (widescreen.cpp, RowRate). A piece of the stage on one of those rows (the
-    // game takes the row's place off the piece's: 01BBC2) goes at the row's rate, the row's own, so that
-    // the piece and the picture it stands on never part: `row` is which. A piece on no plane, which its script puts in the picture itself, has its rate
-    // measured from where it was with the camera furthest left and furthest right (`rate`, and how far
-    // apart those were when it was worked out).
-    static constexpr int kPieces = 48;
-    struct Piece {
-        uint16_t record = 0; // (its address's low half; 0: none)
-        int16_t row = -1;    //   the row of the table it is on (-1: none)
-        int16_t rate = -1;   //   for a piece on no plane (-1: not known)
-        int16_t apart = 0;
-        int16_t leftCamera = 0, leftX = 0, rightCamera = 0, rightX = 0;
-    } pieces[kPieces];
-    uint8_t piece[0x400] = {}; // which of them each entry of the list is (0: none; else its number and 1)
-};
 // A machine other than the port's is loaded and about to run a frame (modes.h, RunSpare): its picture is to
-// be as wide as the port's this frame, whatever it is showing, so that the two can be put together.
-// `planes` is that machine's.
-void WideForSpare(Machine &machine, WidePlanes &planes);
-// ... and the port's own machine is back, with its video's `wide` as it was (`planes` takes the other's)
-void WideForPort(Machine &machine, WidePlanes &planes);
-// ... or the other machine has become the port's
-void WidePromoted(const WidePlanes &planes);
+// be as wide as the port's this frame, whatever it is showing, so that the two can be put together
+void WideForSpare(Machine &machine);
+// ... and the port's own machine is back, with its video's `wide` as it was
+void WideForPort(Machine &machine);
 // From the hook on the game's routine that keeps a player inside the picture (battle.cpp has it), when the
 // game's routine is to run: the picture it keeps the player in is the wide one
 void WideKeepIn(M68K &c);

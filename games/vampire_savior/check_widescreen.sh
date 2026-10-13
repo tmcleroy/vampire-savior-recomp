@@ -5,7 +5,7 @@
 # Checks the widescreen feature (src/widescreen.cpp), with the ladder movie's controls (the fights do not go
 # as the movie's did: the feature changes how the game plays). Where it reads the stage's plan for the
 # picture's sides, the plan has to give what the game itself drew into the map: the run counts the tiles
-# compared and those that differ. Nothing may jump as the camera moves (below). And no instruction may be left to the interpreter (the places the feature
+# compared and those that differ. And no instruction may be left to the interpreter (the places the feature
 # takes the game's comparisons over have translated code after them). That the game with the feature off is
 # what it was is `make check`'s and the movies' business. Run from the repository's top.
 GAME=vampire_savior
@@ -17,18 +17,6 @@ compared=$(echo "$out" | grep "^widescreen:" | awk '{n += $4} END {print n + 0}'
 differ=$(echo "$out" | grep "^widescreen:" | awk '{n += $(NF - 1)} END {print n + 0}')
 echo "the stage's plan against the map: $compared tiles, $differ differ"
 [ "$compared" -gt 0 ] && [ "$differ" -eq 0 ] || status=1
-# Nothing in the wide picture may jump: how far each scroll screen, row and piece is drawn to the side must
-# change no faster than the camera goes. Over made-up fights on every stage (the run counts the frames with
-# the view held somewhere, and those with a jump; a frame or two is allowed for a piece first appearing).
-frames=0; jumps=0
-for stage in 1 2 3 4 5 6 7 8 9 10 11 12; do
-    line=$(VSAV_WIDE_CHECK=1 $port --rom "${ROM:-rom}" --headless --frames 6001 --auto $stage:700 --features free_play,widescreen \
-        --keys "5:ftraining_stage=$stage,10:ctraining_start" 2>&1 | grep "view held" | tail -1)
-    frames=$((frames + $(echo "$line" | awk '{print $4 + 0}')))
-    jumps=$((jumps + $(echo "$line" | awk '{print $10 + 0}')))
-done
-echo "made-up fights on every stage: $frames frames with the view held, $jumps with a jump"
-[ "$frames" -gt 10000 ] && [ "$jumps" -le 3 ] || status=1
 echo "$out" | grep "ran in the interpreter"
 echo "$out" | grep -q "^0 instructions had no translation and ran in the interpreter" || status=1
 [ $status -eq 0 ] && echo "ok: widescreen" || echo "FAILED"

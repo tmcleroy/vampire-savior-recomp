@@ -7,12 +7,14 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 - Widescreen (a switch on the launcher's first page, under "Full screen", and on the in-game
   menu's Display page; off unless switched on, in every preset, because it changes how the game
-  plays): fights are shown and played in 16:9, with more of the stage on each side. The
-  players can go to the wide picture's edges (464 apart at most, where the board allows 336), the
-  camera stops where the wide picture comes to the stage's ends, and the stage's pieces are
-  always drawn (and where a stage keeps two pieces in one record, both are), and the things thrown that the game only keeps while they are in the picture are
-  kept while they are in the wide one. The planes behind stop where their painting does. The bars stay in the middle. Survival, the endless battle, the ring out and the
-  viewer's infinite stage are wide too. With it off the game is exactly the board's.
+  plays): fights are shown and played in 16:9, with more of the stage on each side. The players
+  can go to the wide picture's edges (464 apart at most, where the board allows 336), the camera
+  stops where the wide picture comes to the stage's ends, and the stage's pieces and the things
+  thrown that the game only keeps while they are in the picture are kept while they are in the
+  wide one. The bars stay in the middle. Survival, the endless battle, the ring out and the
+  viewer's infinite stage are wide too. With it off the game is exactly the board's. Known: some
+  pieces of a stage come in late at the wide picture's edge, and at a stage's very ends a few
+  columns of the planes behind are not painted.
 - Endless battle, the stages scrolling by: the next stage is made ready in time for the end of
   the one shown (in the wide picture a stage is crossed sooner, and at the fast speed the
   scrolling waited about a second at each stage's end).

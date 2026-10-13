@@ -103,93 +103,68 @@ The Japanese arcade release of 1997-05-19 (ROM set `vsavj`), on Capcom's CPS-2 b
 ## Widescreen (2026-10-13)
 
 `src/widescreen.cpp`, a feature whose switch is on the launcher's first page under "Full screen"
-(`game.cfg`'s `display`; the launcher keeps it in `launcher.ini` and says at every start whether
-it is on) and on the in-game menu's Display page; off unless switched on (in the Enhanced preset
-too: it changes how the game plays). A fight is 512 columns wide where
-the board shows 384, 16:9 for 4:3, on the toolkit's wider picture (`Video::wide`), and is played
-in that picture. (The first version changed the picture only; the owner asked for the game to be
-played in it, the same day.)
+(`game.cfg`'s `display`) and on the in-game menu's Display page; off unless switched on, in every
+preset (it changes how the game plays). A fight is 512 columns wide where the board shows 384, on
+the toolkit's wider picture (`Video::wide`), and is played in that picture.
 
-- The picture is the board's with 64 columns more on each side. The panel's objects (bars, names,
-  clock, gauges, the words of a round) stay in the middle. The sides of the 8-pixel scroll screen
-  are read from the stage's plan in the ROM, as the game's own routine reads it;
-  `make check-widescreen` compares the plan with what the game drew, where the board shows it (32
-  million tiles over the ladder movie's controls, none differ). While the red curtain is drawn,
-  and wherever there is no stage, the picture is the board's.
-- The players are kept inside the wide picture: the game's two routines for that (`028192`,
-  `02824C`) come to the picture's edges only through the player's half width, so they run with 64
-  less in that word and it is put back where they return. Driven apart, two players stand 464
-  apart (336 on the board); both still come to the stage's ends (280 and 1000).
-- The camera's ends in its record are 320 and 576 (256 and 640 on the board), so the wide
-  picture ends where the stage does. (If the camera is ever nearer an end than that, the stage is
-  drawn to the side by what is missing: the first version's rule, still there.)
-- What the game asks "is it in the picture?" of, in routines all its objects share: a thing
-  thrown is done away with outside the wide picture and a margin (`0154AC`: one comparison, made
-  by a hook with the wider numbers). A piece of the stage is always drawn: the comparisons that
-  would leave it out (`015512`, `01552E`; `0154E2` and `0154F4`, by the camera's place) always say
-  it is in.
-- The stages' own scripts (`07D4xx`-`080Axx`) compare the camera with a place too. In two of
-  them the script does nothing at all for a piece on one side (`07D4DA`: the lady under the bird
-  cage on Feast of the Damned; `07F896`): those are answered the way that keeps the piece. A dozen
-  others looked the same and are not: there the comparison decides where a piece is or what it
-  does (`0803B4` and `080424` put the desert camel's head). Answered for them, the camel's head
-  came away from its body and the lady's arm from hers; they are left to the game. Found by
-  running the same controls with the feature off and on and comparing the middle 384 columns
-  where no plane is held back: the same on every stage (but the two with planes that travel less
-  than 128, which are held from the start).
-  Four scripts keep two pieces in one record, which is
-  the left one while the camera is left of a place and the right one otherwise (`07D438`: Feast
-  of the Damned's dancers and a piece on the right; `07DE78`, `0809A6`, `080A20`): in the wide
-  picture both can be seen, so the piece the record is not is drawn from the entries the game
-  last put in the object list for it, placed against its plane (`Video::objectsTaken`). The
-  dancers move, so their record is kept the dancers once the other piece has been seen; the
-  other three pairs do not move. Seen in a pan of each stage; the three other pairs not looked
-  for one by one.
-- The planes behind are kept inside what the board shows of them, each by how far it travels
-  (`kTravel`, seen in the planes' records): a plane goes with the camera until 64 more columns
-  on a side would show where nothing was painted, and stops there. (Before this the backdrop's
-  colour showed in a strip at a stage's end on some stages, and where two stages meet in the
-  endless battle's scroll.) A piece of the stage rides on one of the planes and is drawn to the
-  side with it: the game says which plane as it works out the piece's place (`01BBC2`, `01BC3A`,
-  by the byte at `+0C` of its record; `01BC88` for the panel), and hooks there note it for the
-  entries of the object list that follow. Each machine a mode keeps has its own note.
-- The scroll screen of 16-pixel tiles has a rate for every line (the board's row scroll): on every
-  stage the wall behind is some rows that all go at one rate, slower than the camera (0.69 of it
-  on Feast of the Damned, 0.36 on Tower of Arrogance), and the floor below goes faster row by row
-  up to the camera's own rate and beyond. The rows are fixed in the table (from 768; which line
-  shows which goes with the camera's height, a register). Each stage's are five numbers in
-  `kStageRows`, read from the table with the camera at each end (the two agree on every row), and
-  each row slower than the camera is kept inside its painting by its own rate
-  (`Video::wide.rows`). A piece on a row (`+24` of its record; the game takes the row's place off
-  the piece's at `01BBC2`) goes at that same row's rate, so a piece and the picture it stands on
-  cannot part. A piece on no plane, which its script puts in the picture itself (the chateau's
-  cave mouth), has its rate measured from where it is at the camera's two furthest places, and
-  worked out again only when those are 16 further apart.
-- What went wrong on the way, to not do again: the rows' rates were first worked out while the
-  game ran, again every frame, each piece's by itself. They flickered between neighbouring values
-  as the camera moved, a piece's against its row's, and against the wrong camera (the table is a
-  frame behind); and the lines' were looked up a frame before the rows had moved up or down. Seen
-  as pieces and bands of the picture twitching near a stage's ends, never in a still picture.
-  `make check-widescreen` now counts, over made-up fights on every stage, the frames in which
-  anything is drawn further to the side than the camera went: none but a piece's first frame.
-- Fetus of God's camera goes from 160 to 736 on the board, not 256 to 640: the wide picture's
-  ends there are 224 and 672. (Before this the picture fell back to the board's near that stage's
-  ends.)
-- Survival, the endless battle, the ring out and the viewer's infinite stage are wide: every
-  machine's frame is as wide as the port's that frame, and the pictures are put together at that
-  width; the ring out's edge is the wide picture's.
-- Hit boxes and the frame meter are drawn where the stage and the middle are in the wide picture;
-  the readouts go to its edges. Training's "Start over" puts the camera at the wide picture's end.
-- With the feature off: the same state hashes as before over 20,000 frames of the ladder movie,
-  and the same speed.
-- Seen in pictures only (every stage from end to end, the ladder movie's controls, a training
-  session with the boxes on, each mode for a minute); not yet in a window, and nobody has played
-  it. The movies do not replay with it on.
-- Known, not done: each character's own code that knows the board's width (helpers and things
-  that come in from the picture's edge, moves that go to an edge: dozens of places with 384,
-  416 or 448 in them) still uses the board's, so such a thing comes in 64 columns inside the wide
-  picture's edge. On the two planes that travel less than 128 (the desert's), the view shows a few
-  columns more than the board ever does (25 and 7 on each side); nothing missing was seen there.
+What is there (eight hooks):
+- The picture is the board's with 64 columns more on each side; the panel's objects stay in the
+  middle. The sides of the 8-pixel scroll screen are read from the stage's plan in the ROM, as the
+  game's own routine reads it (`make check-widescreen`: none of 32 million tiles differ). While
+  the red curtain is drawn, and wherever there is no stage, the picture is the board's.
+- The players are kept inside the wide picture (`028192`, `02824C` run with 64 less in the
+  player's half width). The camera's ends are 64 in from the board's (320 and 576; 224 and 672 on
+  Fetus of God, whose board ends are 160 and 736).
+- Five comparisons all the game's objects share ask of the wide picture: a thing thrown is done
+  away with outside it (`0154AC`), a piece of the stage is drawn inside it (`015512`, `01552E`) or
+  while the camera is 64 further to one side of a place (`0154E2`, `0154F4`).
+- Survival, the endless battle, the ring out and the infinite stage are wide.
+- Checked: the same controls with it off and on, on every stage, every frame where the two
+  cameras agree: the middle 384 columns are the board's picture (a few pixels differ on three
+  stages, where a piece is drawn sooner; on Iron Horse, Iron Terror much differs and has not been
+  looked into).
+
+Known, and why it stopped here: at a stage's very ends the planes behind (which move less than
+the camera) show up to 64 columns that are not painted, and some stage pieces come in late at the
+wide picture's edge (each stage's script has its own tests of the camera's place).
+
+**What was tried on top of this and taken out again** (commits 4ced3aa to 368d76e on the branch
+`widescreen`, the owner's playing found each one glitching; all of it was hooks from outside into
+code that is not readable yet):
+- Always drawing a stage's pieces, and answering the stages' scripts' comparisons of the camera
+  for them (`07D4DA` and a dozen more). Many of those comparisons decide where a piece is or how
+  it moves, not whether it is seen: the desert camel's head came off; the lady under the bird
+  cage on Feast of the Damned snaps between the poses of her fan arm with the camera at rest (the
+  owner's recording, 2026-10-13: record `FFC880`, script `07D4DA`, whose arm is one picture in
+  several colour sets shown by turns of the palette at `90C3C0`).
+- Drawing both halves of a record that is one of two pieces by the camera's side (`07D438` the
+  dancers, `07DE78`, `0809A6`, `080A20`), the other from a copy of its last entries.
+- Holding each plane, each row of the 16-pixel scroll screen and each piece inside its painting
+  near a stage's ends, by its rate. Facts worth keeping from it: each plane's travel across the
+  camera's 384 (8-pixel and 32-pixel screens, by stage: 265/265, 318/339, 137/137, 77/114,
+  206/309, 359/335, 306/218, 363/298, 400/352, 306/262, 384/384, 336/288); the row scroll table's
+  rows are fixed from 768 and the register at CPS-A 0x20 moves with the camera's height; on each
+  stage the wall's rows go at one rate under the camera's and the floor's ramp up to it (wall
+  first/last row, rate in 256ths, floor's first rate, last slow row: 922/959/177/197/983,
+  768/969/227/229/983, 912/912/93/95/983, 814/936/103/107/983, 768/959/183/201/983, none,
+  768/974/233/235/983, 768/976/227/231/983, 768/959/235/193/983, 768/976/233/235/983, none,
+  none); the table is a frame behind the camera and kept in four buffers by turns; an object on a
+  row has the row in `+24` of its record and `01BBC2` takes the row's place off its own; an object
+  whose `+0C` is 0 rides no plane and its script places it in the picture itself.
+
+**Next, agreed with the owner (2026-10-13): make this code readable first, then do widescreen
+inside it.** Rewrites with the checker (cps2recomp/docs/READABLE.md), in this order: the camera
+(`01E36E`, `01E3F2`, `01E450`, `01E4A0`, `01E8F4`); the planes' placing (`01DE40`-`01DF00`,
+`01E762`-`01E80C`) and the row scroll table's making (not found yet: who writes the table at
+`90E000`-`90FFFF`); an object's place in the picture and the list's making (`01BBC2`, `01BC3A`,
+`01BC88`, `01AF9E`, `01AFC6` and its family to `01BB48`); the shared tests (`01549A`, `0154CC`,
+`0154FE`, `01551A`); then each stage's scripts (`07D372`-`080A7A`), Feast of the Damned and the
+desert first. Then: pieces always drawn, both halves of the shared records, and the planes held
+at the ends, as plain lines in those routines, each tried against the owner's four cases (the
+lady's arm, the camel, the foreground under the helicopter, the fire by the tent) in motion, with
+the camera at rest and moving, before it is called done. Ways of checking that were built and
+work: the same controls with the feature off and on, compared where the cameras agree; both
+corners of every stage in training beside the board's corners.
 
 ## Modes (2026-10-12)
 

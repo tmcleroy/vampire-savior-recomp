@@ -9,7 +9,6 @@
 
 #include "machine.h"
 #include "vsav.h"
-#include "widescreen.h"
 
 #include <cstdint>
 #include <functional>
@@ -70,12 +69,10 @@ struct Spare {
     std::vector<uint8_t> state; // (empty: not yet switched on)
     bool ready = false;         // its round is on
     int32_t frames = 0;         // frames run on the way there
-    WidePlanes planes;          // what a save state does not hold of it, for a wide picture (widescreen.h)
     void Clear() {
         state.clear();
         ready = false;
         frames = 0;
-        planes = WidePlanes();
     }
 };
 // Runs the spare for a frame in the port's machine, which is left as it was. `before` is called with the

@@ -76,9 +76,9 @@ It is **off unless you switch it on**, in every preset, because it changes how t
 - The players can go to the wide picture's edges, so they can stand further apart than on the
   board (464 at most, where the board allows 336). The stage's own ends are where they were.
 - The camera stops 64 short of where it did, so that the picture ends where the stage does.
-- A stage's own pieces (the dancers, the lady under the bird cage) are drawn all the time, not
-  only when the board's picture would reach them, and each plane behind stops where its painting
-  does.
+- A stage's own pieces and things thrown are kept while they are in the wide picture, not only
+  the board's. (Some pieces still come in a little late at the wide picture's edge, and at the
+  very ends of a stage a few columns of the planes behind are not painted: see the roadmap.)
 - The bars, the clock and the gauges stay in the middle. Survival, the endless battle, the ring
   out and the stage viewer are wide too. Everything that is not a fight keeps the board's 4:3.
 
