@@ -58,9 +58,9 @@ namespace {
     constexpr int kDropIn = 38;              //   ... at which the winner jumps above the new stage, to come down onto it
     constexpr int kDropFrom = 240;           //   and how far above the new stage's floor that is
     constexpr int kMiddle = (kStageLeft + kStageRight) / 2;
-    constexpr int kShuffleAfter = 2 * 60 * 60;  // frames of fighting on a stage before it fades into another
+    constexpr int kShuffleMinutes[] = {1, 2, 3, 5, 10}; // of fighting on a stage before it fades into another (the menu's choice)
     constexpr int kBlend = 150;                 //   and frames the fade takes
-    constexpr int32_t kScrollBy = 64;           // the scrolling stage's speed, in 256ths of a pixel a frame
+    constexpr int32_t kScrollSpeeds[] = {64, 128, 256}; // the scrolling stage's speed, in 256ths of a pixel a frame: slow, medium, fast
     constexpr int32_t kLeftEnd = kCameraLeft * 256, kRightEnd = kCameraRight * 256;
     constexpr int32_t kAcross = Video::kWidth * 256;
     constexpr int kArena = (kCameraLeft + kCameraRight) / 2; // where the fighters' own camera is kept while the stage scrolls
@@ -69,6 +69,14 @@ namespace {
 
     enum class Kind : int32_t { None, Survival, Endless, RingOut };
     enum class Phase : int32_t { Starting, Fighting, Decided, Over, Falling, Dropping };
+    // (the menu's choices can be changed while the battle goes on: read each frame)
+    int ShuffleAfter() {
+        return kShuffleMinutes[std::clamp(FeatureValue("endless_shuffle"), 0, static_cast<int>(std::size(kShuffleMinutes)) - 1)] * 60 * 60;
+    }
+    int32_t ScrollBy() {
+        return kScrollSpeeds[std::clamp(FeatureValue("endless_scroll"), 0, static_cast<int>(std::size(kScrollSpeeds)) - 1)];
+    }
+
     struct State {
         Kind kind = Kind::None;
         Phase phase = Phase::Starting;
@@ -326,7 +334,7 @@ namespace {
             // The floor moves under the fighters: they and what they have thrown are carried left with it,
             // and the picture's left edge (the fighters' camera stays where it is) pushes them along
             CameraAt().x = kArena;
-            const uint32_t by = static_cast<uint32_t>(kScrollBy) << 8;
+            const uint32_t by = static_cast<uint32_t>(ScrollBy()) << 8;
             for (int n = 0; n < kPlayerRecords; n++) {
                 const uint32_t record = kPlayer1 + static_cast<uint32_t>(n) * kPlayerSize;
                 if (Ram8(record + kActive)) {
@@ -405,7 +413,7 @@ namespace {
 
         // The stage after this one: wanted when this one has been fought on long enough (shuffle), or as
         // soon as this one is the one shown (scroll)
-        if (fighting && !g.backNext && (g.way == kStageScroll || (g.way == kStageShuffle && g.backFor >= kShuffleAfter))) {
+        if (fighting && !g.backNext && (g.way == kStageScroll || (g.way == kStageShuffle && g.backFor >= ShuffleAfter()))) {
             g.backNext = AnyStage(g.back);
             g_backNext.Clear();
             g_backNextSound.Start();
@@ -451,11 +459,12 @@ namespace {
             }
         } else if (g.way == kStageScroll) {
             // (onwards: across this stage, then this stage out and the next in, if that one is ready)
-            if (g.slide > 0 || g.backCamera + kScrollBy >= kRightEnd) {
+            const int32_t by = ScrollBy();
+            if (g.slide > 0 || g.backCamera + by >= kRightEnd) {
                 g.backCamera = kRightEnd;
-                g.slide = nextShown ? std::min(g.slide + kScrollBy, kAcross) : 0;
+                g.slide = nextShown ? std::min(g.slide + by, kAcross) : 0;
             } else {
-                g.backCamera += kScrollBy;
+                g.backCamera += by;
             }
             const int slide = g.slide / 256;
             nextGain = slide * 256 / Video::kWidth;
@@ -874,12 +883,16 @@ void RegisterBattle() {
     game.features.push_back({"endless_one", kEndless, "Fighter 1", "Who is on player 1's side: someone new each time, or always the same.", 0, fighters});
     game.features.push_back({"endless_two", kEndless, "Fighter 2", "Who is on player 2's side: someone new each time, or always the same.", 0, fighters});
     game.features.push_back({"endless_stage", kEndless, "Stage",
-                             "Where they fight. Shuffle: a stage that fades into another every two minutes. Scroll: the stages "
+                             "Where they fight. Shuffle: a stage that fades into another every so often. Scroll: the stages "
                              "go by, one after another, and the fighters are carried along. Or one stage.",
                              0,
                              {"Shuffle", "Scroll", "Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau",
                               "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                               "Fetus of God"}});
+    game.features.push_back({"endless_shuffle", kEndless, "Shuffle every",
+                             "Shuffle: how long they fight on a stage before it fades into another.", 0,
+                             {"1 minute", "2 minutes", "3 minutes", "5 minutes", "10 minutes"}});
+    game.features.push_back({"endless_scroll", kEndless, "Scroll speed", "Scroll: how fast the stages go by.", 0, {"Slow", "Medium", "Fast"}});
 }
 
 } // namespace cps2recomp
