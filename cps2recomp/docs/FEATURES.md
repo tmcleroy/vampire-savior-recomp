@@ -75,6 +75,12 @@ refills, and the dummy: `beforeFrame` changes what the game is told player 2 pre
   picture shows. `TheGame().widestPicture` tells the window what shape to start in. Vampire Savior's
   `widescreen.cpp` is the example.
 
+- **A switch on the launcher's first page.** A feature with `kFeatureFirstPage` is left out of
+  the list the launcher's Features page is made from; the game's `game.cfg` puts its switch under
+  "Full screen" with `display = name | Title | What it says` (more of them with `||` between). The
+  launcher keeps the switch in its own `launcher.ini` and starts the game with `--features name` or
+  `--features -name`, which goes before what `settings.ini` has. The in-game menu still has it.
+
 ## Finding things out
 
 - `--dump-ram F:FILE` writes work RAM after frame F (and the video memory and registers beside

@@ -5,8 +5,9 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
-- Widescreen (Display page; off unless switched on, in every preset, because it changes how the
-  game plays): fights are shown and played in 16:9, with more of the stage on each side. The
+- Widescreen (a switch on the launcher's first page, under "Full screen", and on the in-game
+  menu's Display page; off unless switched on, in every preset, because it changes how the game
+  plays): fights are shown and played in 16:9, with more of the stage on each side. The
   players can go to the wide picture's edges (464 apart at most, where the board allows 336), the
   camera stops where the wide picture comes to the stage's ends, and the stage's pieces and the
   things thrown that the game only keeps while they are in the picture are kept while they are in

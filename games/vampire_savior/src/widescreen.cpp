@@ -304,7 +304,8 @@ void RegisterWidescreen() {
     TheGame().features.push_back({"widescreen", "Display", "Widescreen",
                                   "Fights are shown and played in 16:9, with more of the stage on each side: the players can "
                                   "go to the wide picture's edges, so they can stand further apart than on the board. Off "
-                                  "unless switched on here, in every preset: it changes how the game plays."});
+                                  "unless switched on here, in every preset: it changes how the game plays.",
+                                  kFeatureFirstPage}); // (its switch is on the launcher's first page: game.cfg)
 }
 
 } // namespace cps2recomp

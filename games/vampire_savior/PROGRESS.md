@@ -102,8 +102,10 @@ The Japanese arcade release of 1997-05-19 (ROM set `vsavj`), on Capcom's CPS-2 b
 
 ## Widescreen (2026-10-13)
 
-`src/widescreen.cpp`, a feature on the menu's and the launcher's Display page, off unless switched
-on (in the Enhanced preset too: it changes how the game plays). A fight is 512 columns wide where
+`src/widescreen.cpp`, a feature whose switch is on the launcher's first page under "Full screen"
+(`game.cfg`'s `display`; the launcher keeps it in `launcher.ini` and says at every start whether
+it is on) and on the in-game menu's Display page; off unless switched on (in the Enhanced preset
+too: it changes how the game plays). A fight is 512 columns wide where
 the board shows 384, 16:9 for 4:3, on the toolkit's wider picture (`Video::wide`), and is played
 in that picture. (The first version changed the picture only; the owner asked for the game to be
 played in it, the same day.)

@@ -870,7 +870,10 @@ bool ParseArgs(int argc, char **argv, port::Options &o) {
             // For the launcher: one optional feature per line (recomp-common/settings.h; the ones that last a
             // session, switched in the game's menu only, are not in it)
             RegisterGame();
-            fputs(recomp::FeatureListText(FeatureList()).c_str(), stdout);
+            std::vector<recomp::FeatureInfo> list = FeatureList();
+            // (nor are the ones whose switch is on the launcher's first page: game.h, kFeatureFirstPage)
+            list.erase(std::remove_if(list.begin(), list.end(), [](const recomp::FeatureInfo &f) { return f.flags & kFeatureFirstPage; }), list.end());
+            fputs(recomp::FeatureListText(list).c_str(), stdout);
             exit(0);
         } else if (a == "--settings") {
             o.settingsPath = next();
