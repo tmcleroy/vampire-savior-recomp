@@ -40,6 +40,16 @@ namespace {
     constexpr int kOnTheWay = 4;            // frames a frame that the next match's machine runs until its round is on
     constexpr int kOverFor = 480;           // frames the count is shown for when survival is over
     constexpr uint16_t kHealthBack = 0x30;  // health given back for an opponent beaten
+    // The endless battle's stage: one stage; or the fighters drawn over a stage that another machine shows
+    // (modes.h), which can then change under them: by fading into another, or by scrolling on into the next
+    enum { kStageOne, kStageShuffle, kStageScroll };
+    constexpr int kShuffleAfter = 2 * 60 * 60;  // frames of fighting on a stage before it fades into another
+    constexpr int kBlend = 150;                 //   and frames the fade takes
+    constexpr int32_t kScrollBy = 64;           // the scrolling stage's speed, in 256ths of a pixel a frame
+    constexpr int32_t kLeftEnd = kCameraLeft * 256, kRightEnd = kCameraRight * 256;
+    constexpr int32_t kAcross = Video::kWidth * 256;
+    constexpr int kArena = (kCameraLeft + kCameraRight) / 2; // where the fighters' own camera is kept while the stage scrolls
+    constexpr size_t kSoundAhead = 16;          // samples of another machine's sound kept in hand
     constexpr uint16_t kAnyButton = kLeft | kRight | kUp | kDown | kPunch1 | kPunch2 | kPunch3 | kKick1 | kKick2 | kKick3;
 
     enum class Kind : int32_t { None, Survival, Endless };
@@ -58,8 +68,37 @@ namespace {
         int32_t health = 0, ceiling = 0; // survival: what the player has left
         int32_t fadeIn = 0;              // frames of coming from black still to go
         uint32_t random = 1;
+        // The stage behind the fighters, when another machine shows it
+        int32_t way = kStageOne;
+        int32_t back = 0, backNext = 0;  // its stage, and the one that comes after (1-12; 0: none yet)
+        int32_t backFor = 0;             // frames of fighting on it
+        int32_t blend = 0;               // shuffle: how far the fade to the next has got (of kBlend)
+        int32_t backCamera = 0;          // scroll: where its picture's left edge is, in 256ths of a pixel
+        int32_t slide = 0;               //   and how far the next stage has come in
     } g;
     Spare g_next;
+    Spare g_back, g_backNext;            // the machines of the stage behind and of the one after
+    // Sound another machine has made and that has not been heard yet (two machines' frames do not make quite
+    // the same number of samples)
+    struct Stream {
+        std::vector<int16_t> waiting;
+        void Start() {
+            waiting.assign(kSoundAhead * 2, 0);
+        }
+        void Add(const std::vector<int16_t> &sound) {
+            waiting.insert(waiting.end(), sound.begin(), sound.end());
+        }
+        // Mixed into `sound` (as many samples as it has), `gain` of 256
+        void Mix(std::vector<int16_t> &sound, int gain) {
+            if (waiting.size() < sound.size()) {
+                waiting.resize(sound.size(), 0);
+            }
+            for (size_t i = 0; i < sound.size(); i++) {
+                sound[i] = static_cast<int16_t>(std::clamp(sound[i] + waiting[i] * gain / 256, -32768, 32767));
+            }
+            waiting.erase(waiting.begin(), waiting.begin() + static_cast<std::ptrdiff_t>(sound.size()));
+        }
+    } g_backSound, g_backNextSound;
     bool g_fast = false;
     size_t g_soundBefore = 0;
 
@@ -76,7 +115,10 @@ namespace {
         }
         g = State();
         g_next.Clear();
+        g_back.Clear();
+        g_backNext.Clear();
         Wanted() = MatchWanted();
+        CameraAt() = CameraWanted();
         Fast(false);
         SetHud({});
     }
@@ -114,6 +156,17 @@ namespace {
         const int choice = FeatureValue("endless_stage");
         return choice >= 2 && choice < 2 + kStages ? choice - 1 : static_cast<int>(Random() % kStages) + 1;
     }
+    int AnyStage(int notThis) {
+        for (;;) {
+            const int stage = static_cast<int>(Random() % kStages) + 1;
+            if (stage != notThis) {
+                return stage;
+            }
+        }
+    }
+    bool Layered() {
+        return g.way != kStageOne;
+    }
 
     void Start(Machine &machine, Kind kind) {
         EndModes();
@@ -138,6 +191,13 @@ namespace {
             }
             g.computer[0] = g.computer[1] = true;
             g.stage = ChosenStage();
+            const int choice = FeatureValue("endless_stage");
+            g.way = choice == 0 ? kStageShuffle : choice == 1 ? kStageScroll : kStageOne;
+            if (Layered()) {
+                g.back = g.stage;
+                g.backCamera = kLeftEnd;
+                g_backSound.Start();
+            }
         }
         machine.Reset();
     }
@@ -171,13 +231,16 @@ namespace {
             // Survival: the player chooses a character, at the game's own pace; the rest goes by unseen
             const bool choosing = g.kind == Kind::Survival && Ram16(kMode) == 2 && Ram16(kGameStep) == kGameChoosing && Ram8(kPlayersIn) == 3;
             Fast(!choosing);
-            if (ToRound(machine, g.frames, g.kind == Kind::Survival)) {
+            if (ToRound(machine, g.frames, g.kind == Kind::Survival) && (!Layered() || g_back.ready)) {
                 Fast(false);
                 g.phase = Phase::Fighting;
                 g.since = 0;
                 g.fadeIn = kFade;
                 g.characters[0] = Ram8(Player(0) + kCharacter);
                 g.characters[1] = Ram8(Player(1) + kCharacter);
+                if (Layered()) {
+                    PlaySound(kTuneOff); // (the music is the stage's, from its own machine)
+                }
             } else if (g.frames > kStartMost && !choosing) {
                 End();
             }
@@ -203,6 +266,149 @@ namespace {
         one = g.computer[0] ? 0 : one & kAnyButton;
         two = g.computer[1] ? 0 : two & kAnyButton;
         SayWhoPlays();
+        if (g.way == kStageScroll) {
+            // The floor moves under the fighters: they and what they have thrown are carried left with it,
+            // and the picture's left edge (the fighters' camera stays where it is) pushes them along
+            CameraAt().x = kArena;
+            const uint32_t by = static_cast<uint32_t>(kScrollBy) << 8;
+            for (int n = 0; n < kPlayerRecords; n++) {
+                const uint32_t record = kPlayer1 + static_cast<uint32_t>(n) * kPlayerSize;
+                if (Ram8(record + kActive)) {
+                    SetRam32(record + kX, Ram32(record + kX) - by);
+                }
+            }
+            for (int n = 0; n < kThrownRecords; n++) {
+                const uint32_t record = kThrown + static_cast<uint32_t>(n) * kThrownSize;
+                if (Ram8(record + kActive)) {
+                    SetRam32(record + kX, Ram32(record + kX) - by);
+                }
+            }
+        }
+    }
+
+    // --- the stage behind the fighters ---
+
+    // One of the stage machines for a frame: on its way to its round, or showing its stage with the camera
+    // where it is wanted
+    void RunStage(Machine &machine, Spare &spare, int stage, int cameraX, int cameraY, Made *made) {
+        RunSpare(machine, spare, [&](Machine &m) {
+            Wanted().stage = stage;
+            if (!spare.ready) {
+                spare.ready = ToRound(m, spare.frames);
+            }
+            if (spare.ready) {
+                m.players[0] = m.players[1] = 0;
+                m.video.hideObject = NotTheStage;
+                CameraAt().x = cameraX;
+                CameraAt().y = cameraY;
+            }
+        }, made);
+    }
+
+    // After the fighters' frame: the stage machines' frames, and the picture and sound put together. `show`
+    // of 256 is how much of the fighters is seen (they fade when one match follows another).
+    void Layer(Machine &machine, int show) {
+        static Made fighters, back, next;
+        Take(machine, g_soundBefore, fighters);
+        const int cameraY = static_cast<int16_t>(Ram16(kCameraY));
+        const int cameraX = g.way == kStageScroll ? g.backCamera / 256 : static_cast<int16_t>(Ram16(kCameraX));
+        const bool fighting = g.phase != Phase::Starting;
+
+        // The stage after this one: wanted when this one has been fought on long enough (shuffle), or as
+        // soon as this one is the one shown (scroll)
+        if (fighting && !g.backNext && (g.way == kStageScroll || g.backFor >= kShuffleAfter)) {
+            g.backNext = AnyStage(g.back);
+            g_backNext.Clear();
+            g_backNextSound.Start();
+        }
+        RunStage(machine, g_back, g.back, cameraX, cameraY, &back);
+        if (!g_back.ready) {
+            RunStage(machine, g_back, g.back, cameraX, cameraY, &back); // (twice as fast as the fighters' machine on the way)
+            Give(machine, fighters);
+            return;
+        }
+        g_backSound.Add(back.sound);
+        bool nextShown = false;
+        if (g.backNext) {
+            const bool wasReady = g_backNext.ready;
+            for (int n = 0; n < (wasReady ? 1 : 3); n++) {
+                RunStage(machine, g_backNext, g.backNext, g.way == kStageScroll ? kCameraLeft : cameraX, cameraY, &next);
+                if (g_backNext.ready) {
+                    break;
+                }
+            }
+            if (wasReady) {
+                g_backNextSound.Add(next.sound);
+                nextShown = true;
+            }
+        }
+        if (!fighting) {
+            g_backSound.waiting.resize(kSoundAhead * 2); // (not heard yet)
+            Give(machine, fighters);
+            return;
+        }
+        g.backFor++;
+
+        // The stage's picture: one stage, or two (faded, or side by side)
+        int nextGain = 0;
+        if (nextShown && g.way == kStageShuffle) {
+            g.blend = std::min(g.blend + 1, kBlend);
+            nextGain = g.blend * 256 / kBlend;
+            for (size_t i = 0; i < back.picture.size(); i++) {
+                const uint32_t a = back.picture[i], b = next.picture[i];
+                const uint32_t rb = (((a & 0xFF00FF) * static_cast<uint32_t>(256 - nextGain) + (b & 0xFF00FF) * static_cast<uint32_t>(nextGain)) >> 8) & 0xFF00FF;
+                const uint32_t gr = (((a & 0x00FF00) * static_cast<uint32_t>(256 - nextGain) + (b & 0x00FF00) * static_cast<uint32_t>(nextGain)) >> 8) & 0x00FF00;
+                back.picture[i] = rb | gr;
+            }
+        } else if (g.way == kStageScroll) {
+            // (onwards: across this stage, then this stage out and the next in, if that one is ready)
+            if (g.slide > 0 || g.backCamera + kScrollBy >= kRightEnd) {
+                g.backCamera = kRightEnd;
+                g.slide = nextShown ? std::min(g.slide + kScrollBy, kAcross) : 0;
+            } else {
+                g.backCamera += kScrollBy;
+            }
+            const int slide = g.slide / 256;
+            nextGain = slide * 256 / Video::kWidth;
+            if (slide > 0) {
+                for (int y = 0; y < Video::kHeight; y++) {
+                    uint32_t *row = &back.picture[static_cast<size_t>(y) * Video::kWidth];
+                    memmove(row, row + slide, static_cast<size_t>(Video::kWidth - slide) * sizeof(uint32_t));
+                    memcpy(row + Video::kWidth - slide, &next.picture[static_cast<size_t>(y) * Video::kWidth], static_cast<size_t>(slide) * sizeof(uint32_t));
+                }
+            }
+        }
+        // The fighters over it: the pixels the fighters' machine drew an object at
+        for (size_t i = 0; i < back.picture.size(); i++) {
+            const uint32_t f = fighters.picture[i];
+            if (f & 0xFF000000) {
+                if (show >= 256) {
+                    back.picture[i] = f & 0xFFFFFF;
+                } else {
+                    const uint32_t b = back.picture[i], keep = static_cast<uint32_t>(256 - show), put = static_cast<uint32_t>(show);
+                    back.picture[i] = ((((b & 0xFF00FF) * keep + (f & 0xFF00FF) * put) >> 8) & 0xFF00FF) | ((((b & 0x00FF00) * keep + (f & 0x00FF00) * put) >> 8) & 0x00FF00);
+                }
+            }
+        }
+        fighters.picture = back.picture;
+        // The sound: the fighters', and the stages' music, one fading into the other
+        g_backSound.Mix(fighters.sound, 256 - nextGain);
+        if (nextShown) {
+            g_backNextSound.Mix(fighters.sound, nextGain);
+        }
+        // The next stage is all there is: it is the stage now
+        if ((g.way == kStageShuffle && g.blend >= kBlend) || (g.way == kStageScroll && g.slide >= kAcross)) {
+            g_back = std::move(g_backNext);
+            g_backNext.Clear();
+            g_backSound = g_backNextSound;
+            g.back = g.backNext;
+            g.backNext = 0;
+            g.backFor = 0;
+            g.blend = 0;
+            g.slide = 0;
+            g.backCamera = kLeftEnd;
+        }
+        Give(machine, fighters);
     }
 
     // The picture nearer black by `part` of 256
@@ -231,6 +437,8 @@ namespace {
             return;
         }
         std::vector<HudLine> lines;
+        int dark = 0;         // how far the fighters (or, with one stage, the whole picture) are faded, of 256
+        bool layered = false; // the picture and sound have been put together already
         if (g.phase == Phase::Fighting) {
             const uint8_t result = Ram8(kResult);
             if (result) {
@@ -261,22 +469,31 @@ namespace {
                     const int chosen = ChosenCharacter(loser == 0 ? "endless_one" : "endless_two");
                     g.characters[loser] = chosen >= 0 && chosen != g.characters[loser] ? chosen : AnyCharacter(g.characters[0], g.characters[1]);
                     g.score++;
-                    g.stage = ChosenStage();
+                    if (!Layered()) {
+                        g.stage = ChosenStage();
+                    }
                 }
             }
         } else if (g.phase == Phase::Decided) {
             g.since++;
             MakeNext(machine);
             if (g.since > kAfter - kFade) {
-                Darken(machine, (g.since - (kAfter - kFade)) * 256 / kFade);
+                dark = (g.since - (kAfter - kFade)) * 256 / kFade;
             }
             if (g.since >= kAfter && g_next.ready) {
+                if (Layered()) {
+                    Layer(machine, 0); // (this frame's stage and sound, before the machine is another)
+                    layered = true;
+                }
                 Promote(machine, g_next);
                 if (g.kind == Kind::Survival) {
                     SetRam16(Player(0) + kHealth, static_cast<uint16_t>(g.health));
                     SetRam16(Player(0) + kHealthCeiling, static_cast<uint16_t>(g.ceiling));
                 }
-                Darken(machine, 256);
+                if (Layered()) {
+                    PlaySound(kTuneOff);
+                }
+                dark = 256;
                 g.phase = Phase::Fighting;
                 g.since = 0;
                 g.fadeIn = kFade;
@@ -299,8 +516,15 @@ namespace {
             }
         }
         if (g.phase == Phase::Fighting && g.fadeIn > 0) {
-            Darken(machine, g.fadeIn * 256 / kFade);
+            dark = std::max(dark, g.fadeIn * 256 / kFade);
             g.fadeIn--;
+        }
+        if (Layered()) {
+            if (!layered) {
+                Layer(machine, 256 - dark);
+            }
+        } else if (dark) {
+            Darken(machine, dark);
         }
         if (g.kind == Kind::Survival && g.phase != Phase::Starting && g.phase != Phase::Over) {
             char text[32];
@@ -335,8 +559,14 @@ void BattleFrame(Machine &machine) {
     if (g.kind != Kind::None) {
         Frame(machine);
     }
+    // What the next frame of the port's machine draws: all of it; or no panel; or the fighters alone, marked,
+    // to be laid over the stage that another machine shows
     if (g.kind != Kind::None || !StageViewer()) {
-        machine.video.hideObject = g.kind == Kind::Endless && g.phase != Phase::Starting ? ThePanel : nullptr;
+        const bool fighting = g.kind == Kind::Endless && g.phase != Phase::Starting;
+        const bool layered = fighting && Layered();
+        machine.video.hideObject = layered ? NotTheFighters : fighting ? ThePanel : nullptr;
+        machine.video.layerMask = layered ? 1 : 0xF;
+        machine.video.markObjects = layered;
     }
 }
 
@@ -346,8 +576,15 @@ void BattleState(Archive &ar) {
     ar.Vec(g_next.state);
     ar.Pod(g_next.ready);
     ar.Pod(g_next.frames);
+    for (Spare *spare : {&g_back, &g_backNext}) {
+        ar.Vec(spare->state);
+        ar.Pod(spare->ready);
+        ar.Pod(spare->frames);
+    }
     if (!ar.Saving()) {
         g_fast = false;
+        g_backSound.Start();
+        g_backNextSound.Start();
     }
 }
 
@@ -384,7 +621,10 @@ void RegisterBattle() {
     }
     game.features.push_back({"endless_one", kEndless, "Fighter 1", "Who is on player 1's side: someone new each time, or always the same.", 0, fighters});
     game.features.push_back({"endless_two", kEndless, "Fighter 2", "Who is on player 2's side: someone new each time, or always the same.", 0, fighters});
-    game.features.push_back({"endless_stage", kEndless, "Stage", "Where they fight: somewhere new for each fight, or one stage.", 0,
+    game.features.push_back({"endless_stage", kEndless, "Stage",
+                             "Where they fight. Shuffle: a stage that fades into another every two minutes. Scroll: the stages "
+                             "go by, one after another, and the fighters are carried along. Or one stage.",
+                             0,
                              {"Shuffle", "Scroll", "Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau",
                               "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                               "Fetus of God"}});
