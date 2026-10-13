@@ -128,11 +128,16 @@ played in it, the same day.)
   by a hook with the wider numbers). A piece of the stage is always drawn: the comparisons that
   would leave it out (`015512`, `01552E`; `0154E2` and `0154F4`, by the camera's place) always say
   it is in.
-- The stages' own scripts (`07D4xx`-`080Axx`) compare the camera with a place too. Twelve such
-  comparisons only draw or move a piece while the camera is on one side (`07D4DA`: the lady under
-  the bird cage on Feast of the Damned, whose record was not drawn or moved left of it; `07DF4C`, `07E05E`,
-  `07E0BA`, `07F26E`, `07F896`, `07FB22`, `07FD4A`, `07FE26`, `0803B4`, `080424`, `0808A6`): they
-  are answered the way that keeps the piece. Four scripts keep two pieces in one record, which is
+- The stages' own scripts (`07D4xx`-`080Axx`) compare the camera with a place too. In two of
+  them the script does nothing at all for a piece on one side (`07D4DA`: the lady under the bird
+  cage on Feast of the Damned; `07F896`): those are answered the way that keeps the piece. A dozen
+  others looked the same and are not: there the comparison decides where a piece is or what it
+  does (`0803B4` and `080424` put the desert camel's head). Answered for them, the camel's head
+  came away from its body and the lady's arm from hers; they are left to the game. Found by
+  running the same controls with the feature off and on and comparing the middle 384 columns
+  where no plane is held back: the same on every stage (but the two with planes that travel less
+  than 128, which are held from the start).
+  Four scripts keep two pieces in one record, which is
   the left one while the camera is left of a place and the right one otherwise (`07D438`: Feast
   of the Damned's dancers and a piece on the right; `07DE78`, `0809A6`, `080A20`): in the wide
   picture both can be seen, so the piece the record is not is drawn from the entries the game

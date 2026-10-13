@@ -382,16 +382,17 @@ namespace {
         }
         return false;
     }
-    // A piece of a stage that its script only draws, or only moves, while the camera is on one side of a
-    // place (it is out of the board's picture on the other): in the wide picture, always. The comparison of
-    // the camera with the place is answered the way that keeps the piece.
+    // A piece of a stage that its script neither draws nor moves while the camera is on one side of a place
+    // (it is out of the board's picture there, and the script does nothing at all: 07D4DA, 07F896): in the
+    // wide picture, always. The comparison of the camera with the place is answered the way that keeps the
+    // piece. (Only those two. The stages' scripts compare the camera with a place in a dozen other spots,
+    // and there it decides where a piece is or what it does, not whether it is seen: answered for them, a
+    // camel's head came away from its body.)
     template <uint32_t kAt, uint32_t kLength, bool kLower>
     bool KeepThePiece(M68K &c) {
         return g_play && Answered(c, kAt, kLength, kLower);
     }
-    [[maybe_unused]] constexpr uint32_t kScriptsGoOnAt[] = {
-        HookAt(0x07D444), HookAt(0x07D494), HookAt(0x07D4E0), HookAt(0x07DF52), HookAt(0x07E064), HookAt(0x07E0C0), HookAt(0x07F89C), HookAt(0x07FB28),
-        HookAt(0x07FD50), HookAt(0x07FE2C), HookAt(0x0808AC), HookAt(0x0803B8), HookAt(0x080428), HookAt(0x07F272)};
+    [[maybe_unused]] constexpr uint32_t kScriptsGoOnAt[] = {HookAt(0x07D444), HookAt(0x07D494), HookAt(0x07D4E0), HookAt(0x07F89C)};
 
     // When the board has taken the list: after each twin's entries, the other piece's, put where it is with
     // the planes where they were when the list was made. (From the last twin in the list back, so that the
@@ -754,17 +755,7 @@ void RegisterWidescreen() {
     AddHook(0x07D43E, "KeepTheDancers", KeepTheDancers<0x07D43E>);
     AddHook(0x07D48E, "KeepTheDancers2", KeepTheDancers<0x07D48E>);
     AddHook(0x07D4DA, "KeepThePiece0", KeepThePiece<0x07D4DA, 6, false>);
-    AddHook(0x07DF4C, "KeepThePiece", KeepThePiece<0x07DF4C, 6, true>);
-    AddHook(0x07E05E, "KeepThePiece2", KeepThePiece<0x07E05E, 6, false>);
-    AddHook(0x07E0BA, "KeepThePiece3", KeepThePiece<0x07E0BA, 6, false>);
     AddHook(0x07F896, "KeepThePiece4", KeepThePiece<0x07F896, 6, false>);
-    AddHook(0x07FB22, "KeepThePiece5", KeepThePiece<0x07FB22, 6, true>);
-    AddHook(0x07FD4A, "KeepThePiece6", KeepThePiece<0x07FD4A, 6, false>);
-    AddHook(0x07FE26, "KeepThePiece7", KeepThePiece<0x07FE26, 6, false>);
-    AddHook(0x0808A6, "KeepThePiece8", KeepThePiece<0x0808A6, 6, false>);
-    AddHook(0x0803B4, "KeepThePiece9", KeepThePiece<0x0803B4, 4, true>);
-    AddHook(0x080424, "KeepThePiece10", KeepThePiece<0x080424, 4, true>);
-    AddHook(0x07F26E, "KeepThePiece11", KeepThePiece<0x07F26E, 4, true>);
     AddHook(0x0154AC, "ThrownInPicture", ThrownInPicture);
     AddHook(0x015512, "PieceInPicture", PieceInPicture<0x015512>);
     AddHook(0x01552E, "PieceInPicture2", PieceInPicture<0x01552E>);
