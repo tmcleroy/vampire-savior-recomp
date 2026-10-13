@@ -21,5 +21,24 @@ for skip in "" "AllHitTests,CameraAcross,CameraUp" "AllHitTests,PlayersAgainstPl
     run versus 6000 "" "$skip"
     run ladder 12000 free_play "$skip"
 done
+# The stage's code (camera.cpp, planes.cpp): each stage has its own choice of those routines, so every stage
+# is visited: a training session on it, the players moved by made-up controls. The outer rewrites, then
+# with them left out the ones they use.
+stage() { # stage (1-12), rewrites to leave out
+    out=$(CPS2RECOMP_SKIP_REWRITES="$2" $port --rom "${ROM:-rom}" --headless --frames 4000 --movie "$movies/training_start.txt" --auto 7:1500 \
+        --keys "5:ftraining_stage=$1,10:ctraining_start" --check-rewrites 2>&1)
+    echo "== stage $1${2:+ (without the outer ones)}"
+    # (training's own changes to the round's rules differ from the game's, as they are meant to: only the
+    # stage's rewrites are looked at)
+    out=$(echo "$out" | grep -E "^rewrite|did not" | grep -E "Camera|Players(Across|Up)|Back8|Far32|did not" | grep -v " 0 calls")
+    echo "$out"
+    echo "$out" | grep -q "CameraPlaced" || status=1
+    echo "$out" | grep -E "differs|did not|calls, [1-9][0-9]* differed" >/dev/null && status=1
+}
+outer=$(grep -oE '"(Back8|Far32)(Across|Up)[A-Za-z0-9]*"' games/$GAME/src/planes.cpp | tr -d '"' | paste -sd, -)
+for n in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    stage $n ""
+    stage $n "CameraAcross,CameraUp,$outer"
+done
 [ $status -eq 0 ] && echo "ok: every rewrite does what the game's code does" || echo "FAILED"
 exit $status
