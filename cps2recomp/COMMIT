@@ -1,5 +1,5 @@
 # A copy of the cps2recomp toolkit, made by its tools/sync-toolkit.sh. Do not change it here.
-commit 54dcb9fa7c07536cbfb63e5276a10bd2efaf44cb
+commit cd960db3e9a1929dc71ca9923bc74f32a7e175d3
 200d91d8ef6a4a344ce3eed2df71214be194dd745fd4c3d8409613a7f4835984  .gitignore
 50e69f9ad4e42c22586852634988c895ec4a51d089c0e1dd2e10f9af8fa6b633  CMakeLists.txt
 8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  LICENSE
@@ -98,5 +98,5 @@ bdfbcf2cf8284cba3f2063de49aa72d10ffe44fa5fe49258e7957bb8b3eb25d7  tools/sync-com
 ab002ec525deffcabd6cd2a55a367f6f3809ac72a0e6ad74c7abfd61bd7614d7  tools/sync-toolkit.sh
 bdb42e085e8d2204087c255c55223f163f84f7ffd69f70e5b3915c7ca54bbcba  tools/tracechanges.py
 e45178dc7ace2a69e7a815f6779032b613a2d7302413728927af268d96454301  tools/z80.py
-46a395ba26783a503332c959ae0f4da46a0cf5e9abcea1535364df5ca0df2a3f  video/video.cpp
-6cd4d59a8797825675993f12a3cb20bb528a1923b44061ffa9b3f473d2fc002b  video/video.h
+6c190fcfe660dfae998aec5872ac12e09ae1447b71f6116082aaf89ad892975a  video/video.cpp
+da556418f921008c8ba1369a23512e12b11629b2f5444ef94a99928fbb1e61a2  video/video.h

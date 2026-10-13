@@ -85,8 +85,11 @@ private:
     uint16_t m_priorityControl = 0;
     int m_lastObject = -4;
 
-    void DrawScroll(int which, int rasterLine, uint16_t *pens, uint8_t *priority, uint8_t mark);
-    void DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const uint32_t *masks);
+    // (each in two forms: the board's own picture, with its width known to the compiler and nothing asked
+    // about; and a wider or moved one. The first is as fast as it was before there was a second.)
+    template <bool kWide> void RenderLineAs(int line, uint32_t *out);
+    template <bool kWide> void DrawScroll(int which, int rasterLine, uint16_t *pens, uint8_t *priority, uint8_t mark);
+    template <bool kWide> void DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const uint32_t *masks);
 };
 
 } // namespace cps2recomp
