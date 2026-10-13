@@ -205,6 +205,17 @@ Facts from the rewrites:
   The lady (script 3) does nothing at all while the camera is left of `170`; her fan arm's pose is a set
   of colours copied to `90C3C0` at an event of her animation. Nothing else was found writing those colours.
 
+Widescreen behaviour put inside the rewrites so far, beyond the simple form:
+- The lady under the bird cage is there (animated, her colours set, drawn) while the camera is right of
+  `170` less the wide picture's 64, which in a wide picture is always. Traced over 3,500 frames of made-up
+  play with the camera going from end to end: her animation steps on exactly the frames the candles' do.
+  Not looked at in a window, and no picture was taken with the camera at its left end.
+
+Open: in the same made-up play the pieces' animations step on 75% of the frames with the board's picture
+and 62% with the wide one, the same before and after the rewrites. The fights are not the same fights
+(the players stand further apart), so this may be nothing; whether the wide picture leaves the game short
+of time more often has not been measured.
+
 **Next:** the rest of the scripts, Feast of the Damned's last two (5, 6) and the desert's first; the
 object list's making (`01ABC8` and its family to `01BB74`: it writes object RAM at `708000`, which the
 check does not compare yet); the three scroll screens' frame routines with each stage's

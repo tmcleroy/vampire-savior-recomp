@@ -257,7 +257,8 @@ namespace {
             SetStageAnimation(c, 0x18);
             break;
         case 2:
-            if (Ram16(kCameraX) < kLadyFrom) {
+            // (a wide picture's right edge is further right: widescreen.h)
+            if (Ram16(kCameraX) + WideMargin() < kLadyFrom) {
                 break;
             }
             if (!Frozen(c)) {
