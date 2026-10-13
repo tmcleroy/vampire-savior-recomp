@@ -39,6 +39,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 
 namespace cps2recomp {
 
@@ -61,8 +62,8 @@ namespace {
     // How far each stage's planes behind travel while the camera goes from one end to the other (on the
     // board: 384): the scroll screen of 8-pixel tiles and the one of 32. (Seen in their records as the stage
     // viewer went across; the game works a plane's place out with shifts, a routine for each rate. The one
-    // of 16 is the stage's own plane on every stage: its lines have rates of their own, worked out in
-    // MeasureRows.)
+    // of 16 is the stage's own plane on every stage: its lines have rates of their own, given in
+    // kStageRows.)
     constexpr int kTravel[kStages][2] = {{265, 265}, {318, 339}, {137, 137}, {77, 114}, {206, 309}, {359, 335},
                                          {306, 218}, {363, 298}, {400, 352}, {306, 262}, {384, 384}, {336, 288}};
 
@@ -73,9 +74,16 @@ namespace {
 
     // How far to the right a plane is drawn that travels `travel` across the camera's range, with the camera
     // at `camera`: nothing while 64 more columns of it on each side are columns the board shows too
+    int ViewShiftBy(int camera, double rate);
     int ViewShift(int camera, int travel) {
         // (`travel` is over 384 of the camera's going, whatever the stage's own range is)
-        const double rate = static_cast<double>(travel) / kCameraTravel;
+        return ViewShiftBy(camera, static_cast<double>(travel) / kCameraTravel);
+    }
+    // ... by its rate in 256ths of the camera's going
+    int ViewShiftAt(int camera, int rate) {
+        return ViewShiftBy(camera, rate / 256.0);
+    }
+    int ViewShiftBy(int camera, double rate) {
         const double at = (camera - kCameraMiddle) * rate; // from its middle
         const double most = std::max((CameraRightEnd() - CameraLeftEnd()) / 2.0 * rate - kSide, 0.0);
         return static_cast<int>(std::lround(at - std::clamp(at, -most, most)));
@@ -83,40 +91,38 @@ namespace {
     constexpr int kRowAtMiddle = 192; // what the row scroll table has for every row with the camera at the middle
     constexpr int kWithItsPlane = INT_MIN;
     int g_pieceShifts[WidePlanes::kPieces] = {}; // each piece's that is on a row (or kWithItsPlane)
-    int16_t g_lines[Machine::kLines] = {};        // each line's of the scroll screen of 16-pixel tiles, over g_shifts[1]
-    int g_still = 0;                              // frames the camera has been at rest
-    // (the row scroll table as the board reads it: video.cpp)
-    int RowScroll(const Machine &machine, int row) {
-        const uint32_t table = (static_cast<uint32_t>(machine.cpsA[4]) * 256) & ~0x7FFu & 0x3FFFF;
-        const uint8_t *word = &machine.videoRam[table + static_cast<uint32_t>(row & 0x3FF) * 2];
-        return static_cast<int16_t>((word[0] << 8) | word[1]);
+    int16_t g_rows[0x400] = {};                   // each row's of the scroll screen of 16-pixel tiles, over g_shifts[1]
+    int Snapped(int rate) {
+        return std::clamp((rate + 2) / 4 * 4, 0, 1024);
     }
-    // A rate from how far something is ahead of the camera's own plane with the camera `off` its middle. It
-    // is only as good as `off` is large; the game's rates are sixteenths and thirty-seconds, so with the
-    // camera moving (when what is read can be a frame from what `off` says) it is taken to the nearest.
-    bool RateFrom(int ahead, int off, bool still, int16_t &rate, bool &sure) {
-        if (std::abs(off) < 48 || (sure && !still)) {
-            return false;
+    // The rows of the scroll screen of 16-pixel tiles (the board's row scroll table has 1,024; a stage uses
+    // those from 768, and which line shows which goes with the camera's height). On every stage they are the
+    // same shape: the wall behind, all of whose rows go at one rate, slower than the camera; then the
+    // floor, whose rows go faster the nearer they are, from a rate just above the wall's (but on one
+    // stage) to the camera's own and beyond. A row that goes as fast as the camera or faster needs no
+    // holding. Read from the table with the camera at each end of its range (320 and 576: the two agree
+    // on every row of every stage): the wall's first and last rows and its rate in 256ths, the rate of the
+    // floor's first row, and the last row slower than the camera. The floor between is a straight line (to
+    // a 256th or two).
+    struct StageRows {
+        int first, wallLast, wall, floorFirst, last;
+    };
+    constexpr StageRows kStageRows[kStages] = {{922, 959, 177, 197, 983}, {768, 969, 227, 229, 983}, {912, 912, 93, 95, 983},
+                                               {814, 936, 103, 107, 983}, {768, 959, 183, 201, 983}, {0, -1, 256, 256, -1},
+                                               {768, 974, 233, 235, 983}, {768, 976, 227, 231, 983}, {768, 959, 235, 193, 983},
+                                               {768, 976, 233, 235, 983}, {0, -1, 256, 256, -1},     {0, -1, 256, 256, -1}};
+    int RowRate(unsigned stage, int row) {
+        if (stage >= kStages) {
+            return 256;
         }
-        int measured = 256 + ahead * 256 / off;
-        if (!still) {
-            measured = (measured + 4) / 8 * 8;
+        const StageRows &rows = kStageRows[stage];
+        if (row < rows.first || row > rows.last) {
+            return 256;
         }
-        rate = static_cast<int16_t>(std::clamp(measured, 0, 1024));
-        sure = still;
-        return true;
-    }
-    // Each row's rate, from the table (the stage's rows are the same rows whatever the camera does)
-    void MeasureRows(const Machine &machine, WidePlanes &planes, int camera, bool still) {
-        if (!(machine.cpsA[17] & 1)) {
-            return; // (no row scroll)
+        if (row <= rows.wallLast) {
+            return rows.wall;
         }
-        for (int row = 0; row < 0x400; row++) {
-            bool sure = planes.rowSure[row];
-            if (RateFrom(RowScroll(machine, row) - kRowAtMiddle, camera - kCameraMiddle, still, planes.rowRate[row], sure)) {
-                planes.rowSure[row] = sure;
-            }
-        }
+        return rows.floorFirst + (256 - rows.floorFirst) * (row - rows.wallLast - 1) / (rows.last - rows.wallLast);
     }
     void SetShifts(const Machine &machine, int camera, const WidePlanes &planes) {
         const unsigned stage = Ram16(kStage) / 2u;
@@ -129,14 +135,20 @@ namespace {
             g_shifts[n] = ViewShift(camera, travel[n]);
         }
         g_shift = g_shifts[1];
-        // (each line's row is where the board will look it up: the raster's line and the register's count)
-        for (int line = 0; line < Machine::kLines; line++) {
-            const int rate = (machine.cpsA[17] & 1) ? planes.rowRate[(line + machine.cpsA[16]) & 0x3FF] : -1;
-            g_lines[line] = rate < 0 ? 0 : static_cast<int16_t>(ViewShift(camera, rate * kCameraTravel / 256) - g_shift);
+        // (by the table's row: the board looks a line's row up when it draws the line)
+        int rateBefore = 256, shiftBefore = 0;
+        for (int row = 0; row < 0x400; row++) {
+            const int rate = RowRate(stage, row);
+            if (rate != rateBefore) {
+                rateBefore = rate;
+                shiftBefore = rate >= 256 ? 0 : ViewShiftAt(camera, rate) - g_shift;
+            }
+            g_rows[row] = static_cast<int16_t>(shiftBefore);
         }
         for (int n = 0; n < WidePlanes::kPieces; n++) {
             const WidePlanes::Piece &piece = planes.pieces[n];
-            g_pieceShifts[n] = piece.record && piece.rate >= 0 ? ViewShift(camera, piece.rate * kCameraTravel / 256) : kWithItsPlane;
+            const int rate = !piece.record ? -1 : piece.row >= 0 ? RowRate(stage, piece.row & 0x3FF) : piece.rate;
+            g_pieceShifts[n] = rate >= 0 ? ViewShiftAt(camera, rate) : kWithItsPlane;
         }
     }
 
@@ -151,7 +163,7 @@ namespace {
     enum : uint8_t { kRidesNotKnown, kRidesFirst, kRidesNone = 4 };
     WidePlanes g_planes, g_shown, g_portPlanes, g_portShown;
     int g_portShifts[3] = {0, 0, 0}, g_portPieceShifts[WidePlanes::kPieces] = {};
-    int16_t g_portLines[Machine::kLines] = {};
+    int16_t g_portRows[0x400] = {};
 
     Machine *g_machine = nullptr; // (the machine whose memory is loaded: for reading the list it is making)
 
@@ -254,20 +266,25 @@ namespace {
                 piece->rightCamera = camera;
                 piece->rightX = x;
             }
-            if (piece->rightCamera - piece->leftCamera >= 64) {
-                piece->rate = static_cast<int16_t>(std::clamp((piece->leftX - piece->rightX) * 256 / (piece->rightCamera - piece->leftCamera), 0, 512));
+            const int apart = piece->rightCamera - piece->leftCamera;
+            if (apart >= 64 && apart >= piece->apart + 16) {
+                piece->rate = static_cast<int16_t>(Snapped((piece->leftX - piece->rightX) * 256 / apart));
+                piece->apart = static_cast<int16_t>(apart);
             }
             return static_cast<uint8_t>(number + 1);
         }
         if (rides != kRidesFirst + 1 || !Ram16(object + kPieceRow)) {
             return 0;
         }
-        const int ahead = RowAhead(object, rides);
         WidePlanes::Piece *piece = PieceOf(object, number);
         if (!piece) {
             return 0;
         }
-        RateFrom(ahead, camera - kCameraMiddle, g_still >= 3, piece->rate, piece->sure);
+        // (which row of the table the board reads: the game's place in its own copy of it, less the piece's
+        // row, counted from where the board's table starts)
+        const uint32_t boards = 0x900000 + ((static_cast<uint32_t>(g_machine->cpsA[4]) * 256) & ~0x7FFu & 0x3FFFF);
+        const uint32_t its = Ram32(kRowTable) + static_cast<int16_t>(Ram16(kRowTableAt) - 2 * Ram16(object + kPieceRow));
+        piece->row = static_cast<int16_t>(((its - boards) / 2) & 0x3FF);
         return static_cast<uint8_t>(number + 1);
     }
 
@@ -659,11 +676,62 @@ int WideStage() {
     return g_side + g_shift;
 }
 
+namespace {
+    // For checking that nothing in the wide picture jumps (VSAV_WIDE_CHECK=1): how far each scroll screen,
+    // each line and each piece is drawn to the side must not change from one frame to the next by more than
+    // the camera went (and one more, for rounding). Printed when a stage is left, and every thousand frames:
+    // how many frames were looked at with the view held somewhere, and how many had a jump.
+    void CheckSmooth(int camera) {
+        static const bool check = getenv("VSAV_WIDE_CHECK") != nullptr;
+        static int before[3 + 0x400 + WidePlanes::kPieces], cameraBefore = -1, stage = -1;
+        static long frames = 0, jumps = 0, worst = 0, tick = 0;
+        if (!check) {
+            return;
+        }
+        int now[3 + 0x400 + WidePlanes::kPieces];
+        bool held = false;
+        for (int n = 0; n < 3; n++) {
+            now[n] = g_shifts[n];
+        }
+        for (int n = 0; n < 0x400; n++) {
+            now[3 + n] = g_shifts[1] + g_rows[n];
+        }
+        for (int n = 0; n < WidePlanes::kPieces; n++) {
+            now[3 + 0x400 + n] = g_pieceShifts[n] == kWithItsPlane ? 0 : g_pieceShifts[n];
+        }
+        for (int value : now) {
+            held = held || value != 0;
+        }
+        if (g_side && cameraBefore >= 0 && std::abs(camera - cameraBefore) <= 6 && stage == Ram16(kStage) / 2) {
+            int most = 0;
+            for (size_t n = 0; n < std::size(now); n++) {
+                most = std::max(most, std::abs(now[n] - before[n]));
+            }
+            if (held) {
+                frames++;
+            }
+            if (most > std::abs(camera - cameraBefore) + 1) {
+                jumps++;
+                worst = std::max<long>(worst, most);
+            }
+        }
+        if ((!g_side && frames) || (++tick % 1000 == 0 && frames)) {
+            fprintf(stderr, "widescreen: stage %d, %ld frames with the view held, %ld with a jump (the largest %ld)\n", stage, frames, jumps, worst);
+            if (!g_side) {
+                frames = jumps = worst = 0;
+            }
+        }
+        std::copy(std::begin(now), std::end(now), before);
+        cameraBefore = g_side ? camera : -1;
+        stage = Ram16(kStage) / 2;
+    }
+} // namespace
+
 void WidescreenBeforeFrame(Machine &machine) {
     const int camera = static_cast<int16_t>(Ram16(kCameraX)), shown = g_cameraBefore;
     g_cameraBefore = camera;
     g_side = g_shift = g_shifts[0] = g_shifts[1] = g_shifts[2] = 0;
-    std::fill(std::begin(g_lines), std::end(g_lines), int16_t{0});
+    std::fill(std::begin(g_rows), std::end(g_rows), int16_t{0});
     std::fill(std::begin(g_pieceShifts), std::end(g_pieceShifts), kWithItsPlane);
     g_play = FeatureOn("widescreen");
     if (g_play && OnStage(camera) && OnStage(shown) && !CurtainDrawn(machine)) {
@@ -673,19 +741,16 @@ void WidescreenBeforeFrame(Machine &machine) {
     if (!OnStage(camera)) {
         g_planes = WidePlanes(); // (no stage: its twins and its pieces' rates are gone with it)
     }
-    g_still = camera == shown ? g_still + 1 : 0;
-    if (g_side) {
-        MeasureRows(machine, g_planes, camera, g_still >= 3);
-    }
     Show(g_planes, machine);
     if (g_side) {
         SetShifts(machine, shown, g_shown);
     }
+    CheckSmooth(shown);
     machine.video.objectsTaken = g_side ? ListTaken : nullptr;
     Video::Wide &wide = machine.video.wide;
     wide.side = g_side;
     std::copy(g_shifts, g_shifts + 3, wide.scroll);
-    wide.lines = g_side ? g_lines : nullptr;
+    wide.rows = g_side ? g_rows : nullptr;
     wide.object = g_side ? MoveObject : nullptr;
     // (a stage whose 8-pixel scroll screen is a whole picture in the map needs no help: it goes round)
     g_machine = &machine;
@@ -701,7 +766,7 @@ void WideForSpare(Machine &machine, WidePlanes &planes) {
     g_portShown = g_shown;
     std::copy(g_shifts, g_shifts + 3, g_portShifts);
     std::copy(std::begin(g_pieceShifts), std::end(g_pieceShifts), g_portPieceShifts);
-    std::copy(std::begin(g_lines), std::end(g_lines), g_portLines);
+    std::copy(std::begin(g_rows), std::end(g_rows), g_portRows);
     const int camera = static_cast<int16_t>(Ram16(kCameraX));
     if (!OnStage(camera)) {
         planes = WidePlanes();
@@ -709,11 +774,8 @@ void WideForSpare(Machine &machine, WidePlanes &planes) {
     g_machine = &machine;
     g_planes = planes;
     g_shift = g_shifts[0] = g_shifts[1] = g_shifts[2] = 0;
-    std::fill(std::begin(g_lines), std::end(g_lines), int16_t{0});
+    std::fill(std::begin(g_rows), std::end(g_rows), int16_t{0});
     std::fill(std::begin(g_pieceShifts), std::end(g_pieceShifts), kWithItsPlane);
-    if (g_side && OnStage(camera)) {
-        MeasureRows(machine, g_planes, camera, false);
-    }
     Show(g_planes, machine);
     if (g_side && OnStage(camera)) {
         SetShifts(machine, camera, g_shown);
@@ -721,7 +783,7 @@ void WideForSpare(Machine &machine, WidePlanes &planes) {
     Video::Wide &wide = machine.video.wide;
     wide.side = g_side;
     std::copy(g_shifts, g_shifts + 3, wide.scroll);
-    wide.lines = g_side ? g_lines : nullptr;
+    wide.rows = g_side ? g_rows : nullptr;
     wide.object = g_side ? MoveObject : nullptr;
     wide.tile = g_side && Ram8(kBackLayer + kLayerDrawnAsItGoes) ? SideTile : nullptr;
 }
@@ -732,7 +794,7 @@ void WideForPort(Machine &, WidePlanes &planes) {
     g_shown = g_portShown;
     std::copy(g_portShifts, g_portShifts + 3, g_shifts);
     std::copy(std::begin(g_portPieceShifts), std::end(g_portPieceShifts), g_pieceShifts);
-    std::copy(std::begin(g_portLines), std::end(g_portLines), g_lines);
+    std::copy(std::begin(g_portRows), std::end(g_portRows), g_rows);
     g_shift = g_shifts[1];
 }
 

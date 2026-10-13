@@ -153,16 +153,25 @@ played in it, the same day.)
   side with it: the game says which plane as it works out the piece's place (`01BBC2`, `01BC3A`,
   by the byte at `+0C` of its record; `01BC88` for the panel), and hooks there note it for the
   entries of the object list that follow. Each machine a mode keeps has its own note.
-- The scroll screen of 16-pixel tiles has a rate for every line (the board's row scroll): the
-  floor's lines go faster than the camera, and on most stages the wall's lines go slower (0.72 of
-  it on the chateau). Each row's rate is worked out from the row scroll table with the camera off
-  the middle, and each line is kept inside its painting by its own rate (`Video::wide.lines`). A
-  piece on a row (`+24` of its record; the game takes the row's place off the piece's at `01BBC2`)
-  goes at the row's rate; a piece on no plane, which its script puts in the picture itself (the
-  chateau's cave mouth, 41 entries of one record), has its rate measured from where it is at the
-  camera's two furthest places. The half of a shared record that is drawn from a copy is placed
-  by its row too (the lady's arm on Feast of the Damned was off by the row's going). Both corners
-  of all twelve stages in training were compared with the board's corners side by side: the same.
+- The scroll screen of 16-pixel tiles has a rate for every line (the board's row scroll): on every
+  stage the wall behind is some rows that all go at one rate, slower than the camera (0.69 of it
+  on Feast of the Damned, 0.36 on Tower of Arrogance), and the floor below goes faster row by row
+  up to the camera's own rate and beyond. The rows are fixed in the table (from 768; which line
+  shows which goes with the camera's height, a register). Each stage's are five numbers in
+  `kStageRows`, read from the table with the camera at each end (the two agree on every row), and
+  each row slower than the camera is kept inside its painting by its own rate
+  (`Video::wide.rows`). A piece on a row (`+24` of its record; the game takes the row's place off
+  the piece's at `01BBC2`) goes at that same row's rate, so a piece and the picture it stands on
+  cannot part. A piece on no plane, which its script puts in the picture itself (the chateau's
+  cave mouth), has its rate measured from where it is at the camera's two furthest places, and
+  worked out again only when those are 16 further apart.
+- What went wrong on the way, to not do again: the rows' rates were first worked out while the
+  game ran, again every frame, each piece's by itself. They flickered between neighbouring values
+  as the camera moved, a piece's against its row's, and against the wrong camera (the table is a
+  frame behind); and the lines' were looked up a frame before the rows had moved up or down. Seen
+  as pieces and bands of the picture twitching near a stage's ends, never in a still picture.
+  `make check-widescreen` now counts, over made-up fights on every stage, the frames in which
+  anything is drawn further to the side than the camera went: none but a piece's first frame.
 - Fetus of God's camera goes from 160 to 736 on the board, not 256 to 640: the wide picture's
   ends there are 224 and 672. (Before this the picture fell back to the board's near that stage's
   ends.)
