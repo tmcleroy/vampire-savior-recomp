@@ -53,6 +53,12 @@ enum : uint32_t {
     kFreeFlags = 1u << 16,
 };
 void AddRewrite(uint32_t address, const char *name, RewriteFn fn, uint32_t free = 0, uint32_t cycles = 0);
+// A rewrite that stands aside in some cases: `when` is asked before each call of the rewrite at `address`,
+// and when it says no, the game's own code runs that time. For a routine that in some state waits for an
+// interrupt (a rewrite cannot, and neither can anything it calls with Call: a rewrite that would reach
+// such a wait has to stand aside too).
+using RewriteWhenFn = bool (*)(M68K &c);
+void RewriteWhen(uint32_t address, RewriteWhenFn when);
 // Time. A rewrite takes no time of the 68000's unless it says so, and a game that is short of time in a
 // frame (and so slows down, as the board does) would then not be. `cycles` is charged for every call; a
 // rewrite whose original takes longer for some calls than for others adds the rest itself (Spend). The check

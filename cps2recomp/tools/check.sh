@@ -8,7 +8,8 @@
 #
 #   check.sh FRAMES [MOVIE] [extra port arguments]
 #
-# Without a movie the input is made up (--auto 7:400). Run from the repository's top.
+# Without a movie the input is made up (--auto 7:400). Run from the repository's top. The sound program runs
+# on the Z80 here whether or not there is a driver for it (tools/check_sound.sh checks that).
 GAME=${GAME:-vampire_savior}
 ROM=${ROM:-rom}
 frames=${1:-3000}; movie=$2
@@ -19,7 +20,7 @@ port=${B:-build/$GAME}/$GAME
 mkdir -p "$work"
 if [ -n "$movie" ]; then input="--movie $movie"; else input="--auto 7:400"; fi
 run() { # name, cpu mode
-    $port --rom "$ROM" --headless --frames "$frames" $input --cpu "$2" --hash-log "$work/$1.txt" $extra 2>"$work/$1.err" || {
+    $port --rom "$ROM" --headless --frames "$frames" $input --cpu "$2" --sound z80 --hash-log "$work/$1.txt" $extra 2>"$work/$1.err" || {
         echo "FAILED: the $1 run stopped"; cat "$work/$1.err"; exit 1; }
 }
 run blocks blocks & run native native & run again native & wait

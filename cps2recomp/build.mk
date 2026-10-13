@@ -9,6 +9,7 @@
 #   make record     run it and add the places it reaches by computed jumps to the entries file
 #   make check      translated code against the interpreter run the same way, by state hash; two runs alike
 #   make check-blocks  every translated block beside the interpreter (registers, cycles, writes)
+#   make check-sound   the sound driver beside the game's sound program on the Z80 (every write to the chip)
 #   make check-toolkit the toolkit (cps2recomp/) is what its tools/sync-toolkit.sh recorded
 #   make check-common  the copy of recomp-common (recomp-common/) is what tools/sync-common.sh recorded
 #   make launcher   build the launcher (build/$(GAME)/$(GAME)-launcher)
@@ -34,16 +35,19 @@ FRAMES ?= 3000
 # (settings.ini: the features switched in the in-game menu; a run also notes the code it reaches that has
 # no translation yet, for the next build)
 EXPLORE_FEATURES ?= $(shell $(CFG) explore_features $(GAME))
+EXPLORE_LADDER ?= $(shell $(CFG) explore_ladder_features $(GAME))
+EXPLORE_LADDER_2 ?= $(shell $(CFG) explore_ladder_features_2 $(GAME))
 RUN_ARGS = --rom "$(ROM)" --eeprom $(WORK)/eeprom.bin --settings $(WORK)/settings.ini --record-entries $(ENTRIES)
 
 PROGRAM := $(WORK)/program.bin
 ENTRIES := $(WORK)/entries.txt
 
-.PHONY: all configure port gen run record explore check check-blocks check-rewrites check-common check-toolkit launcher app clean
+.PHONY: all configure port gen run record explore check check-blocks check-sound check-rewrites check-common check-toolkit launcher app clean
 all: port
 
 # Generated code: the game's program as C++ (tools/recomp.py). It is made from the deciphered program, which
 # the port itself writes; so the first build of a fresh tree is an interpreter-only one, and is done twice.
+# (NO_ROM=1: there is no ROM set, so the build stops at the interpreter-only one; the toolkit's stand-in game)
 gen:
 	@mkdir -p $(GEN)
 	@$(CFG) --header $(GEN)/game_info.h $(GAME)
@@ -64,7 +68,7 @@ configure:
 
 port: gen configure
 	@ninja -C $(B) $(GAME)
-	@if [ ! -f $(PROGRAM).z80 ]; then $(PORT) --rom "$(ROM)" --dump-program $(PROGRAM) && $(MAKE) --no-print-directory port; fi
+	@if [ -z "$(NO_ROM)" ] && [ ! -f $(PROGRAM).z80 ]; then $(PORT) --rom "$(ROM)" --dump-program $(PROGRAM) && $(MAKE) --no-print-directory port; fi
 
 run: port
 	$(PORT) $(RUN_ARGS) $(ARGS)
@@ -76,7 +80,9 @@ record: port
 
 # Find the game's code by playing it with made-up input, in rounds, translating what each round found before
 # the next (a fresh tree knows almost none of it, and runs mostly in the interpreter until this is done; about
-# ten minutes). EXPLORE_FEATURES: features that help the made-up play get far (cheats).
+# ten minutes). EXPLORE_FEATURES: features that help the made-up play get far (cheats). EXPLORE_LADDER: features
+# with which one made-up player wins every match, for the one-player game to its end (a few minutes more);
+# EXPLORE_LADDER_2: another such set, for a second way through it (a hidden opponent, say).
 explore: port
 	@$(CR)/tools/explore.sh 1 6 12000
 	@$(MAKE) --no-print-directory port
@@ -84,6 +90,8 @@ explore: port
 	@$(MAKE) --no-print-directory port
 	@AUTO=":400:1" $(CR)/tools/explore.sh 30 12 60000 $(if $(EXPLORE_FEATURES),--features $(EXPLORE_FEATURES))
 	@$(CR)/tools/explore.sh 50 6 30000 --test-switch 600:30000
+	@if [ -n "$(EXPLORE_LADDER)" ]; then AUTO=":400:1" $(CR)/tools/explore.sh 100 12 130000 --features $(EXPLORE_LADDER); fi
+	@if [ -n "$(EXPLORE_LADDER_2)" ]; then AUTO=":400:1" $(CR)/tools/explore.sh 120 6 130000 --features $(EXPLORE_LADDER_2); fi
 	@$(MAKE) --no-print-directory port
 
 # Every translated block beside the interpreter, compared (FRAMES=n, MOVIE=path or ARGS=...)
@@ -92,6 +100,9 @@ check-blocks: gen configure
 	$(B)/$(GAME)-check --rom "$(ROM)" --headless --cpu check --frames $(FRAMES) --stats $(if $(MOVIE),--movie $(MOVIE)) $(ARGS)
 
 # The game's rewritten routines against the code they replace (docs/READABLE.md); the game says how
+check-sound: port
+	@$(CR)/tools/check_sound.sh
+
 check-rewrites: port check-common check-toolkit
 	@games/$(GAME)/check_rewrites.sh
 

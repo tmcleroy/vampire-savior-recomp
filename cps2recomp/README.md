@@ -8,10 +8,10 @@ part of this repository or of a game's.
 
 | Path | What |
 | --- | --- |
-| `tools/` | The translators (`recomp.py`, `m68k.py`; `recompz80.py`, `z80.py`), `gamecfg.py`, the checks (`check.sh`), finding a game's code by made-up play (`explore.sh`), reading the listing (`lst.py`, `tracechanges.py`, `ramfind.py`), `sync-toolkit.sh`, `sync-common.sh` |
+| `tools/` | The translators (`recomp.py`, `m68k.py`; `recompz80.py`, `z80.py`), `gamecfg.py`, the checks (`check.sh`, `check_sound.sh`), finding a game's code by made-up play (`explore.sh`), reading the listing (`lst.py`, `tracechanges.py`, `ramfind.py`), `sync-toolkit.sh`, `sync-common.sh` |
 | `runtime/` | What translated code is written in terms of; hooks and readable rewrites (`lift.h`); features and settings (`game.h`) |
 | `machine/` | The 68000, bus, interrupts, timing, settings EEPROM, ROM set and cipher |
-| `video/`, `sound/` | The picture; the Z80 and QSound |
+| `video/`, `sound/` | The picture; the Z80 and QSound; Capcom's sound driver (version 2.01b) as ordinary code (`driver.cpp`), used in place of the Z80 where a game has that version |
 | `port/` | The frontend (SDL3), putting the picture on the screen (`present.*`: SDL's GPU API, so Metal, Vulkan or Direct3D 12, with SDL's renderer where there is no device; shaders in `shaders/`, compiled into `shaders.inc` by `tools/gen_shaders.py`), in-game menu adapter, HUD, control bindings |
 | `recomp-common/` | A copy of [recomp-common](https://github.com/tmcleroy/recomp-common) (the in-game menu, the settings rules, the launcher), made by `tools/sync-common.sh`; never changed here |
 | `launcher/` | What this toolkit tells the launcher the recomp ports share (`recomp-common/launcher`; SDL3 + Dear ImGui): `src/description.cpp` has the words for a ROM set, the check of the player's, the game's arguments and the buttons that can be chosen |
@@ -44,7 +44,22 @@ make CR=../cps2recomp check
 Commit here, then in each game: `cps2recomp/tools/sync-toolkit.sh`, run the game's checks, commit.
 Anything about one game belongs in that game's `game.cfg` or `src/`, not here.
 
-GPL-3.0-only. The cipher (`machine/cps2crypt.*`) is from MAME (BSD-3-Clause; its header says so).
+## Checking the toolkit itself
+
+`make check` in this repository needs no game: it audits the files (`tools/audit.sh`: nothing from a
+game, no keys, no personal paths), checks the copy of recomp-common, builds the program with no
+translated code and the launcher for the stand-in game in `example/`, starts both, and tries
+`sync-toolkit.sh`; CI does the same on macOS, Linux and Windows. See [CONTRIBUTING.md](CONTRIBUTING.md).
+A game's copy leaves out these checks, the stand-in game and this repository's project pages.
+
+## License and credits
+
+GPL-3.0-only. The cipher (`machine/cps2crypt.*`) is from MAME (BSD-3-Clause; its header says so), and the
+QSound model follows MAME's; [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) has the notices in full.
+
+cps2recomp is not affiliated with or endorsed by Capcom. "Capcom", "CPS-2" and "QSound" are names and
+trademarks of their owners, used here only to say what the toolkit works with. No game is included: a port
+needs the ROM set of a board its player owns.
 
 The launcher's look, and the files that make it, come from the launcher of
 [wiiparty-recomp](https://github.com/arelkair/wiiparty-recomp) by arelkair (GPL-3.0-or-later); they are in

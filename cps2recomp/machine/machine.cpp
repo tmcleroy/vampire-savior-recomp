@@ -6,6 +6,7 @@
 #include "../runtime/state.h"
 
 #include <algorithm>
+#include <map>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -58,6 +59,21 @@ Machine::Machine(const RomSet &roms)
     cpu.rom = roms.program.data();
     cpu.opcodes = roms.opcodes.data();
     cpu.romSize = static_cast<uint32_t>(roms.program.size());
+    if (SoundDriver::Knows(roms.soundProgram)) {
+        soundDriver = std::make_unique<SoundDriver>(roms.soundProgram, soundRam, [this](uint8_t reg, uint16_t data, uint32_t gap) {
+            if (soundSide == SoundSide::Check) {
+                m_driverWrites.push_back({reg, data, 0, gap});
+                return;
+            }
+            if (m_chipQueue.empty()) {
+                m_chipNext = std::max(soundCpu.cycles, m_chipLast) + gap;
+            }
+            m_chipQueue.push_back({reg, data, 0, gap});
+        });
+    }
+    if (getenv("CPS2RECOMP_SOUND_GAPS")) {
+        m_gapStats = std::make_unique<std::map<uint16_t, GapStat>>();
+    }
     Reset();
 }
 
@@ -165,17 +181,39 @@ void Machine::RunSound(int cycles) {
     m_soundTime += static_cast<uint64_t>(cycles);
     while (soundCpu.cycles < m_soundTime) {
         const uint64_t next = std::min({m_soundTime, m_soundInterruptAt, m_sampleAt});
-        if (m_soundRunning) {
+        if (m_soundRunning && soundSide != SoundSide::Driver) {
             soundCpu.Run(next, soundMode);
+        } else if (m_driverInterrupt) {
+            // (where the Z80 would take it: as it next runs)
+            m_driverInterrupt = false;
+            soundDriver->Interrupt();
         }
         soundCpu.cycles = std::max(soundCpu.cycles, next); // (held in reset or halted: time passes all the same)
         while (m_soundInterruptAt <= soundCpu.cycles) {
             m_soundInterruptAt += kSoundInterruptPeriod;
             if (m_soundRunning) {
-                soundCpu.RaiseInterrupt();
+                if (soundSide != SoundSide::Driver) {
+                    soundCpu.RaiseInterrupt();
+                }
+                if (soundSide == SoundSide::Check) {
+                    soundDriver->Interrupt();
+                } else if (soundSide == SoundSide::Driver) {
+                    m_driverInterrupt = true;
+                }
             }
         }
         while (m_sampleAt <= soundCpu.cycles) {
+            if (!m_chipQueue.empty() && m_chipNext <= m_sampleAt) {
+                const ChipWrite write = m_chipQueue.front();
+                m_chipQueue.erase(m_chipQueue.begin());
+                qsound.Write(0, static_cast<uint8_t>(write.data >> 8));
+                qsound.Write(1, static_cast<uint8_t>(write.data));
+                qsound.Write(2, write.reg);
+                m_chipLast = m_sampleAt;
+                if (!m_chipQueue.empty()) {
+                    m_chipNext = m_chipLast + m_chipQueue.front().gap;
+                }
+            }
             int16_t sample[2];
             qsound.Step(sample);
             audio.push_back(sample[0]);
@@ -184,6 +222,71 @@ void Machine::RunSound(int cycles) {
             m_sampleAt = (m_sampleCount + 1) * kSoundClock / QSound::kSampleRate;
         }
     }
+    if (soundSide == SoundSide::Check) {
+        CompareSound();
+    }
+}
+
+// The Z80's writes to the chip and the driver's must be the same, in the same order (they need not come at
+// the same moment: the Z80 takes time over its work)
+void Machine::CompareSound() {
+    const size_t count = std::min(m_z80Writes.size(), m_driverWrites.size());
+    for (size_t n = 0; n < count; n++) {
+        const ChipWrite &z80 = m_z80Writes[n], &driver = m_driverWrites[n];
+        if (z80.reg == driver.reg && z80.data == driver.data) {
+            if (m_gapStats) {
+                GapStat &stat = (*m_gapStats)[z80.pc];
+                stat.count++, stat.z80 += z80.gap, stat.driver += driver.gap;
+            }
+            continue;
+        }
+        m_soundHistory.insert(m_soundHistory.end(), m_z80Writes.begin(), m_z80Writes.begin() + static_cast<ptrdiff_t>(n));
+        fprintf(stderr, "sound driver differs from the Z80 at chip write %llu (frame %llu)\n",
+                static_cast<unsigned long long>(soundWritesChecked + n), static_cast<unsigned long long>(frame));
+        fprintf(stderr, "  before:");
+        for (const ChipWrite &w : m_soundHistory) {
+            fprintf(stderr, " %02X=%04X@%04X", w.reg, w.data, w.pc);
+        }
+        fprintf(stderr, "\n");
+        auto list = [&](const char *name, const std::vector<ChipWrite> &writes, bool pcs) {
+            fprintf(stderr, "  %-7s", name);
+            for (size_t k = n > 6 ? n - 6 : 0; k < writes.size() && k < n + 10; k++) {
+                fprintf(stderr, "%s%02X=%04X", k == n ? " >" : " ", writes[k].reg, writes[k].data);
+                if (pcs) {
+                    fprintf(stderr, "@%04X", writes[k].pc);
+                }
+            }
+            fprintf(stderr, "\n");
+        };
+        list("Z80:", m_z80Writes, true);
+        list("driver:", m_driverWrites, false);
+        // (what each has for the voice: the Z80's memory for its two tracks, in the sound program's layout)
+        const unsigned voice = z80.reg >= 0x80 ? z80.reg & 15 : z80.reg >> 3;
+        soundDriver->Describe(voice);
+        for (int which = 0; which < 2; which++) {
+            fprintf(stderr, "  Z80 %s %u:", which ? "music" : "effect", voice);
+            for (unsigned at = 0; at < 0x68; at++) {
+                fprintf(stderr, "%s%02X", at % 8 ? " " : "  ", soundRam2[0x200 + which * 0x680 + voice * 0x68 + at]);
+            }
+            fprintf(stderr, "\n");
+        }
+        for (unsigned n = 0; n < 3; n++) {
+            fprintf(stderr, "  Z80 ADPCM %u:", n);
+            for (unsigned at = 0; at < 0x18; at++) {
+                fprintf(stderr, "%s%02X", at % 8 ? " " : "  ", soundRam2[0xF00 + n * 0x18 + at]);
+            }
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "  Z80 stereo %02X\n", soundRam2[8]);
+        exit(3);
+    }
+    m_soundHistory.insert(m_soundHistory.end(), m_z80Writes.begin(), m_z80Writes.begin() + static_cast<ptrdiff_t>(count));
+    if (m_soundHistory.size() > 24) {
+        m_soundHistory.erase(m_soundHistory.begin(), m_soundHistory.end() - 24);
+    }
+    soundWritesChecked += count;
+    m_z80Writes.erase(m_z80Writes.begin(), m_z80Writes.begin() + static_cast<ptrdiff_t>(count));
+    m_driverWrites.erase(m_driverWrites.begin(), m_driverWrites.begin() + static_cast<ptrdiff_t>(count));
 }
 
 // --- the 68000's bus ---
@@ -383,6 +486,10 @@ void Machine::WriteRegister(uint32_t address, uint16_t value, uint16_t mask) {
             const bool run = value & 0x0008;
             if (run && !m_soundRunning) {
                 soundCpu.Reset();
+                if (soundDriver && soundSide != SoundSide::Z80) {
+                    soundDriver->shadow = soundSide == SoundSide::Check;
+                    soundDriver->Reset();
+                }
             }
             m_soundRunning = run;
         }
@@ -410,6 +517,9 @@ uint8_t Machine::Read(uint16_t address) {
         return at < m_roms.soundProgram.size() ? m_roms.soundProgram[at] : 0xFF;
     }
     if (address < 0xD000) {
+        if (address == 0xCFFE && monoForTest) {
+            return 0;
+        }
         return soundRam[address - 0xC000];
     }
     if (address == 0xD007) {
@@ -423,12 +533,47 @@ uint8_t Machine::Read(uint16_t address) {
 
 void Machine::Write(uint16_t address, uint8_t value) {
     if (address >= 0xC000 && address < 0xD000) {
+        if (soundSide == SoundSide::Check && address == 0xC00F && value == 0xFF) {
+            soundDriver->TakeCommand(); // (the sound program's interrupt has taken a command)
+        }
         soundRam[address - 0xC000] = value;
     } else if (address >= 0xD000 && address <= 0xD002) {
         qsound.Write(address - 0xD000, value);
+        if (soundSide == SoundSide::Check) {
+            if (address == 0xD000) {
+                m_chipLatch = static_cast<uint16_t>((m_chipLatch & 0x00FF) | (value << 8));
+            } else if (address == 0xD001) {
+                m_chipLatch = static_cast<uint16_t>((m_chipLatch & 0xFF00) | value);
+            } else {
+                m_z80Writes.push_back({value, m_chipLatch, soundCpu.pc, static_cast<uint32_t>(soundCpu.cycles - m_z80Mark)});
+                m_z80Mark = soundCpu.cycles;
+            }
+        }
     } else if (address == 0xD003) {
         m_soundBank = value & 0x0F;
     } else if (address >= 0xF000) {
+        if (soundSide == SoundSide::Check) {
+            // The sound program counts down what its interrupt counted up as it starts on each piece of work;
+            // for commands, what tells is its taking one from its queue (an interrupt can add one between
+            // the count and the look at the queue)
+            if ((address == 0xF002 || address == 0xF003) && value == static_cast<uint8_t>(soundRam2[address - 0xF000] - 1)) {
+                m_z80Mark = soundCpu.cycles;
+                soundDriver->Do(static_cast<SoundDriver::Work>(address - 0xF000));
+            } else if (address == 0xF016) {
+                m_z80Mark = soundCpu.cycles;
+                soundDriver->Do(SoundDriver::Work::Commands);
+            }
+        }
+        if (soundSide == SoundSide::Check && address == 0xF008) {
+            soundDriver->SetStereo(value);
+        }
+        if (address == 0xF016 && getenv("CPS2RECOMP_SOUND_COMMANDS")) {
+            fprintf(stderr, "z80   command");
+            for (int n = 0; n < 13; n++) {
+                fprintf(stderr, " %02X", soundRam2[0x100 + soundRam2[0x16] + n]);
+            }
+            fprintf(stderr, " (frame %llu)\n", static_cast<unsigned long long>(frame));
+        }
         soundRam2[address - 0xF000] = value;
     }
 }
@@ -437,6 +582,9 @@ void Machine::Serialize(Archive &ar) {
     ar.Mark(0x4D414348);
     cpu.Serialize(ar);
     soundCpu.Serialize(ar);
+    if (soundDriver) {
+        soundDriver->Serialize(ar);
+    }
     qsound.Serialize(ar);
     video.Serialize(ar);
     eeprom.Serialize(ar);
@@ -463,6 +611,27 @@ void Machine::Serialize(Archive &ar) {
     ar.Pod(m_soundInterruptAt);
     ar.Pod(m_sampleCount);
     ar.Pod(m_sampleAt);
+    ar.Pod(m_driverInterrupt);
+    ar.Vec(m_chipQueue);
+    ar.Pod(m_chipNext);
+    ar.Pod(m_chipLast);
+}
+
+// (CPS2RECOMP_SOUND_GAPS, with --sound check) how long the Z80 took to come to each of its writes and how
+// long the driver reckons, by the place in the sound program that writes
+void Machine::ReportSoundTimes() const {
+    if (!m_gapStats) {
+        return;
+    }
+    uint64_t z80 = 0, driver = 0;
+    for (const auto &[pc, stat] : *m_gapStats) {
+        fprintf(stderr, "  write at %04X: %8llu times, Z80 %6llu cycles on average, driver %6llu\n", pc,
+                static_cast<unsigned long long>(stat.count), static_cast<unsigned long long>(stat.z80 / stat.count),
+                static_cast<unsigned long long>(stat.driver / stat.count));
+        z80 += stat.z80, driver += stat.driver;
+    }
+    fprintf(stderr, "  in all: Z80 %llu cycles, driver %llu (%.1f%%)\n", static_cast<unsigned long long>(z80),
+            static_cast<unsigned long long>(driver), 100.0 * static_cast<double>(driver) / static_cast<double>(std::max<uint64_t>(z80, 1)));
 }
 
 } // namespace cps2recomp

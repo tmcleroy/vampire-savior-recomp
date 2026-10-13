@@ -36,7 +36,7 @@ endif ()
 
 set(MACHINE_SOURCES
     video/video.cpp
-    sound/z80.cpp sound/qsound.cpp
+    sound/z80.cpp sound/qsound.cpp sound/driver.cpp
     machine/m68k.cpp machine/machine.cpp machine/eeprom.cpp machine/romset.cpp machine/cps2crypt.cpp
     runtime/recomp.cpp runtime/recomp_z80.cpp
 )
