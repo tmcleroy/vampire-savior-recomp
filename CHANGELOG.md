@@ -12,6 +12,13 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
   which keep the board's picture.
 - Endless battle: how often the shuffled stage changes (1, 2, 3, 5 or 10 minutes; it was two) and
   how fast the scrolling stage goes by (slow, medium, fast) are chosen on its page.
+- The launcher can be used with a gamepad alone, or with the arrow keys and Space or Enter: a ring
+  shows what is chosen, A presses it, B goes back, the shoulder buttons change the page. With a
+  gamepad, Choose opens a list of folders and files in the launcher's own window.
+- In the in-game menu Space, Enter and a gamepad's A choose and Backspace and B go back, whatever
+  the game's buttons are set to.
+- Sound can be switched off: a "Muted" switch in the launcher (off unless switched on) and a
+  "Sound" row in the in-game menu.
 - A gamepad's left trigger goes on by a frame only once the game has been stopped (`P`, the right
   stick's click); it no longer stops the game itself, which a touch of it while playing did, with
   nothing on the trigger to start it again.
