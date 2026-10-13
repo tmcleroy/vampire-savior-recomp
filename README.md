@@ -62,6 +62,29 @@ gauge, infinite time). [docs/FEATURES.md](docs/FEATURES.md) has the whole list.
 | ![Another Dark Force](docs/screenshots/action-7.png) | ![The launcher: features](docs/screenshots/launcher-features.png) |
 | ![The launcher: controllers](docs/screenshots/launcher-controls.png) | |
 
+## Widescreen
+
+![Widescreen: Morrigan and Lilith in Feast of the Damned, the whole hall in view](docs/screenshots/widescreen.png)
+
+A switch on the launcher's first page, under "Full screen" (and on the in-game menu's Display
+page). Fights are shown and played in 16:9: the picture is 512 columns wide where the board's is
+384, at the same height and with everything the same size, so there is a third more of the stage
+in view.
+
+It is **off unless you switch it on**, in every preset, because it changes how the game plays:
+
+- The players can go to the wide picture's edges, so they can stand further apart than on the
+  board (464 at most, where the board allows 336). The stage's own ends are where they were.
+- The camera stops 64 short of where it did, so that the picture ends where the stage does.
+- A stage's own pieces (the dancers, the lady under the bird cage) are drawn all the time, not
+  only when the board's picture would reach them, and each plane behind stops where its painting
+  does.
+- The bars, the clock and the gauges stay in the middle. Survival, the endless battle, the ring
+  out and the stage viewer are wide too. Everything that is not a fight keeps the board's 4:3.
+
+With it off the game is exactly the board's. Nothing here stretches the picture: the extra
+columns are the game's own stage, drawn by the port from what the game already has.
+
 ## Other modes
 
 "Alternative modes" also has:
