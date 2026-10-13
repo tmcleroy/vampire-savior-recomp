@@ -258,16 +258,21 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   wide, is the same but for moving colours and the floor; 450 frames of the infinite stage (every 20th
   of 9,000, fast) have no column that is black above the floor, where 24 of 130 had before.
 
-- Piece scripts written again whole so far (`pieces.cpp`), each checked on its stage: 0-5, 7-13, 15,
-  21, 22, 24-26, 29-39, 41, 43, 44, 46-48, 51-57 (48 of the 58). The game's own code still: 6, 14, 16-18,
-  27, 28, 40, 45 (the longer ones: several run a second animation inside the record through `09190A`
-  and `09192A`, or move by `07E672` and `07E77E`, which are not read yet), and 19, 20, 23, 42, 49, 50, which no stage was seen to use. The check is of the
+- Piece scripts written again whole so far (`pieces.cpp`), each checked on its stage: 0-13, 15-18, 21,
+  22, 24-26, 29-39, 41, 43-48, 51-57 (53 of the 58). The game's own code still: 14, 27, 28, 40, and 19, 20, 23, 42, 49, 50, which no stage was seen to use. The check is of the
   paths the made-up play reached: a script's rarer steps (script 11's second and third animations,
   script 38's events) may not have been among them. The two pieces the finder still names are explained
   by their scripts: 41 (the train) is not there until the round is on, and 29 (War Agony) waits, not
   drawn, on a byte of the piece that made it. Script 11 reads two longs from below its own record where
   script 24 reads the players' states (the game's slip, kept); script 48's piece is neither moved nor
   drawn again once the camera has taken its place below 496.
+- A path a piece flies (scripts 16 and 17, `07E672`, `07E77E`): legs in the ROM of a word of frames, a
+  start, and six longs of speed and what changes it; a word below nothing ends it. A record's own
+  animations of colours (scripts 6 and 45) are still the game's code (`09190A`, `09192A`, `01538C`: they
+  write the board's colours). A table the 68000 reads by its program counter is in the deciphered
+  program; one read through an address register is the ROM as it is (`ProgramWord` for the first).
+  Script 18's lists name a seventh place of six: the game reads on into its own code, and so does the
+  rewrite.
 - More of a piece's record: `+05` a step within the frame's step; `+30` the record that made it (a word);
   `+0D` set by pieces made by others; `+40`/`+44`/`+48`/`+4C` speed and pull (longs) for the ones that
   move by `015466`. From A5: `107` not zero once the round's fighting has begun, `B4` bit 0 turning over
