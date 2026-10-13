@@ -10,6 +10,8 @@
 
 namespace cps2recomp {
 
+bool AttractMode(); // modes.cpp
+
 namespace {
     using namespace vsav;
 
@@ -26,7 +28,8 @@ namespace {
     }
 
     void Frame(Machine &) {
-        if (FeatureOn("free_play") && Ram8(kCredits) < 2) {
+        // (not in attract mode: with a coin in, the game waits for Start and shows nothing else)
+        if (FeatureOn("free_play") && !AttractMode() && Ram8(kCredits) < 2) {
             SetRam8(kCredits, 2); // (two: a second player can always join)
         }
         if (!Fighting()) {

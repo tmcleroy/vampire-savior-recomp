@@ -57,6 +57,11 @@ public:
     const uint32_t *Picture() const {
         return m_picture.data();
     }
+    // For a game's own sources that put the picture together themselves (two stages side by side, say): the
+    // picture the frame made, to change before it is shown
+    uint32_t *Picture() {
+        return m_picture.data();
+    }
     // Sound made and not yet taken: left and right samples at QSound::kSampleRate
     std::vector<int16_t> audio;
 

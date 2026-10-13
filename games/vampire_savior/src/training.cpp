@@ -18,8 +18,12 @@
 
 namespace cps2recomp {
 
+void BootToChoice(Machine &machine);
 bool AttackInRange(M68K &c, uint32_t player); // fight.cpp
 bool GuardStanding(M68K &c, uint32_t player);
+bool StageViewer();      // modes.cpp: the stage viewer is on (no players, no readouts)
+int StageViewerStage();  //   and the stage it shows (1-12), or 0
+void EndModes();         //   attract mode and the stage viewer are over
 
 namespace {
     using namespace vsav;
@@ -116,12 +120,10 @@ namespace {
     // --- a training session ---
 
     // The menu's "Training mode": the board switched off and on, and the way to the character choice worked
-    void StartTraining(Machine &machine) {
+    void Start(Machine &machine) {
+        EndModes();
         SetFeature("training_mode", true);
-        machine.Reset();
-        g_boot = true;
-        g_bootFrames = 0;
-        SetFastForward(true);
+        BootToChoice(machine);
     }
 
     // What the controls do on the way there
@@ -198,8 +200,9 @@ namespace {
     // The game is choosing the stage for a match (vsav.h, kChooseStage). In a training session with a stage
     // asked for, that one is used and the game's routine is left out.
     bool ChooseStage(M68K &c) {
-        const int stage = FeatureValue("training_stage"); // 0: the game's choice
-        if (!FeatureOn("training_mode") || stage < 1 || stage > kStages || Ram8(kPlayersThen) != 3) {
+        // (0: the game's choice)
+        const int stage = StageViewer() ? StageViewerStage() : FeatureOn("training_mode") ? FeatureValue("training_stage") : 0;
+        if (stage < 1 || stage > kStages || Ram8(kPlayersThen) != 3) {
             return false;
         }
         SetRam16(kStage, static_cast<uint16_t>((stage - 1) * 2));
@@ -455,6 +458,12 @@ namespace {
     }
 
     void Frame(Machine &machine) {
+        if (StageViewer()) {
+            // (nothing of training's is shown, or kept)
+            g.fighting = false;
+            g_roundFought = false;
+            return;
+        }
         // The round's fighting begins: kept, for starting over
         const bool fought = RoundFought();
         if (fought && !g_roundFought && FeatureOn("training_mode")) {
@@ -611,51 +620,64 @@ void TrainingState(Archive &ar) {
     FramesState(ar);
 }
 
-// A training session is on: no clock and no knockouts (fight.cpp)
+// A training session is on, or the stage viewer: no clock and no knockouts (fight.cpp)
 bool TrainingMode() {
-    return FeatureOn("training_mode");
+    return FeatureOn("training_mode") || StageViewer();
+}
+
+// "Training mode" on the menu's Alternative modes page (modes.cpp)
+void StartTraining(Machine &machine) {
+    Start(machine);
+}
+
+// The board switched off and on, and the way to the character choice with two players worked (the game runs
+// unseen meanwhile)
+void BootToChoice(Machine &machine) {
+    machine.Reset();
+    g_boot = true;
+    g_bootFrames = 0;
+    SetFastForward(true);
+}
+bool Booting() {
+    return g_boot;
 }
 
 void RegisterTraining() {
     Game &game = TheGame();
     AddHook(0x00AE7C, "ChooseStage", ChooseStage);
-    game.commands.push_back({"training_start", "", "Training mode",
-                             "Starts a training session: straight to the character choice with two players (choose player 1's, "
-                             "then player 2's with the same controls), and a fight with no clock that nobody loses.",
-                             StartTraining});
-    game.commands.push_back({"training_restart", "", "Start over",
+    game.commands.push_back({"training_restart", "Training mode", "Start over",
                              "In a training session: the round as it began, with the players where \"Start over at\" says. Backspace "
                              "or a gamepad's left shoulder does this while playing; the stick held as it is pressed chooses the place "
                              "(left, right: a corner; down: sides swapped; up: the middle).",
                              StartOver, kKeyRestart});
-    game.features.push_back({"restart_at", "Training", "Start over at",
+    game.features.push_back({"restart_at", "Training mode", "Start over at",
                              "Where \"Start over\" puts the players: the middle or a corner, player 1 on the left or (swapped) on the right.",
                              0, {"Middle", "Left corner", "Right corner", "Middle, swapped", "Left corner, swapped", "Right corner, swapped"}});
-    game.features.push_back({"training_stage", "Training", "Stage",
+    game.features.push_back({"training_stage", "Training mode", "Stage",
                              "Where a training session's fight is: the game's own choice (at random, from those that go with player "
                              "2's character) or a stage named here. Takes effect when the characters are next chosen.",
                              0, {"The game's choice", "Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau",
                                  "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                                  "Fetus of God"}});
-    game.features.push_back({"training_mode", "Training", "Training session",
-                             "The fight has no clock and nobody is knocked out. (\"Training mode\" on the first page switches this "
+    game.features.push_back({"training_mode", "Training mode", "Training session",
+                             "The fight has no clock and nobody is knocked out. (\"Start\" above switches this "
                              "on and takes the game to the character choice; Reset ends it.)",
                              kFeatureSession});
-    game.features.push_back({"damage_readout", "Training", "Combo readout",
+    game.features.push_back({"damage_readout", "Training mode", "Combo readout",
                              "Under the bar of the player hit: what the hit took off; for a combo (hits landing before the player is free again) the "
                              "hits and the damage; how much of it is lost for good and how much comes back; the round's best."});
-    game.features.push_back({"input_display", "Training", "Input display",
+    game.features.push_back({"input_display", "Training mode", "Input display",
                              "Shows what each player presses and for how many frames: the stick as a keypad number (5 is the middle, 6 right, 2 down), then the buttons."});
-    game.features.push_back({"hit_boxes", "Training", "Hit boxes",
+    game.features.push_back({"hit_boxes", "Training mode", "Hit boxes",
                              "Draws the boxes the game tests: where a player can be hit (blue), attacks (red; orange for things thrown), and the boxes that keep the players apart (green)."});
-    game.features.push_back({"frame_data", "Training", "Frame data",
+    game.features.push_back({"frame_data", "Training mode", "Frame data",
                              "After a move: the step it can first hit on (startup), how many it can hit for (active) and how many "
                              "follow before the player can act (recovery). After a hit or a guarded one: who can act first, by how "
                              "many steps (+: the attacker)."});
-    game.features.push_back({"frame_meter", "Training", "Frame meter",
+    game.features.push_back({"frame_meter", "Training mode", "Frame meter",
                              "A row of cells for each player, one for every step of the game: green before a move can hit, red "
                              "while it can, blue after; yellow reeling from a hit, light blue from a guarded one; grey in the air."});
-    game.features.push_back({"health_refill", "Training", "Health refills",
+    game.features.push_back({"health_refill", "Training mode", "Health refills",
                              "A player's health comes back when they have not been hit for a moment."});
     game.features.push_back({"dummy_stand", "Dummy", "Stands", "Player 2 stands still, whatever its controls do.", kFeatureExclusive});
     game.features.push_back({"dummy_crouch", "Dummy", "Crouches", "Player 2 crouches.", kFeatureExclusive});

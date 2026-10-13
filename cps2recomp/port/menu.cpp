@@ -23,7 +23,19 @@ namespace {
 void Menu::Open(bool withStates) {
     const cps2recomp::Game &game = cps2recomp::TheGame();
     recomp::MenuConfig config;
-    // Three groups with a line between them: the save states, what the game offers, and leaving
+    // The game's pages that belong at the head; then three groups with a line between them: the save
+    // states, what the game offers, and leaving
+    std::vector<recomp::MenuRow> top;
+    for (const cps2recomp::Page &page : game.pages) {
+        // (such pages are ways of running the game: their rows do not count features that are on)
+        config.pages.push_back({page.name, page.parent, page.description, false});
+        if (page.top && !*page.parent) {
+            top.push_back({recomp::MenuRow::Page, 0, page.name});
+        }
+    }
+    if (!top.empty()) {
+        config.groups.push_back(std::move(top));
+    }
     if (withStates) {
         config.groups.push_back({{recomp::MenuRow::Save}, {recomp::MenuRow::Load}, {recomp::MenuRow::Slot}});
     }

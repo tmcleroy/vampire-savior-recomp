@@ -95,4 +95,6 @@ recomp-common, run its tests, commit there, then run `tools/sync-common.sh` here
 `port/menu.{h,cpp}` is what is this toolkit's about it: the first page's rows in their three groups
 (save states; the pages, Speed, Insert coin, Player 2 joins; Reset, Quit game, Resume), CPS-2's
 buttons turned into the menu's six, the speeds, and the games' features and commands handed over.
-A game needs nothing more: its features and commands show up from `TheGame()`.
+A game needs nothing more: its features and commands show up from `TheGame()`. A game with pages
+that are under another page, or a page that belongs at the head of the menu before the save states
+(a page of ways to run the game, say), names them in `TheGame().pages` (`runtime/game.h`, `Page`).

@@ -36,6 +36,13 @@ constexpr uint32_t kPlayersIn = 0xFF808D;
 // In a player's record while choosing: a step (0 the character, 2 the speed and guard choices, 4 done)
 constexpr uint32_t kChoosingStep = 0x04;
 enum : uint8_t { kChosen = 4 };
+// Sounds the game wants made wait in a ring of 256 entries of sixteen bytes (three longs are used: the first
+// is the sound's number, a tune's or an effect's) until the sound CPU has taken the one before. The game adds
+// at kSoundQueueEnd (a word: bytes into the ring) and sends from the word before it.
+constexpr uint32_t kSoundQueue = 0xFF0E0E, kSoundQueueEnd = 0xFF1E0E;
+// With no coin in, kMode steps through the game's show (modes.cpp names its parts). A byte counts its
+// fights, two for each: it picks who fights next and where, and which ranking follows.
+constexpr uint32_t kAttractFight = 0xFF1E2A;
 // Coins paid for and not yet used
 constexpr uint32_t kCredits = 0xFF8076;
 // The round's clock: seconds left (99 at most), and the part of a second

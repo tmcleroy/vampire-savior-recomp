@@ -5,6 +5,16 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- "Alternative modes" at the top of the in-game menu: Training mode and two new modes, each with
+  a page of its own. Training's page has Start, Start over, its aids and the dummy's page, which
+  were on the first page and on pages of their own.
+- Attract mode: the game's own show on a loop with no coin in, with free play on too. All of it,
+  the introduction only, or the demonstration fights only.
+- Stage viewer: any stage with nobody on it and no panel; scrolled with the stick or by itself
+  (slow, medium, fast); the stage's own tune or any other stage's.
+- The viewer's "Infinite" stage: every stage in turn, each scrolling into the next, the tunes
+  fading from one to the other.
+
 ## 0.1.0-beta.1 - 2026-10-12
 
 - Vampire Savior (set `vsavj`) boots and plays from the player's own ROM set: attract mode, the
