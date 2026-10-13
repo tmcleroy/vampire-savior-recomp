@@ -5,6 +5,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+## 0.1.0-beta.3 - 2026-10-13
+
 - Three more modes under "Alternative modes". Survival: one opponent after another on the health
   you have left, with the count at the end. Endless battle: two fighters the game plays, with no
   panel, the loser replaced; either can be taken over from the controls; on one stage, on stages
