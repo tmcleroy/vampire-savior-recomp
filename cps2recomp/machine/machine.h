@@ -10,6 +10,7 @@
 // are drawn as they pass. The hardware facts follow MAME's cps2 driver (BSD-3-Clause).
 #pragma once
 
+#include "../sound/driver.h"
 #include "../sound/qsound.h"
 #include "../sound/z80.h"
 #include "../video/video.h"
@@ -18,6 +19,8 @@
 #include "romset.h"
 
 #include <cstdint>
+#include <map>
+#include <memory>
 #include <vector>
 
 namespace cps2recomp {
@@ -68,6 +71,15 @@ public:
     // How the 68000 is run: translated code, or the interpreter (machine/m68k.h)
     M68K::Mode cpuMode = M68K::Mode::Interpreter;
     Z80::Mode soundMode = Z80::Mode::Interpreter;
+    // What works the QSound chip: the board's Z80 running the game's sound program; that program as
+    // ordinary code (sound/driver.h), where the game has a version of it that is known; or the Z80 with the
+    // other beside it, every write to the chip compared
+    enum class SoundSide { Z80, Driver, Check };
+    SoundSide soundSide = SoundSide::Z80;
+    std::unique_ptr<SoundDriver> soundDriver; // (none: the sound program is not a known one)
+    uint64_t soundWritesChecked = 0;
+    void ReportSoundTimes() const;
+    bool monoForTest = false; // (--sound-test) the Z80 reads the game's stereo setting as mono
 
     uint16_t players[2] = {}; // Button bits
     bool serviceButton = false, testSwitch = false;
@@ -128,6 +140,26 @@ private:
     void RunLine();
     int LineCycles() const;
     void RunSound(int cycles);
+    struct ChipWrite {
+        uint8_t reg;
+        uint16_t data;
+        uint16_t pc;
+        uint32_t gap; // Z80 cycles since the write before, or since the piece of work began
+    };
+    // (SoundSide::Driver) the driver's writes wait here for their time: each as long after the one before as
+    // the Z80 would have been, and no more than one a sample
+    std::vector<ChipWrite> m_chipQueue;
+    uint64_t m_chipNext = 0, m_chipLast = 0; // when the first in the queue is due; when the last write was made
+    uint64_t m_z80Mark = 0;                  // (SoundSide::Check) when the Z80 last wrote, or began a piece of work
+    std::vector<ChipWrite> m_z80Writes, m_driverWrites; // (SoundSide::Check) not yet compared
+    std::vector<ChipWrite> m_soundHistory;              // ... the last few that were
+    uint16_t m_chipLatch = 0;
+    bool m_driverInterrupt = false; // (SoundSide::Driver) raised and not yet taken
+    void CompareSound();
+    struct GapStat {
+        uint64_t count = 0, z80 = 0, driver = 0;
+    };
+    std::unique_ptr<std::map<uint16_t, GapStat>> m_gapStats;
     void UpdateInterruptLevel();
     uint16_t ReadRegister(uint32_t address);
     void WriteRegister(uint32_t address, uint16_t value, uint16_t mask);
