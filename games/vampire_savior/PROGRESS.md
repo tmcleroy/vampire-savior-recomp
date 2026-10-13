@@ -100,6 +100,42 @@ The Japanese arcade release of 1997-05-19 (ROM set `vsavj`), on Capcom's CPS-2 b
   feature in the game's menu now leaves the rest of `settings.ini` as it was. Not seen in a window;
   the dropdowns not clicked.
 
+## Modes (2026-10-12)
+
+The menu's first page, "Modes" (`src/modes.cpp`): training (moved there), attract mode, a stage
+viewer. Checked with no window only (pictures, traces of the game's memory, sound dumps); nobody
+has yet used them in a window or listened.
+
+- **Attract mode.** The board reset and no coin kept in (free play's credits are held back). "The
+  intro only" and "the fights only" move the game's own step on where a wanted part ends, and for
+  the fights count the game's fight counter on as the rankings would have. Traced over 16,000
+  frames: the introduction loops about every 2,700 frames; the eight demonstration fights come round
+  in order.
+- **Stage viewer.** A two-player round on the stage chosen (the same hook as training's stage
+  choice), reached unseen. The players stand 192 apart and are moved together, so the game's own
+  camera follows; the picture leaves out every object that is not the stage's
+  (`Video::hideObject`): colour sets 0-21, and the shadows' tiles in set 22. On all twelve stages
+  the only pixels that differ from the picture with shadows are the shadows'. The camera goes the
+  whole way (256 to 640) at each speed.
+- **Music.** A tune is queued as the game queues one: `FF05`, then the tune's number.
+
+Facts found for these:
+
+- With no coin in, the word at `FF8000` steps through the show: `0C` its start, `10` the sound
+  notice, `12`-`14` the maker's, `16`-`18` the introduction and title, `1A`-`20` a fight, `22`-`24`
+  the score ranking, `26`-`36` the maker's notice and the title, `38`-`3E` a second fight, `40`-`46`
+  the versus ranking, then `0C` again (7,864 frames). Below `0C`: starting up, or a game.
+- `FF1E2A`: a byte counting the show's fights, two for each (added at `0054C6`, on the way to a
+  ranking); it picks who fights and where. Eight fights before they repeat.
+- Sounds wait in a ring at `FF0E0E` (256 entries of sixteen bytes, three longs used; the first is
+  the number), added at the word at `FF1E0E` by `0031DA` and sent by `003136`. Tunes: `02` the
+  character choice, `05` the versus screen, `09`-`14` the twelve stages in the order of their
+  numbers. `FF05` is sent before a new tune.
+- The camera (`01E36E`, the record at `FF8280`): with the players 192 or more apart it goes to
+  their middle less 192; nearer than that it has a dead zone.
+- Objects' colour sets in a fight: 0-6 the panel and sparks, 10 and 16-17 the players, 22-31 the
+  stage's pieces; shadows are tiles `F8F7`-`F90A` in set 22.
+
 ## Release readiness (audit of 2026-10-12)
 
 - A release's game program holds the translated code, as Muscle March's does (the owner's decision,

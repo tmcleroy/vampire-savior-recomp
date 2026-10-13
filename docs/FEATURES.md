@@ -8,6 +8,25 @@ presets: **Pure** (all off), **Enhanced** (the default: free play on), **Custom*
 This list is what `vampire_savior --list-features` prints. How features are written is in
 [cps2recomp/docs/FEATURES.md](../cps2recomp/docs/FEATURES.md).
 
+## Modes
+
+The in-game menu's first page, "Modes", starts ways of running the game that the board does not
+have. Each ends when another is started or with the menu's Reset.
+
+- **Training mode**: straight to the character choice with two players and a fight with no clock
+  that nobody loses (the README says more; the Training and Dummy features below are its aids).
+- **Attract mode**: the game's own show on a loop with no coin in, even with free play on: the
+  notices, the introduction, the title, two fights and the rankings. Start or a coin ends it.
+- **Stage viewer**: the stage chosen with nobody on it and no panel. The stage's own pieces move
+  as in a fight. Left and right scroll it, or it scrolls by itself from end to end and back.
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| Attract shows | `attract_show` | What attract mode plays. Choices: Everything, The intro only (the introduction to the title, over and over), The fights only (one of the game's eight demonstration fights after another). |
+| Stage | `viewer_stage` | The stage the viewer shows: any of the twelve. Changing it while viewing goes to the new one. |
+| Scrolling | `viewer_scroll` | How the viewer moves across the stage. Choices: With the stick, Slow, Medium, Fast. |
+| Music | `viewer_music` | The tune that plays in the viewer. Choices: The stage's own, any stage's, Character select. |
+
 ## Game
 
 | Feature | Name in `settings.ini` | What it does |
@@ -59,5 +78,5 @@ This list is what `vampire_savior --list-features` prints. How features are writ
 
 Not features, because they change nothing in the game: the in-game menu, save states (nine slots),
 stopping the game and going on a frame at a time, slow motion, a coin button, Reset, and choosing
-keys and gamepad buttons in the launcher. The menu's "Training mode" and "Start over" rows are
-commands, described in the README.
+keys and gamepad buttons in the launcher. The menu's "Start over" row and the rows that start a
+mode are commands, not features.

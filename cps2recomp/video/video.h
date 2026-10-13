@@ -45,6 +45,10 @@ public:
 
     // (for tools: which layers are drawn; bit 0 objects, bits 1-3 scroll screens 1-3)
     unsigned layerMask = 0xF;
+    // For a game's own sources: an object is not drawn when this says so of its tile's number and its
+    // attributes (the colour set is the low five bits). A game that can tell its players' objects from its
+    // stage's can show one without the other. Not part of a save state: who sets it keeps it set.
+    bool (*hideObject)(uint32_t tile, uint16_t attributes) = nullptr;
 
 private:
     Sources m_src;

@@ -16,21 +16,33 @@ void RegisterTraining(); // training.cpp
 void TrainingBeforeFrame(Machine &machine);
 void TrainingFrame(Machine &machine);
 void TrainingState(Archive &ar);
+void RegisterModes(); // modes.cpp
+void ModesBeforeFrame(Machine &machine);
+void ModesFrame(Machine &machine);
+void ModesState(Archive &ar);
 
 void RegisterGame() {
+    RegisterModes(); // (first: its page is the menu's first)
     RegisterCheats();
     RegisterTraining();
     RegisterCollision();
     RegisterFight();
     RegisterInput();
     RegisterFrames();
-    TheGame().beforeFrame = TrainingBeforeFrame;
+    TheGame().beforeFrame = [](Machine &machine) {
+        TrainingBeforeFrame(machine);
+        ModesBeforeFrame(machine);
+    };
     // (the training aids see what the frame did before the cheats put things back)
     TheGame().frame = [](Machine &machine) {
         TrainingFrame(machine);
+        ModesFrame(machine);
         CheatsFrame(machine);
     };
-    TheGame().state = TrainingState;
+    TheGame().state = [](Archive &ar) {
+        TrainingState(ar);
+        ModesState(ar);
+    };
 }
 
 } // namespace cps2recomp

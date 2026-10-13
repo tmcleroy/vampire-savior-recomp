@@ -18,8 +18,12 @@
 
 namespace cps2recomp {
 
+void BootToChoice(Machine &machine);
 bool AttackInRange(M68K &c, uint32_t player); // fight.cpp
 bool GuardStanding(M68K &c, uint32_t player);
+bool StageViewer();      // modes.cpp: the stage viewer is on (no players, no readouts)
+int StageViewerStage();  //   and the stage it shows (1-12), or 0
+void EndModes();         //   attract mode and the stage viewer are over
 
 namespace {
     using namespace vsav;
@@ -116,12 +120,10 @@ namespace {
     // --- a training session ---
 
     // The menu's "Training mode": the board switched off and on, and the way to the character choice worked
-    void StartTraining(Machine &machine) {
+    void Start(Machine &machine) {
+        EndModes();
         SetFeature("training_mode", true);
-        machine.Reset();
-        g_boot = true;
-        g_bootFrames = 0;
-        SetFastForward(true);
+        BootToChoice(machine);
     }
 
     // What the controls do on the way there
@@ -198,8 +200,9 @@ namespace {
     // The game is choosing the stage for a match (vsav.h, kChooseStage). In a training session with a stage
     // asked for, that one is used and the game's routine is left out.
     bool ChooseStage(M68K &c) {
-        const int stage = FeatureValue("training_stage"); // 0: the game's choice
-        if (!FeatureOn("training_mode") || stage < 1 || stage > kStages || Ram8(kPlayersThen) != 3) {
+        // (0: the game's choice)
+        const int stage = StageViewer() ? StageViewerStage() : FeatureOn("training_mode") ? FeatureValue("training_stage") : 0;
+        if (stage < 1 || stage > kStages || Ram8(kPlayersThen) != 3) {
             return false;
         }
         SetRam16(kStage, static_cast<uint16_t>((stage - 1) * 2));
@@ -455,6 +458,12 @@ namespace {
     }
 
     void Frame(Machine &machine) {
+        if (StageViewer()) {
+            // (nothing of training's is shown, or kept)
+            g.fighting = false;
+            g_roundFought = false;
+            return;
+        }
         // The round's fighting begins: kept, for starting over
         const bool fought = RoundFought();
         if (fought && !g_roundFought && FeatureOn("training_mode")) {
@@ -611,18 +620,31 @@ void TrainingState(Archive &ar) {
     FramesState(ar);
 }
 
-// A training session is on: no clock and no knockouts (fight.cpp)
+// A training session is on, or the stage viewer: no clock and no knockouts (fight.cpp)
 bool TrainingMode() {
-    return FeatureOn("training_mode");
+    return FeatureOn("training_mode") || StageViewer();
+}
+
+// The Modes page's "Training mode" (modes.cpp)
+void StartTraining(Machine &machine) {
+    Start(machine);
+}
+
+// The board switched off and on, and the way to the character choice with two players worked (the game runs
+// unseen meanwhile)
+void BootToChoice(Machine &machine) {
+    machine.Reset();
+    g_boot = true;
+    g_bootFrames = 0;
+    SetFastForward(true);
+}
+bool Booting() {
+    return g_boot;
 }
 
 void RegisterTraining() {
     Game &game = TheGame();
     AddHook(0x00AE7C, "ChooseStage", ChooseStage);
-    game.commands.push_back({"training_start", "", "Training mode",
-                             "Starts a training session: straight to the character choice with two players (choose player 1's, "
-                             "then player 2's with the same controls), and a fight with no clock that nobody loses.",
-                             StartTraining});
     game.commands.push_back({"training_restart", "", "Start over",
                              "In a training session: the round as it began, with the players where \"Start over at\" says. Backspace "
                              "or a gamepad's left shoulder does this while playing; the stick held as it is pressed chooses the place "
@@ -638,7 +660,7 @@ void RegisterTraining() {
                                  "Abaraya", "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror",
                                  "Fetus of God"}});
     game.features.push_back({"training_mode", "Training", "Training session",
-                             "The fight has no clock and nobody is knocked out. (\"Training mode\" on the first page switches this "
+                             "The fight has no clock and nobody is knocked out. (\"Training mode\" on the Modes page switches this "
                              "on and takes the game to the character choice; Reset ends it.)",
                              kFeatureSession});
     game.features.push_back({"damage_readout", "Training", "Combo readout",
