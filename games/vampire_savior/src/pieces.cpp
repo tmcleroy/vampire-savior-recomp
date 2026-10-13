@@ -2323,6 +2323,143 @@ namespace {
         }
     }
 
+    // 07F2F0 (script 27, Vanity Paradise): a thing that floats up and down about a height (70), pulled back
+    // towards it; each time it is past the height and still being pulled away, the pull is made up anew
+    // (and its speed nudged by a number the game takes from whatever its D3 held: kept). Its picture is
+    // one of twelve in turn (a new one every fifteen frames) and another on every other frame. It makes
+    // two pieces that go with it (script 54).
+    void Script27(M68K &c) {
+        static constexpr Steps kSteps = {0x07F2F0, {0x07F304, 0x07F3A2, 0x07F432, 0x07F432}};
+        constexpr uint16_t kHighest = 0x4E, kHeight = 0x46;
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetRam8(piece + kHalf, 0);
+            SetRam32(piece + kSpeedY, 0x600);
+            SetRam32(piece + kPullY, 0xFFFFFFC0);
+            SetRam8(piece + kTurn, 0x0E);
+            SetRam8(piece + kTurn + 1, 9);
+            for (int n = 0; n < 2 && Take(c); n++) {
+                const uint32_t made = c.a[4] & 0xFFFFFF;
+                SetRam32(made, n == 0 ? 0x01003616 : 0x01003617);
+                SetRam8(made + kDepth, n == 0 ? 2 : 4);
+                SetRam8(made + kFacesRight, Ram8(piece + kFacesRight));
+                LikeMaker(c, made, piece);
+                SetRam32(made + 0x28, 0x02788000);
+                SetRam16(made + kMaker, static_cast<uint16_t>(c.a[6]));
+            }
+            SetStageAnimation(c, 9);
+            break;
+        case 2:
+            c.d[1] = Ram32(piece + kSpeedY);
+            SetRam32(piece + kY, Ram32(piece + kY) + c.d[1]);
+            c.d[2] = Ram32(piece + kPullY);
+            SetRam32(piece + kSpeedY, Ram32(piece + kSpeedY) + c.d[2]);
+            if (Ram16(piece + kY) > kHighest) {
+                SetRam32(piece + kY, Ram32(piece + kY) - c.d[1]);
+            }
+            c.d[1] = (static_cast<uint32_t>(static_cast<uint16_t>(Ram16(piece + kY) - kHeight)) << 16) | (c.d[1] >> 16);
+            c.d[1] ^= c.d[2];
+            if (!(c.d[1] & 0x80000000)) {
+                Call(c, kRandom);
+                c.d[3] &= 3;
+                SetLow16(c.d[3], c.d[3] << 6);
+                Call(c, kRandom);
+                SetLow16(c.d[0], c.d[0] & 1);
+                if (!(c.d[0] & 0xFFFF)) {
+                    c.d[3] = 0u - c.d[3];
+                    c.d[2] = 0u - c.d[2];
+                }
+                SetRam32(piece + kSpeedY, Ram32(piece + kSpeedY) + c.d[3]);
+                SetRam32(piece + kPullY, c.d[2]);
+            }
+            if (!Frozen(c) && CountedDown(piece + kTurn)) {
+                SetRam8(piece + kTurn, 0x0E);
+                SetRam8(piece + kTurn + 1, Ram8(piece + kTurn + 1) + 1 >= 0x15 ? 9 : Ram8(piece + kTurn + 1) + 1);
+            }
+            SetStageAnimation(c, (Ram8(Var(c, kOddFrame)) & 1) ? Ram8(piece + kTurn + 1) : 0x15);
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07FE5A (script 40, the train): a piece whose animation's events change something of the scroll
+    // screens' tiles (the game's own code still: 01520A, by a table at 357CA4). Until the round is on,
+    // every 180 frames one of two animations; when it is, a last one, and a piece let go (script 41).
+    constexpr uint32_t kScript40Tiles = 0x357CA4, kChangeTiles = 0x01520A;
+    void Script40Tiles(M68K &c, uint32_t piece) {
+        SetLow8(c.d[1], Ram8(piece + kEvent));
+        if ((c.d[1] & 0xFF) == Ram8(piece + kHalf)) {
+            return;
+        }
+        SetRam8(piece + kHalf, c.d[1]);
+        SetLow16(c.d[1], static_cast<int8_t>(c.d[1]) << 4);
+        c.a[0] = kScript40Tiles;
+        SetLow16(c.d[0], Mem16(c, c.a[0] + 0x10) + c.d[1]);
+        c.a[0] += static_cast<uint32_t>(static_cast<int16_t>(c.d[0]));
+        c.a[0] = Mem32(c, c.a[0] + 4);
+        c.d[0] = (static_cast<uint32_t>(Ram16(Var(c, 0x1A))) << 8) + 0x3764;
+        c.a[2] = c.d[0];
+        c.d[2] = 1;
+        Call(c, kChangeTiles);
+    }
+    void Script40(M68K &c) {
+        static constexpr Steps kSteps = {0x07FE5A, {0x07FE6E, 0x07FE84, 0x07FF1A, 0x07FF30}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + kHalf, 0xFF);
+            SetRam16(piece + kTurn, 0xB4);
+            StartAs(c, 0x16);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                if (InnerStep(c, 0x07FEA6, 0x07FEAA, 0x07FECA) == 0) {
+                    SetRam16(piece + kTurn, static_cast<uint16_t>(Ram16(piece + kTurn) - 1));
+                    if (Ram16(piece + kTurn) & 0x8000) {
+                        SetRam8(piece + kInner, 2);
+                        Call(c, kRandom);
+                        SetLow16(c.d[0], c.d[0] & 1);
+                        SetLow8(c.d[0], c.d[0] + 0x16);
+                        SetStageAnimation(c);
+                    }
+                } else if (Ram8(piece + kOver) & 0x80) {
+                    SetRam8(piece + kInner, 0);
+                }
+                if (Ram8(Var(c, kRoundOn))) {
+                    NextStep(piece);
+                    if (Take(c)) {
+                        const uint32_t made = c.a[4] & 0xFFFFFF;
+                        SetRam32(made, 0x01000029);
+                        SetRam8(made + kDepth, 2);
+                        SetRam16(made + kX, Ram16(piece + kX));
+                        SetRam16(made + kY, Ram16(piece + kY));
+                        LikeMaker(c, made, piece);
+                    }
+                    SetStageAnimation(c, 0x18);
+                }
+            }
+            Script40Tiles(c, piece);
+            Animate(c);
+            ByCamera(c);
+            break;
+        case 4:
+            if (!Frozen(c)) {
+                Script40Tiles(c, piece);
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
     // --- pieces with colours of their own that change ---
     //
     // A record can run up to three animations of colours beside its own (eight bytes each, from +50):
@@ -2551,6 +2688,8 @@ void RegisterPieces() {
     AddRewrite(0x07E77E, "FlyLeg", FlyLeg, kFreeFlags, 180);
     AddRewrite(0x07EA82, "Script17", Script17, kFreeFlags, 200);
     AddRewrite(0x07E62C, "Script16", Script16, kFreeFlags, 200);
+    AddRewrite(0x07F2F0, "Script27", Script27, kFreeFlags, 250);
+    AddRewrite(0x07FE5A, "Script40", Script40, kFreeFlags, 200);
     AddRewrite(0x07EBEA, "Script18", Script18, kFreeFlags, 200);
     AddRewrite(0x0800EC, "Script45", Script45, kFreeFlags, 150);
     AddRewrite(0x07D710, "Script6", Script6, kFreeFlags, 200);
