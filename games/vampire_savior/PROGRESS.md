@@ -330,6 +330,15 @@ has yet used them in a window or listened.
   quite the same number. When the next is all the way in, its machine becomes the port's. Over
   4,200 frames at the fast speed: five stages in order, no silence, no jump in the sound larger
   than a plain viewer run has; 1,016 frames a second on the Mac with both machines running.
+- **Model viewer** (2026-10-13, `src/model.cpp`). One character by itself on a stage or on white or
+  black, from a quarter to 25 times its size, standing (player 1's controls move it) or going through any
+  of its animations. A two-player round reached unseen, the second player not followed by the camera
+  (the game's own flag, `+134`), stood 768 to the right and never drawn. The frame's own picture is the
+  stage alone; the character is drawn again by itself (objects only, marked) and laid over it at the size
+  wanted. Nothing of it is in a save state (the states made before it still load; loading one ends it).
+  Checked with no window: pictures of five characters, a stage, white and black, four sizes, animations
+  of two lists; an animation switched on and off in mid view (the character stands again); walking with
+  the controls; a wide picture. The menu's page has not been looked at, and nobody has used it.
 - **The menu** (2026-10-13): Training mode's Start, Start over and aids, and the dummy's page, are
   under Alternative modes too.
 
@@ -347,6 +356,14 @@ has yet used them in a window or listened.
 - Known of them: with the stage behind, a stage's pieces that belong in front of the fighters are
   behind them, and a super move's own backdrop is not shown; a fighter that has fallen leaves its
   shadow; the two "Best" counts are features, so a preset chosen in the launcher clears them.
+
+Facts found for the model viewer:
+- A character's animations: three tables of longs by the character's number, at `0BCEFA`, `0BCF7A` and
+  `0BCE7A` (the game starts one of each at `027EB8`, `027EC0`, `027EC8`, the number in D0): each long is a
+  list of words, an animation's distance from the list. The lists are not counted; by what is a frame,
+  about 100, 130 and 60 a character. A frame is `18` bytes: frames of the game it is shown for, then a
+  byte for what follows (0 the next, bit 7 a jump to the long at `+18`, bit 6 the end), its picture at
+  `+04`, the number of its boxes at `+08`.
 
 Facts found for these:
 - A "round" is one of a player's two lives: `FF810C` (the round's result) is set at each

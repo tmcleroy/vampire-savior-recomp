@@ -1,0 +1,349 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Tommy McLeroy
+//
+// Vampire Savior: the model viewer, a mode of the menu's "Alternative modes" page: one character alone, on a
+// stage or on plain white or black, at a size from a quarter to twenty-five times its own, standing as it
+// does in a fight (and moved with player 1's controls), or going through any one of its animations.
+//
+// It is a round of a two-player match, reached unseen as the stage viewer's is (modes.h), with the second
+// player put out of the way: not followed by the camera, out of the picture, and never drawn. The picture
+// is made in two parts. The frame's own is the stage with nothing on it. The character is then drawn by
+// itself (the board's objects alone, and of them only player 1's and its shadow), and laid over the stage
+// or the plain colour at the size wanted, about the place where the character stands.
+//
+// A character's animations are in three tables in the ROM, by the character's number (the game starts one
+// at 027EB8, 027EC0 or 027EC8): each a list of how far on from the table an animation is. An animation is
+// frames of 0x18 bytes: how many frames of the game it is shown for, what follows it (the next, a jump to
+// the frame a long names, or the end), and where its picture is. Showing one here is putting its frame in
+// the player's record each frame, with the time left kept high so that the game's own stepping never
+// comes round; the game goes on believing the player stands.
+#include "modes.h"
+#include "state.h"
+#include "widescreen.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <iterator>
+#include <string>
+#include <vector>
+
+namespace cps2recomp {
+
+namespace {
+    using namespace vsav;
+
+    constexpr const char *kModel = "Model viewer";
+    constexpr int kStartMost = 9000; // frames after which getting to a round is given up
+
+    // The characters in the menu's order, by their numbers in the game (11 is nobody)
+    constexpr const char *kCharacterNames[] = {"Bulleta", "Demitri", "Gallon", "Victor", "Zabel", "Morrigan", "Anakaris", "Felicia",
+                                               "Bishamon", "Aulbath", "Sasquatch", "Q-Bee", "Lei-Lei", "Lilith", "Jedah"};
+    constexpr int kCharacterNumbers[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15};
+    // The "Background" choice: the twelve stages, then the plain colours
+    constexpr int kWhite = kStages, kBlack = kStages + 1;
+    // The "Size" choice, in quarters: the character's own size first (a choice's first is what it is when
+    // nothing is chosen), then larger, and round to the smaller ones
+    constexpr int kSizes[] = {4, 6, 8, 12, 16, 24, 32, 48, 64, 100, 1, 2, 3};
+    // The "Animation" choice: standing as in a fight, or one of the three tables
+    constexpr uint32_t kAnimationTables[3] = {0x0BCEFA, 0x0BCF7A, 0x0BCE7A};
+    constexpr const char *kTableNames[3] = {"A", "B", "C"};
+    constexpr int kMostAnimations = 256;
+    constexpr uint32_t kFrameBytes = 0x18, kFramePicture = 0x04, kFrameJump = 0x18;
+    constexpr uint32_t kTimer = 0x20;     // a player's record: frames the animation's frame is still shown for
+    constexpr uint32_t kActionStep = 0x06; //   the action and its own step (a word): nothing, from its start
+
+    struct State {
+        bool on = false;
+        bool starting = false;
+        int32_t frames = 0;
+        int32_t character = 0, background = 0; // the choices the round was started with
+        // The animation being shown (0: none, the character stands): which table and which of it, where
+        // its first frame and the frame shown are, and how long that one has left
+        int32_t table = 0, number = 0;
+        uint32_t first = 0, frame = 0;
+        int32_t left = 0;
+        // Where the character stood in the picture a frame ago (the picture a frame shows is the game's of
+        // the frame before)
+        int32_t anchorX = 0, anchorY = 0;
+    } g;
+    bool g_fast = false;
+
+    void Fast(bool on) {
+        if (on != g_fast) {
+            g_fast = on;
+            SetFastForward(on);
+        }
+    }
+    void End() {
+        if (g.on) {
+            g = State();
+            Wanted() = MatchWanted();
+            Fast(false);
+        }
+    }
+
+    uint32_t Read32(Machine &machine, uint32_t address) {
+        return (static_cast<uint32_t>(machine.Read16(address)) << 16) | machine.Read16(address + 2);
+    }
+    bool InRom(uint32_t address) {
+        return address >= 0x100000 && address < 0x400000 && !(address & 1);
+    }
+    // Is this an animation's frame? (Its picture is somewhere in the ROM, and it is shown for a while.)
+    bool IsFrame(Machine &machine, uint32_t frame) {
+        return InRom(frame) && machine.Read8(frame) != 0 && InRom(Read32(machine, frame + kFramePicture));
+    }
+    // Where an animation of the character's starts (0: there is none of that number)
+    uint32_t AnimationAt(Machine &machine, int character, int table, int number) {
+        const uint32_t list = Read32(machine, kAnimationTables[table] + static_cast<uint32_t>(character) * 4);
+        if (!InRom(list)) {
+            return 0;
+        }
+        const uint32_t frame = list + machine.Read16(list + static_cast<uint32_t>(number) * 2);
+        return IsFrame(machine, frame) ? frame : 0;
+    }
+    // How many animations a table has for the character: the list is not counted in the ROM, so as many
+    // as start with something that is a frame
+    int Animations(Machine &machine, int character, int table) {
+        int count = 0;
+        while (count < kMostAnimations && AnimationAt(machine, character, table, count)) {
+            count++;
+        }
+        return count;
+    }
+
+    // Objects by what they are: for the frame's own picture, the stage's alone (modes.h, NotTheStage); for
+    // the character's, player 1's own and what it throws, and its shadow
+    bool NotTheModel(uint32_t tile, uint16_t attributes) {
+        if (IsShadow(tile, attributes)) {
+            return false;
+        }
+        const unsigned set = attributes & 0x1F;
+        return set < 5 || set > 15 || ThePanel(tile, attributes);
+    }
+
+    void StartModel(Machine &machine) {
+        End();
+        EndModes();
+        EndBattle();
+        SetFeature("training_mode", false);
+        g.on = true;
+        g.starting = true;
+        g.character = std::clamp(FeatureValue("model_character"), 0, static_cast<int>(std::size(kCharacterNumbers)) - 1);
+        g.background = std::clamp(FeatureValue("model_background"), 0, kBlack);
+        Wanted().stage = g.background < kStages ? g.background + 1 : 1;
+        Wanted().characters[0] = kCharacterNumbers[g.character];
+        Wanted().characters[1] = kCharacterNumbers[(g.character + 1) % std::size(kCharacterNumbers)];
+        machine.Reset();
+    }
+
+    // The second player out of the way: the camera does not follow it (the game's own flag, which also
+    // keeps it out of the hit tests and lets it leave the picture), and it stands far off to the right
+    void PutAway() {
+        SetRam8(Player(1) + kNotFollowed, 0x80);
+        SetRam32(Player(1) + kX, (static_cast<uint32_t>(Ram16(Player(0) + kX)) + 0x300) << 16);
+    }
+
+    // The animation chosen in the menu, shown: a frame of it put in player 1's record
+    void ShowAnimation(Machine &machine) {
+        const int table = std::clamp(FeatureValue("model_animation"), 0, 3), character = kCharacterNumbers[g.character];
+        int number = 0;
+        uint32_t first = 0;
+        if (table) {
+            const int count = Animations(machine, character, table - 1);
+            number = count ? std::clamp(FeatureValue("model_number"), 0, kMostAnimations - 1) % count : 0;
+            first = AnimationAt(machine, character, table - 1, number);
+        }
+        if (!first) {
+            if (g.table) {
+                // (back to standing: the game's own "nothing" action from its start sets the animation again)
+                SetRam16(Player(0) + kActionStep, 0);
+                SetRam8(Player(0) + kTimer, 1);
+            }
+            g.table = 0;
+            SetHud({});
+            return;
+        }
+        if (table != g.table || number != g.number || first != g.first) {
+            g.table = table;
+            g.number = number;
+            g.first = g.frame = first;
+            g.left = machine.Read8(first);
+        } else if (--g.left <= 0) {
+            // (the frame's time is up: the next, by what the frame says follows it; the end is the start again)
+            const uint8_t follows = machine.Read8(g.frame + kFrameEnd);
+            uint32_t next = follows & 0x80 ? Read32(machine, g.frame + kFrameJump) : follows & 0x40 ? g.first : g.frame + kFrameBytes;
+            if (!IsFrame(machine, next)) {
+                next = g.first;
+            }
+            g.frame = next;
+            g.left = machine.Read8(next);
+        }
+        SetRam32(Player(0) + kFrame, g.frame);
+        SetRam32(Player(0) + kTimer, Read32(machine, g.frame));
+        SetRam8(Player(0) + kTimer, 0x7F);
+        machine.players[0] = 0; // (the controls would start moves of the game's own)
+        char text[64];
+        snprintf(text, sizeof(text), "Animation %s %d of %d", kTableNames[table - 1], number, Animations(machine, character, table - 1));
+        SetHud({{0.5f, 0.04f, 0, text}});
+    }
+
+    // The frame's picture made: the stage (or a plain colour), and the character over it at the size wanted
+    void Compose(Machine &machine) {
+        static std::vector<uint32_t> model;
+        const int width = machine.PictureWidth(), height = Video::kHeight;
+        uint32_t *picture = machine.Picture();
+        model.resize(static_cast<size_t>(width) * height);
+        // (the character by itself: the objects alone, the model's only, and marked so that their pixels
+        // are told from what is behind them)
+        Video &video = machine.video;
+        const unsigned layers = video.layerMask;
+        const bool marked = video.markObjects;
+        const auto hidden = video.hideObject;
+        video.layerMask = 1;
+        video.markObjects = true;
+        video.hideObject = NotTheModel;
+        for (int line = 0; line < height; line++) {
+            video.RenderLine(line, &model[static_cast<size_t>(line) * width]);
+        }
+        video.layerMask = layers;
+        video.markObjects = marked;
+        video.hideObject = hidden;
+
+        if (g.background >= kStages) {
+            std::fill(picture, picture + static_cast<size_t>(width) * height, g.background == kWhite ? 0xFFFFFFu : 0u);
+        }
+        // Each pixel of the picture looks at the character's picture, so many quarters to a pixel, about
+        // where the character stands (its feet for the smaller sizes; for the larger ones a place in its
+        // middle, put in the middle of the picture, so that it is not all legs)
+        const int size = kSizes[std::clamp(FeatureValue("model_size"), 0, static_cast<int>(std::size(kSizes)) - 1)];
+        const bool large = size > 8;
+        const int fromX = g.anchorX, fromY = g.anchorY - (large ? 56 : 0);
+        const int toX = large ? width / 2 : g.anchorX, toY = large ? height / 2 : g.anchorY;
+        auto back = [size](int to, int about, int from) { // (rounded down, for places left of or above `about` too)
+            const int quarters = (to - about) * 4 + 2;
+            return from + (quarters >= 0 ? quarters / size : -((-quarters + size - 1) / size));
+        };
+        for (int y = 0; y < height; y++) {
+            const int sourceY = back(y, toY, fromY);
+            if (sourceY < 0 || sourceY >= height) {
+                continue;
+            }
+            for (int x = 0; x < width; x++) {
+                const int sourceX = back(x, toX, fromX);
+                if (sourceX >= 0 && sourceX < width) {
+                    const uint32_t pixel = model[static_cast<size_t>(sourceY) * width + sourceX];
+                    if (pixel & 0x80000000) {
+                        picture[static_cast<size_t>(y) * width + x] = pixel & 0xFFFFFF;
+                    }
+                }
+            }
+        }
+    }
+
+    // (the 256 numbers of the "Number" choice, as text)
+    const std::vector<const char *> &Numbers() {
+        static std::vector<std::string> text;
+        static std::vector<const char *> names;
+        if (names.empty()) {
+            for (int n = 0; n < kMostAnimations; n++) {
+                text.push_back(std::to_string(n));
+            }
+            for (const std::string &one : text) {
+                names.push_back(one.c_str());
+            }
+        }
+        return names;
+    }
+} // namespace
+
+bool ModelViewer() {
+    return g.on;
+}
+void EndModel() {
+    End();
+}
+
+void ModelBeforeFrame(Machine &machine) {
+    if (!g.on) {
+        return;
+    }
+    Wanted().stage = g.background < kStages ? g.background + 1 : 1;
+    if (g.starting) {
+        Fast(true);
+        if (ToRound(machine, g.frames)) {
+            g.starting = false;
+            Fast(false);
+            // (the character in the middle of the stage)
+            SetRam32(Player(0) + kX, static_cast<uint32_t>((kStageLeft + kStageRight) / 2) << 16);
+        } else if (g.frames > kStartMost) {
+            End();
+        }
+        return;
+    }
+    machine.players[1] = 0;
+    PutAway();
+    SetRam8(kClock, kClockFull);
+    ShowAnimation(machine);
+}
+
+void ModelFrame(Machine &machine) {
+    if (!g.on) {
+        return;
+    }
+    // (the board reset, by the menu or by another mode starting: the viewer is over)
+    if (!g.starting && Ram16(kMode) == 0) {
+        End();
+        return;
+    }
+    if (g.starting) {
+        return;
+    }
+    // Another character or background chosen in the menu: the viewer starts again with it
+    if (std::clamp(FeatureValue("model_character"), 0, static_cast<int>(std::size(kCharacterNumbers)) - 1) != g.character ||
+        std::clamp(FeatureValue("model_background"), 0, kBlack) != g.background) {
+        StartModel(machine);
+        return;
+    }
+    machine.video.hideObject = NotTheStage;
+    Compose(machine);
+    g.anchorX = static_cast<int16_t>(Ram16(Player(0) + kX)) - static_cast<int16_t>(Ram16(kCameraX)) + WideStage();
+    g.anchorY = 239 - (static_cast<int16_t>(Ram16(Player(0) + kY)) - static_cast<int16_t>(Ram16(kCameraY)));
+}
+
+// (Nothing of the viewer is kept in a save state, so that the states made before there was one still load:
+// a state loaded while viewing ends the viewer, and what is loaded is the fight it holds.)
+void ModelState(Archive &ar) {
+    if (!ar.Saving()) {
+        End();
+    }
+}
+
+void RegisterModel() {
+    Game &game = TheGame();
+    game.pages.push_back({kModel, "Alternative modes",
+                          "One character by itself, on a stage or on white or black, at any size, standing or going through any "
+                          "of its animations."});
+    game.commands.push_back({"model_start", kModel, "Start",
+                             "Shows the character chosen below by itself. Player 1's controls move it while it stands. Reset ends it.",
+                             StartModel});
+    game.features.push_back({"model_character", kModel, "Character", "Who is shown. Changing it while viewing goes to the new one.", 0,
+                             {std::begin(kCharacterNames), std::end(kCharacterNames)}});
+    game.features.push_back({"model_background", kModel, "Background",
+                             "What is behind the character: one of the stages, or plain white or black. Changing it while viewing "
+                             "goes to the new one.",
+                             0,
+                             {"Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau", "Abaraya",
+                              "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror", "Fetus of God",
+                              "White", "Black"}});
+    game.features.push_back({"model_size", kModel, "Size", "How large the character is drawn, from a quarter of its own size to 25 times.", 0,
+                             {"1x", "1.5x", "2x", "3x", "4x", "6x", "8x", "12x", "16x", "25x", "0.25x", "0.5x", "0.75x"}});
+    game.features.push_back({"model_animation", kModel, "Animation",
+                             "What the character does: stands as in a fight, moved with player 1's controls, or goes through one "
+                             "of its animations over and over (they are in three lists in the game: A, B and C; Number picks "
+                             "which of the list).",
+                             0, {"Standing (you control it)", "List A", "List B", "List C"}});
+    game.features.push_back({"model_number", kModel, "Number",
+                             "Which animation of the list chosen above (a list has fewer than 256: the count goes round).", 0, Numbers()});
+}
+
+} // namespace cps2recomp
