@@ -76,6 +76,7 @@ namespace {
     int32_t Across() {
         return PictureWidth() * 256;
     }
+    constexpr int kStageToRound = 1100; // frames a stage's machine runs before its round is on, at most (counted: 921 for most stages, 1,046 for Fetus of God), and a few
     constexpr int kArena = (kCameraLeft + kCameraRight) / 2; // where the fighters' own camera is kept while the stage scrolls
     constexpr size_t kSoundAhead = 16;          // samples of another machine's sound kept in hand
     constexpr uint16_t kAnyButton = kLeft | kRight | kUp | kDown | kPunch1 | kPunch2 | kPunch3 | kKick1 | kKick2 | kKick3;
@@ -445,7 +446,15 @@ namespace {
         bool nextShown = false;
         if (g.backNext) {
             const bool wasReady = g_backNext.ready;
-            for (int n = 0; n < (wasReady ? 1 : 3); n++) {
+            // (on its way to its round: three frames a frame; when the stages scroll by, more if that is what
+            // has it ready when the shown stage has been crossed, so that the scrolling does not wait for it. A
+            // wide picture's stage is crossed sooner, and at the fast speed three were too few.)
+            int onTheWay = 3;
+            if (g.way == kStageScroll) {
+                const int32_t framesLeft = std::max((RightEnd() - g.backCamera) / std::max(ScrollBy(), 1), 1);
+                onTheWay = std::clamp((kStageToRound - g_backNext.frames + framesLeft - 1) / framesLeft, 3, 6);
+            }
+            for (int n = 0; n < (wasReady ? 1 : onTheWay); n++) {
                 RunStage(machine, g_backNext, g.backNext, g.way == kStageScroll ? LeftEnd() / 256 : cameraX, cameraY, &next);
                 if (g_backNext.ready) {
                     break;
