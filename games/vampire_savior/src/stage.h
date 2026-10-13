@@ -20,6 +20,12 @@ struct Layer {
 };
 extern const Layer kLayer8, kLayer16, kLayer32;
 
+// The records of the scroll screens an object can ride on, by the byte kIsRiding of its record (0 none, then
+// 4, 8, 12 for the three). An object that rides none is looked up at 000030, in the ROM, as the game does:
+// its place is its script's business.
+constexpr uint32_t kIsRiding = 0x0C;
+constexpr uint32_t kLayerRecords[4] = {0x000030, vsav::kBackLayer, vsav::kCameraRecord, vsav::kFarLayer};
+
 // The layer whose record is at A6 is put at the place in D0, across or up, and its shake added; the strip
 // of its picture that comes in is drawn into the map when the record says its picture is drawn as it goes
 // (01DEEA and 01DF70, 01E450 and 01E4A0, 01E7F6 and 01E876)

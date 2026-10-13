@@ -48,8 +48,6 @@ namespace {
     // (modes.h), which can then change under them: by fading into another, or by scrolling on into the next
     enum { kStageOne, kStageShuffle, kStageScroll, kStageBehind }; // (the last: behind the fighters, and never changing by itself)
     // The ring out
-    constexpr uint32_t kKeepIn = 0x028192;   // the game's routine that keeps the player at A6 inside the picture
-    constexpr uint32_t kAtEdge = 0x116;      //   and what it leaves: 1 at the picture's left edge, 2 at its right
     constexpr int kOutBy = 4;                // a fighter is out when its middle is within this of the picture's edge
     constexpr int kFallFor = 44;             // frames a fighter that is out is seen falling for
     constexpr int kDropFor = 80;             // frames the way down to the next stage takes
@@ -548,27 +546,6 @@ namespace {
 
     // --- the ring out ---
 
-    // 028192. The game keeps the player at A6 inside the picture. In a ring out fight a player that is not its
-    // own master (reeling from a hit, guarding one, thrown) is not kept in at a side where the picture is at
-    // the stage's end: it goes over the end.
-    bool KeepIn(M68K &c) {
-        const uint32_t player = c.a[6] & 0xFFFFFF;
-        if (g_open && (player == Player(0) || player == Player(1)) && Ram8(player + kControl) != kControlOwn) {
-            const int x = static_cast<int16_t>(Ram16(player + kX)), half = Ram16(player + kHalfWidth);
-            const int camera = static_cast<int16_t>(Ram16(kCameraX));
-            const int margin = WideMargin(); // (the picture's edges and the camera's ends: widescreen.h)
-            const bool left = camera <= kCameraLeft + margin && x - half <= camera - margin;
-            const bool right = camera >= kCameraRight - margin && x + half >= camera + Video::kWidth + margin;
-            if (left || right) {
-                SetRam8(player + kAtEdge, 0);
-                Return(c);
-                return true;
-            }
-        }
-        WideKeepIn(c); // (the game's routine runs: widescreen.h)
-        return false;
-    }
-
     // Is a fighter out? Its middle has come to the picture's edge at an end of the stage.
     void LookForOut() {
         const int camera = static_cast<int16_t>(Ram16(kCameraX));
@@ -863,9 +840,22 @@ void BattleState(Archive &ar) {
     }
 }
 
+// In a ring out fight a player that is not its own master (reeling from a hit, guarding one, thrown) is not
+// kept in at a side where the picture is at the stage's end: it goes over the end (edges.cpp asks).
+bool RingOutLetsOut(uint32_t player) {
+    if (!g_open || (player != Player(0) && player != Player(1)) || Ram8(player + kControl) == kControlOwn) {
+        return false;
+    }
+    const int x = static_cast<int16_t>(Ram16(player + kX)), half = Ram16(player + kHalfWidth);
+    const int camera = static_cast<int16_t>(Ram16(kCameraX));
+    const int margin = WideMargin(); // (the picture's edges and the camera's ends: widescreen.h)
+    const bool left = camera <= kCameraLeft + margin && x - half <= camera - margin;
+    const bool right = camera >= kCameraRight - margin && x + half >= camera + Video::kWidth + margin;
+    return left || right;
+}
+
 void RegisterBattle() {
     Game &game = TheGame();
-    AddHook(0x028192, "KeepIn", KeepIn);
     game.pages.push_back({kSurvival, kModes, "One opponent after another on the health you have left. How many can you beat?"});
     game.pages.push_back({kEndless, kModes, "Two fighters the game plays, for as long as you like. Touch the controls to take one over."});
     game.commands.push_back({"survival_start", kSurvival, "Start",

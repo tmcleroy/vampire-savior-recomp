@@ -56,6 +56,8 @@ Machine::Machine(const RomSet &roms)
         video.layerMask = static_cast<unsigned>(strtoul(layers, nullptr, 0)); // (bit 0 objects, 1-3 scroll screens)
     }
     cpu.ram = ram.data();
+    cpu.video = videoRam.data();
+    cpu.videoSize = static_cast<uint32_t>(videoRam.size());
     cpu.rom = roms.program.data();
     cpu.opcodes = roms.opcodes.data();
     cpu.romSize = static_cast<uint32_t>(roms.program.size());

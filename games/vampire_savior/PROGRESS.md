@@ -107,7 +107,7 @@ The Japanese arcade release of 1997-05-19 (ROM set `vsavj`), on Capcom's CPS-2 b
 preset (it changes how the game plays). A fight is 512 columns wide where the board shows 384, on
 the toolkit's wider picture (`Video::wide`), and is played in that picture.
 
-What is there (eight hooks):
+What is there:
 - The picture is the board's with 64 columns more on each side; the panel's objects stay in the
   middle. The sides of the 8-pixel scroll screen are read from the stage's plan in the ROM, as the
   game's own routine reads it (`make check-widescreen`: none of 32 million tiles differ). While
@@ -152,19 +152,69 @@ code that is not readable yet):
   row has the row in `+24` of its record and `01BBC2` takes the row's place off its own; an object
   whose `+0C` is 0 rides no plane and its script places it in the picture itself.
 
-**Next, agreed with the owner (2026-10-13): make this code readable first, then do widescreen
-inside it.** Rewrites with the checker (cps2recomp/docs/READABLE.md), in this order: the camera
-(`01E36E`, `01E3F2`, `01E450`, `01E4A0`, `01E8F4`); the planes' placing (`01DE40`-`01DF00`,
-`01E762`-`01E80C`) and the row scroll table's making (not found yet: who writes the table at
-`90E000`-`90FFFF`); an object's place in the picture and the list's making (`01BBC2`, `01BC3A`,
-`01BC88`, `01AF9E`, `01AFC6` and its family to `01BB48`); the shared tests (`01549A`, `0154CC`,
-`0154FE`, `01551A`); then each stage's scripts (`07D372`-`080A7A`), Feast of the Damned and the
-desert first. Then: pieces always drawn, both halves of the shared records, and the planes held
-at the ends, as plain lines in those routines, each tried against the owner's four cases (the
-lady's arm, the camel, the foreground under the helicopter, the fire by the tent) in motion, with
-the camera at rest and moving, before it is called done. Ways of checking that were built and
-work: the same controls with the feature off and on, compared where the cameras agree; both
-corners of every stage in training beside the board's corners.
+**Agreed with the owner (2026-10-13): make this code readable first, then do widescreen inside it.**
+Rewrites with the checker (cps2recomp/docs/READABLE.md). Done so far, none differing from the game's code
+over the movies and a training session on each of the twelve stages with the players moved by made-up controls, the camera going from end to end
+(`make check-rewrites`):
+
+| What | Routines | File |
+| --- | --- | --- |
+| The camera: where the players are, where it wants to be, its most for a frame, its ends | `01E36E`, `01E3F2`, `01E450`, `01E4A0`, `01E8F4`, `01E962` | `camera.cpp` |
+| The other two scroll screens placed from the camera: a rate of its travel, or a row of the row scroll table; the scroll registers to be | `01DE40`-`01DF70`, `01DFC0`, `01E4F0`, `01E75E`-`01E876`, `01E8C6` | `planes.cpp` |
+| The row scroll table made each frame (it was "not found yet": `01FDFE`, called after the camera's record is done) | `01FDFE` and each stage's part `01FEA0`-`020236`, the super move's wave `0202BE` | `rows.cpp` |
+| What is in the picture: the shared tests and the frame's lists of things to draw | `01549A`, `0154CC`, `0154FE`, `01551A`, `015546`, `015572`, `01559E`, `015696` | `picture.cpp` |
+| The players kept inside the picture, and the corner's push back | `028192`, `02824C` | `edges.cpp` |
+| An object's place in the picture, for drawing it | `01BBC2`, `01BC3A`, `01BC88` | `picture.cpp` |
+| The stage's pieces: the frame's run of their scripts, the animation's step, a record given back; the plain piece (every stage) and Feast of the Damned's candles, dancers, lady and thrower | `07D240`, `015030`, `015084`, `07D372`, `0170A6`, scripts 0-4 (`07D354`-`07D596`) | `pieces.cpp` |
+
+Widescreen has no hooks left: the camera's ends, the picture's edges for the players and the tests of
+what is in the picture each ask `WideMargin()` where the rule is. The modes' own place for the camera and
+the ring out's open ends are lines in the same routines.
+
+Facts from the rewrites:
+- Each stage's choice of rates (across / up): the 8-pixel screen 1 / 3/4, 15/16 / 1, 1 / 1, 1/2 / stays,
+  3/4 / 1/2, 15/16 / 1, 7/8 / 1, the row 4 above the stage's own / 1, the row 4 below / 1, 7/8 / 3/4,
+  1 / 1 (the train, with its own start), 7/8 / 3/4 (Fetus of God, with a shake of its own); the 32-pixel
+  screen 1 / 3/4, 1 / 1, 1 / 1, 3/4 / 1/2, the row 22 above / 1, 7/8 / 1, 5/8 / 1/2, 7/8 / 3/4, the row 8
+  above / 1, 3/4 / 3/4, 1 / 1/2, 3/4 / 1/2. A plane's start is 448 (336 on Fetus of God; the 8-pixel
+  screen's 192 on the subway, 128 on the chateau).
+- The row scroll table: a row holds 192 and so many steps more (the floor, below the stage's own row at
+  `7B0` bytes in) or less (the wall, above), a step being the camera's travel from its start over a number
+  of the stage's (104, 128, 112, 80, 112, 192, 112, 72, 96, 88; the train and Fetus of God have no
+  table). The table of `rows.cpp` says how many rows ramp and how many above are alike. It is made in four
+  places in video RAM by turns (`90E000`, `90E800`, `90F000`, `90F800`).
+- The camera's record: `+60` not zero holds it; `+40`/`+42` its ends up and down; `+50`/`+54` a shake
+  added to its place; `+28`/`+2C` where it was a frame ago; `+58`/`+5A` added to the scroll registers
+  only. A player with bit 7 of `+134` set (and `+19A` zero) is not followed.
+- With the camera held (`+60`), the routine for its height sets its place across again and leaves the
+  height alone (the game's own slip; kept).
+- The camera's own scroll screen is never drawn as it goes (`+03` is zero in every fight seen), so the
+  strip drawing in `01E450`/`01E4A0` is not reached; the 8-pixel screen's is.
+- The frame's lists of things to draw: places at `7982(A5)` on, counts at `79C5(A5)` on; a thing thrown
+  goes on two (its depth's and the hit tests'), a piece of the stage on one of four from `79AE(A5)` by its
+  byte `+09`. A piece with a long at `+28` is drawn only while the camera is left of its first word, or
+  (that word below nothing) right of its second.
+- A rewrite's check compares video RAM too when asked (`kChecksVideo`, toolkit 4523083).
+
+- A stage's pieces: twenty-four records of `80` bytes from `FFC800`; `+02` the script (58 of them, the
+  table at `07D26C`: 0 every stage's plain piece, 1-6 Feast of the Damned's), `+04` its step, `+1C` the
+  animation's frame (eight bytes a frame; the first four copied to `+20`: frames left, `FF` at the end, a
+  spare, an event for the script). Animations by stage at `2776B0`.
+- The dancers (script 2) are one record that is two pieces by turns: left of the camera at `1C0` the
+  couples at (384, 48), right of it those at (920, 112); the frame the change is made nothing is drawn.
+  The lady (script 3) does nothing at all while the camera is left of `170`; her fan arm's pose is a set
+  of colours copied to `90C3C0` at an event of her animation. Nothing else was found writing those colours.
+
+**Next:** the rest of the scripts, Feast of the Damned's last two (5, 6) and the desert's first; the
+object list's making (`01ABC8` and its family to `01BB74`: it writes object RAM at `708000`, which the
+check does not compare yet); the three scroll screens' frame routines with each stage's
+choice as a table (`01DB16`, `01DFEE`, `01E51E`, `01DA3C`); then each stage's scripts (`07D372`-`080A7A`),
+Feast of the Damned and the desert first. Then: pieces always drawn, both halves of the shared records,
+and the planes held at the ends, as plain lines in those routines, each tried against the owner's four
+cases (the lady's arm, the camel, the foreground under the helicopter, the fire by the tent) in motion,
+with the camera at rest and moving, before it is called done. Ways of checking that were built and work:
+the same controls with the feature off and on, compared where the cameras agree; both corners of every
+stage in training beside the board's corners.
 
 ## Modes (2026-10-12)
 

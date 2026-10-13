@@ -29,11 +29,8 @@ int WideMargin();
 void WideForSpare(Machine &machine);
 // ... and the port's own machine is back, with its video's `wide` as it was
 void WideForPort(Machine &machine);
-// From the hook on the game's routine that keeps a player inside the picture (battle.cpp has it), when the
-// game's routine is to run: the picture it keeps the player in is the wide one
-void WideKeepIn(M68K &c);
-// From the hook on the camera's own routine (machines.cpp), with the camera's record: its ends put where
-// the picture being played in wants them
+// From the camera's own routine (camera.cpp), with the camera's record: its ends put where the picture
+// being played in wants them
 void WideCameraEnds(uint32_t camera);
 
 } // namespace cps2recomp

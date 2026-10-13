@@ -4,8 +4,8 @@
 // Vampire Savior: widescreen. A fight is shown 512 columns wide where the board shows 384 (16:9 for 4:3, the
 // height and the size of everything as they were): more of the stage on each side. The fight is played in
 // that picture too (the second half of this file): the players can go to its edges, the camera stops where
-// its edges come to the stage's ends, and what the game only keeps while it is in the picture is kept
-// while it is in this one. With the feature off none of that is there and the game is the board's.
+// its edges come to the stage's ends (camera.cpp), and what the game only keeps while it is in the picture
+// is kept while it is in this one (picture.cpp). With the feature off none of that is there and the game is the board's.
 //
 // A stage is three scroll screens and some objects, each moving at its own rate as the camera does, about the
 // stage's middle. The board's picture is the 384 columns from the camera's place; the stage's own plane (the
@@ -153,77 +153,11 @@ namespace {
 
 // --- the game played in the wide picture ---
 //
-// The players. The game keeps a player inside the board's picture: no further left than the camera's place
-// less half the player's width, no further right than 384 on from it (028192, for one player; 02824C, for
-// the two when one carries the other). Both read the half width from the player's record, and both come
-// to the picture's edges through it and nothing else, so with 64 less in that word for as long as the
-// routine runs, the edges it keeps the player inside are the wide picture's. It is put back where the
-// routine returns (each has one place where it does).
+// The players are kept inside the wide picture (edges.cpp), the camera stops where the wide picture's edges
+// come to the stage's ends (camera.cpp), and what is drawn is what is in the wide picture (picture.cpp):
+// each of those asks WideMargin.
 namespace {
-    constexpr uint32_t kKeepsIn = 0x028192, kKeepsInDone = 0x02824A;
-    constexpr uint32_t kKeepsBothIn = 0x02824C, kKeepsBothInDone = 0x0282B6;
-    constexpr uint32_t kOther = 0x32;      // ... and the other player's record (a word: its address's low half)
-
-    bool g_play = false;              // fights are played in the wide picture (WidePlay)
-    uint32_t g_narrowed[2] = {0, 0};  // the records whose half width is 64 less just now
-
-    void Narrow(int n, uint32_t player) {
-        g_narrowed[n] = player;
-        SetRam16(player + kHalfWidth, static_cast<uint16_t>(Ram16(player + kHalfWidth) - kSide));
-    }
-    bool Widen(M68K &) {
-        for (uint32_t &player : g_narrowed) {
-            if (player) {
-                SetRam16(player + kHalfWidth, static_cast<uint16_t>(Ram16(player + kHalfWidth) + kSide));
-                player = 0;
-            }
-        }
-        return false;
-    }
-    bool KeepBothIn(M68K &c) {
-        if (g_play && !g_narrowed[0] && !g_narrowed[1]) {
-            const uint32_t player = c.a[6] & 0xFFFFFF;
-            Narrow(0, player);
-            Narrow(1, 0xFF0000u | Ram16(player + kOther));
-        }
-        return false;
-    }
-} // namespace
-
-// The things on a stage. The game asks of each whether it is in the picture, in a few routines all its
-// objects share, and what is not is not drawn, or is done away with. Each asks by one comparison, which is
-// made here instead when fights are played in the wide picture: the same question of a picture 64 wider
-// on each side.
-namespace {
-    // (where the 68000 goes on after each of those comparisons: named so that there is translated code from
-    // there, and the interpreter is not needed)
-    [[maybe_unused]] constexpr uint32_t kGoesOnAt[] = {HookAt(0x0154B0), HookAt(0x015516), HookAt(0x015532), HookAt(0x0154E6), HookAt(0x0154F8)};
-    // What `cmp.w` leaves in the flags, of `value` less `than`; the 68000 goes on after the instruction
-    // (four bytes long, at `at`: a hook is not told where the 68000 is)
-    bool Compared(M68K &c, uint32_t at, uint32_t value, uint32_t than) {
-        const uint32_t a = value & 0xFFFF, b = than & 0xFFFF, difference = (a - b) & 0xFFFF;
-        c.flagC = a < b;
-        c.flagZ = difference == 0;
-        c.flagN = difference & 0x8000;
-        c.flagV = ((a ^ b) & (a ^ difference) & 0x8000) != 0;
-        c.pc = at + 4;
-        c.cycles += 8;
-        return true;
-    }
-    // 0154AC, 015512, 01552E: `cmpi.w #width,d1`, where d1 is how far right of the picture's left edge the
-    // thing is, and a margin (a thing thrown is done away with outside it; a piece is not drawn)
-    template <uint32_t kAt, uint32_t kWidth>
-    bool InPicture(M68K &c) {
-        return g_play && Compared(c, kAt, c.d[1] + kSide, kWidth + 2 * kSide);
-    }
-    // 0154E2, 0154F4: `cmp.w camera,d1`. A piece of the stage that is only drawn while the camera is left
-    // of a place (the piece's right edge), or right of one (its left edge less the picture's width)
-    bool WhileLeftOf(M68K &c) {
-        return g_play && Compared(c, 0x0154E2, c.d[1], Ram16(kCameraX) - kSide);
-    }
-    bool WhileRightOf(M68K &c) {
-        return g_play && Compared(c, 0x0154F4, c.d[1], Ram16(kCameraX) + kSide);
-    }
+    bool g_play = false; // fights are played in the wide picture (WidePlay)
 } // namespace
 
 bool WidePlay() {
@@ -231,12 +165,6 @@ bool WidePlay() {
 }
 int WideMargin() {
     return g_play ? kSide : 0;
-}
-
-void WideKeepIn(M68K &c) {
-    if (g_play && !g_narrowed[0] && !g_narrowed[1]) {
-        Narrow(0, c.a[6] & 0xFFFFFF);
-    }
 }
 
 // The camera. Its place is the board's picture's left edge, and the wide picture's is 64 left of that: so
@@ -298,15 +226,6 @@ void WideForPort(Machine &machine) {
 }
 
 void RegisterWidescreen() {
-    // (028192 itself is hooked in battle.cpp, which calls WideKeepIn)
-    AddHook(kKeepsInDone, "KeepsInDone", Widen);
-    AddHook(kKeepsBothIn, "KeepsBothIn", KeepBothIn);
-    AddHook(kKeepsBothInDone, "KeepsBothInDone", Widen);
-    AddHook(0x0154AC, "ThrownInPicture", InPicture<0x0154AC, 0x240>);
-    AddHook(0x015512, "PieceInPicture", InPicture<0x015512, 0x280>);
-    AddHook(0x01552E, "PieceInPicture2", InPicture<0x01552E, 0x200>);
-    AddHook(0x0154E2, "PieceWhileLeftOf", WhileLeftOf);
-    AddHook(0x0154F4, "PieceWhileRightOf", WhileRightOf);
     TheGame().widestPicture = [] { return Video::kWidth + (FeatureOn("widescreen") ? 2 * kSide : 0); };
     // (not in the Enhanced preset: it shows more of the stage than the board does, and a player who wants the
     // game as it is played in competition must not get that without asking)

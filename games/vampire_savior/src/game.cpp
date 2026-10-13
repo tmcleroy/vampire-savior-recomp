@@ -13,6 +13,10 @@ void RegisterFight();     // fight.cpp
 void RegisterInput();     // input.cpp
 void RegisterCamera();    // camera.cpp
 void RegisterPlanes();    // planes.cpp
+void RegisterRows();      // rows.cpp
+void RegisterPicture();   // picture.cpp
+void RegisterEdges();     // edges.cpp
+void RegisterPieces();    // pieces.cpp
 void RegisterFrames();    // frames.cpp
 void RegisterTraining(); // training.cpp
 void TrainingBeforeFrame(Machine &machine);
@@ -41,6 +45,10 @@ void RegisterGame() {
     RegisterInput();
     RegisterCamera();
     RegisterPlanes();
+    RegisterRows();
+    RegisterPicture();
+    RegisterEdges();
+    RegisterPieces();
     RegisterFrames();
     RegisterWidescreen();
     TheGame().beforeFrame = [](Machine &machine) {
