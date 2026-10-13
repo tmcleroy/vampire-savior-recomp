@@ -1,0 +1,138 @@
+# Vampire Savior Recomp
+
+An unofficial native PC port of the arcade game *Vampire Savior: The Lord of Vampire* (Capcom,
+1997, CPS-2 board) for macOS, Linux (Steam Deck included) and Windows, made by static
+recompilation, with a full training mode.
+
+> **Beta.** The game plays from start to ending and its code is checked instruction by
+> instruction, but it has been played on few machines and controllers yet. Expect rough edges, and
+> please [report what you find](#feedback-and-contributing).
+
+**No game files are included.** You need your own copy of the game: the arcade ROM set `vsavj`
+(Japan, 970519) with its key file, from a board you own. **Only that version works**: the sets of
+other regions and revisions (`vsav`, `vsavu`, `vsava`, `vsavh` and the rest) do not. This project
+cannot help you get one.
+
+This project is not affiliated with, endorsed by, or sponsored by Capcom. *Vampire Savior* and
+*Darkstalkers* are trademarks of Capcom Co., Ltd.
+
+![The title screen](docs/screenshots/title.png)
+
+## What it is
+
+The game's 68000 program runs on a small machine written for this project (the board's video,
+QSound chip, sound CPU and registers), not in an emulator, and the program itself is translated
+ahead of time into C++ ([how it works](docs/PORT.md)).
+
+- Plays with a keyboard, a gamepad or an arcade stick; every key and button can be changed, for
+  each player, in the launcher.
+- **Pure** plays exactly as the board does. **Enhanced** (the default) adds free play. Every other
+  feature is a switch of its own.
+- Your ROM set is only ever read. Settings, save states and the board's settings memory go in your
+  own user folder.
+
+## Training mode
+
+"Training mode" in the in-game menu goes straight to the character choice with two players and
+into a fight with no clock that nobody loses.
+
+| Feature | What it does |
+| --- | --- |
+| Hit boxes | The boxes the game itself tests: where a player can be hit, attacks, and the boxes that keep the players apart |
+| Frame data and frame meter | Startup, active and recovery of each move and the advantage after a hit or a guarded hit, counted in the game's own steps |
+| Input display | What each player presses and for how long, the stick as a keypad number |
+| Combo readout | Hits, damage, how much is lost for good and how much comes back, the round's best |
+| The dummy | Stands, crouches, jumps; guards (always, after a hit, at random; high or low as each attack needs); pushes away or guard cancels; softens throws; rolls on getting up; records and replays in three slots, and can answer with a recording after guarding or being hit |
+| Start over | The round as it began, in the middle or a corner, sides swapped or not |
+| Stage | Any of the twelve stages |
+| Stop, step, slow | Stop the game, go on one frame at a time, or play at a half, a quarter or an eighth of the speed (anywhere, not only in training) |
+
+Also: save states in nine slots, free play, and a few cheats (no damage, one-hit knockouts, full
+gauge, infinite time). [docs/FEATURES.md](docs/FEATURES.md) has the whole list.
+
+![Training mode: hit boxes, input display, frame data and the frame meter](docs/screenshots/training.png)
+
+| | |
+| --- | --- |
+| ![A fight](docs/screenshots/fight.png) | ![Another fight](docs/screenshots/fight-2.png) |
+| ![The launcher: features](docs/screenshots/launcher-features.png) | ![The launcher: controllers](docs/screenshots/launcher-controls.png) |
+
+## What you need
+
+- The ROM set `vsavj` (*Vampire Savior: The Lord of Vampire*, Japan 970519): `vsavj.zip` (with
+  `vsav.zip` beside it if your collection keeps the shared files there) or a folder with the set's
+  files, including `vsavj.key`. The launcher checks every file by checksum and tells you which is
+  missing or different. Sets of other regions and revisions are refused: the port is made from this
+  one version's program, and its training features use addresses found in it.
+- One of: macOS 13 or later (Apple silicon or Intel); Linux x86_64 or SteamOS; Windows 10 or 11,
+  64-bit.
+- A gamepad or stick with six buttons is recommended.
+
+## Playing
+
+1. Download the build for your system from the [releases page](../../releases) and unpack it.
+2. Open the launcher (`Vampire Savior Recomp.app`, `vampire_savior-launcher`) and drop your ROM set on it,
+   or choose it. It stays where it is.
+3. Press **Play**.
+
+macOS: the app is not notarized, so the first time, right-click it and choose Open.
+Linux and Steam Deck: unpack the archive anywhere and run `vampire_savior-launcher`; its "Add to
+Steam" button puts it in your library.
+
+## Controls
+
+| | Keyboard | Gamepad |
+| --- | --- | --- |
+| Move | Arrows | D-pad or left stick |
+| Punches (light, medium, hard) | `A` `S` `D` | West, North, right shoulder (Xbox: X, Y, RB) |
+| Kicks (light, medium, hard) | `Z` `X` `C` | South, East, right trigger (Xbox: A, B, RT) |
+| Start | `1` or Return | Start |
+| Coin | `5` | Back (Select) |
+| In-game menu | Esc or `F1` | Left stick click, or Start and Select together |
+| Stop the game / one frame on | `P` / `O` | Right stick click / left trigger |
+| Speed | `-` `=` | |
+| Start over (training) | Backspace | Left shoulder |
+| Save / load a state, slot | `F5` / `F9`, `F6` `F7` | |
+| Operator's test switch | `F2` | |
+| Full screen | `F11` | |
+
+The launcher's Controllers page changes any of these for each player. Only the menu's "Quit game"
+row (or closing the window) ends the game.
+
+## Status
+
+| | |
+| --- | --- |
+| Game | Boots, attract mode, the whole one-player ladder to the ending and credits, two-player games, the operator's test menu |
+| Picture | Three scroll screens and the objects with the board's priorities, drawn line by line |
+| Sound | The game's sound driver on a model of the QSound chip. No "Q1" stereo filter (plain panning instead): it needs a ROM inside the chip that is not part of a game's ROM set |
+| Speed | Far above what the game needs on any recent machine |
+| Checked | Every translated block against the interpreter over the whole ladder; every readable rewrite against the routine it replaces |
+| Not yet | Other releases of the game (`vsav`, `vsavu`, ...); netplay; frame data compared with published tables |
+
+## Building from source
+
+With your own ROM set in `rom/` (ignored by Git), CMake, Ninja, SDL 3 and Python 3:
+
+```sh
+make            # twice the first time
+make explore    # once, about ten minutes: finds the game's code by made-up play and translates it
+make run
+```
+
+[docs/BUILDING.md](docs/BUILDING.md) has every platform, the checks and the release builds.
+
+## Feedback and contributing
+
+Bug reports and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for the rules
+(above all: nothing from the game, ever) and [docs/ROADMAP.md](docs/ROADMAP.md) for what is next.
+
+## License and credits
+
+GPL-3.0-only (see [LICENSE](LICENSE)). [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists what comes
+from other projects: the CPS-2 program cipher is MAME's (BSD-3-Clause; worked out by Andreas Naive
+and Nicola Salmoria), the QSound model follows MAME's high-level one (superctr, Valley Bell), the
+hardware facts follow MAME's CPS-2 driver, and the launcher's look comes from arelkair's
+wiiparty-recomp. SDL 3, Dear ImGui and the Inter font are used by the programs.
+
+The repository holds no game data and nothing derived from it.

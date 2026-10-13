@@ -1,0 +1,98 @@
+# Every push and pull request, without the game: nothing from the game can be in the repository, so
+# CI cannot build what a release holds (the game's program translated to C++ needs a ROM set). It
+# audits the files (tools/audit.sh) and proves that everything compiles, packs and starts on each
+# system: the game program with no translated code (NO_GAME_CODE=1: it runs a ROM set in the port's
+# interpreters) and the launcher. The checks that need a ROM set (make check, check-blocks,
+# check-rewrites, check-release) and the release archives are made on a contributor's own machine.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  NO_GAME_CODE: 1
+  LINUX_PACKAGES: >-
+    ninja-build zlib1g-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev
+    libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev libegl-dev libgl-dev
+    libpulse-dev libasound2-dev libudev-dev libdbus-1-dev libpipewire-0.3-dev
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/audit.sh
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install ninja
+      - name: Build and pack (Apple silicon and Intel)
+        run: tools/release/macos.sh
+      - name: Start the programs with no display
+        run: |
+          app="build/release/Vampire Savior Recomp.app/Contents/MacOS"
+          "$app/vampire_savior" --list-features | grep -q free_play
+          arch -x86_64 "$app/vampire_savior" --list-features | grep -q free_play
+          mkdir -p "$RUNNER_TEMP/home"
+          SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software VAMPIRE_SAVIOR_HOME="$RUNNER_TEMP/home" \
+            "$app/vampire_savior-launcher" --screenshot "$RUNNER_TEMP/page"
+          ls "$RUNNER_TEMP"/page*.png
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $LINUX_PACKAGES
+      - name: Build and pack
+        run: tools/release/linux.sh
+      - name: Start the programs with no display
+        run: |
+          tar -xzf build/release/VampireSavior-linux-x86_64.tar.gz -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/VampireSavior"
+          ./vampire_savior --list-features | grep -q free_play
+          mkdir -p "$RUNNER_TEMP/home"
+          SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software VAMPIRE_SAVIOR_HOME="$RUNNER_TEMP/home" \
+            ./vampire_savior-launcher --screenshot "$RUNNER_TEMP/page"
+          ls "$RUNNER_TEMP"/page*.png
+
+  windows-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: >
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ninja-build zip
+          g++-mingw-w64-x86-64-posix gcc-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 libz-mingw-w64-dev
+      - name: Build and pack (cross-compiled)
+        run: tools/release/windows.sh
+      # (handed to the Windows machine below to be started; no translated code in it, and not a release)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-no-game-code
+          path: build/release/VampireSavior-windows-x64.zip
+          retention-days: 1
+
+  windows-run:
+    needs: windows-build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-no-game-code
+      - name: Start the programs on Windows with no display
+        shell: bash
+        run: |
+          unzip -q VampireSavior-windows-x64.zip
+          cd VampireSavior
+          ./vampire_savior.exe --list-features | grep -q free_play
+          mkdir -p "$RUNNER_TEMP/home"
+          SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software VAMPIRE_SAVIOR_HOME="$RUNNER_TEMP/home" \
+            ./vampire_savior-launcher.exe --screenshot "$RUNNER_TEMP/page"
+          ls "$RUNNER_TEMP"/page*.png

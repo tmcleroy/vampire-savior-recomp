@@ -1,0 +1,63 @@
+# Features
+
+Every change to how the game plays, looks or is controlled is a switch, set in the launcher's
+Features page or in the in-game menu (Esc, `F1`, a gamepad's left stick click) and kept in
+`settings.ini`. With every one off the game runs exactly as the arcade board does. The launcher's
+presets: **Pure** (all off), **Enhanced** (the default: free play on), **Custom**.
+
+This list is what `vampire_savior --list-features` prints. How features are written is in
+[cps2recomp/docs/FEATURES.md](../cps2recomp/docs/FEATURES.md).
+
+## Game
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| Free play | `free_play` | Start works without a coin. |
+
+## Cheats
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| No damage | `no_damage` | Player 1's health does not go down. |
+| No damage, player 2 | `no_damage_2` | Player 2's health does not go down (the opponent's, in a one-player game). |
+| One-hit knockouts | `one_hit` | Player 2 (the opponent, in a one-player game) goes down with the first hit. |
+| Full gauge | `full_gauge` | Player 1 always has special gauges to spend. |
+| Full gauge, player 2 | `full_gauge_2` | Player 2 always has special gauges to spend. |
+| Infinite time | `infinite_time` | The round's clock stands still. |
+
+## Training
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| Start over at | `restart_at` | Where "Start over" puts the players: the middle or a corner, player 1 on the left or (swapped) on the right. Choices: Middle, Left corner, Right corner, Middle, swapped, Left corner, swapped, Right corner, swapped. |
+| Stage | `training_stage` | Where a training session's fight is: the game's own choice (at random, from those that go with player 2's character) or a stage named here. Takes effect when the characters are next chosen. Choices: The game's choice, Feast of the Damned, Concrete Cave, Tower of Arrogance, Red Thirst, Deserted Chateau, Abaraya, Vanity Paradise, War Agony, Forever Torment, Green Scream, Iron Horse, Iron Terror, Fetus of God. |
+| Combo readout | `damage_readout` | Under the bar of the player hit: what the hit took off; for a combo (hits landing before the player is free again) the hits and the damage; how much of it is lost for good and how much comes back; the round's best. |
+| Input display | `input_display` | Shows what each player presses and for how many frames: the stick as a keypad number (5 is the middle, 6 right, 2 down), then the buttons. |
+| Hit boxes | `hit_boxes` | Draws the boxes the game tests: where a player can be hit (blue), attacks (red; orange for things thrown), and the boxes that keep the players apart (green). |
+| Frame data | `frame_data` | After a move: the step it can first hit on (startup), how many it can hit for (active) and how many follow before the player can act (recovery). After a hit or a guarded one: who can act first, by how many steps (+: the attacker). |
+| Frame meter | `frame_meter` | A row of cells for each player, one for every step of the game: green before a move can hit, red while it can, blue after; yellow reeling from a hit, light blue from a guarded one; grey in the air. |
+| Health refills | `health_refill` | A player's health comes back when they have not been hit for a moment. |
+
+## Dummy
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| Stands | `dummy_stand` | Player 2 stands still, whatever its controls do. |
+| Crouches | `dummy_crouch` | Player 2 crouches. |
+| Jumps | `dummy_jump` | Player 2 jumps on the spot, again and again. |
+| Record | `dummy_record` | Player 1's controls work player 2, and what they do is recorded in the slot chosen (20 seconds at most). Switch to Replay when done. |
+| Replay | `dummy_replay` | Player 2 does what was recorded in the slot chosen, over and over. |
+| Replay any slot | `dummy_replay_any` | Player 2 does what was recorded, over and over, each time from a slot picked at random. |
+| Recording slot | `dummy_slot` | Which of three recordings Record makes and Replay plays. Choices: 1, 2, 3. |
+| Guards | `dummy_guard` | Player 2 guards player 1's attacks, standing or crouching as each needs: always; only for a moment after being hit (to see whether a combo really is one); or one attack in two, at random. Choices: Off, Always, After a hit, At random. |
+| While guarding | `dummy_guard_action` | What player 2 does while guarding a hit: presses buttons to push the attacker away, or does a guard cancel (towards, down, down and towards with a punch or a kick: most characters have one or the other). Choices: Nothing, Pushes away, Guard cancel, punch, Guard cancel, kick. |
+| Answers with the recording | `dummy_reversal` | Player 2 plays the recording once as soon as it can act after guarding, after being hit (or knocked down, or thrown), or both. Choices: Off, After guarding, After being hit, After either. |
+| Softens throws | `dummy_tech` | Player 2 does a throw's own command while being thrown (a "tech hit"). |
+| Gets up | `dummy_getup` | Where player 2 gets up after being knocked down: where it fell, or rolled towards player 1 or away. Choices: Where it fell, Towards, Away. |
+
+## Always there
+
+Not features, because they change nothing in the game: the in-game menu, save states (nine slots),
+stopping the game and going on a frame at a time, slow motion, a coin button, Reset, and choosing
+keys and gamepad buttons in the launcher. The menu's "Training mode" and "Start over" rows are
+commands, described in the README.

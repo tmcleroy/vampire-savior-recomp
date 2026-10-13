@@ -1,0 +1,44 @@
+# On a tag vX.Y.Z (docs/RELEASING.md): the audit as for a public repository, the builds of ci.yml (the
+# proof that the tag compiles and starts on each system), and a DRAFT release with the version's section
+# of the changelog as its notes and NO files. The archives hold the game's translated code, which needs
+# a ROM set, so a person builds them on their own machine (tools/release/all.sh), plays each, uploads
+# them to the draft (gh release upload) and publishes it. CI never builds or holds a release archive.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/audit.sh --public
+      - name: The tag is the version
+        run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"
+
+  build:
+    needs: audit
+    uses: ./.github/workflows/ci.yml
+
+  draft:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Draft release with the changelog's section, no files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="## $version" '$0 ~ "^## " { on = (index($0, v) == 1); next } on' CHANGELOG.md > notes.md
+          test -s notes.md
+          pre=""
+          case "$GITHUB_REF_NAME" in *-beta*|*-rc*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --draft $pre --title "$GITHUB_REF_NAME" --notes-file notes.md
