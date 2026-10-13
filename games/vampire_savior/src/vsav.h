@@ -31,6 +31,18 @@ constexpr uint32_t kStage = 0xFF8100, kChooseStage = 0x00AE7C, kPlayersThen = 0x
 constexpr int kStages = 12; // in the order of their numbers: Feast of the Damned (the castle's hall), Concrete Cave (the
 // subway), Tower of Arrogance, Red Thirst (the desert), Deserted Chateau, Abaraya, Vanity Paradise, War
 // Agony (the wooden town), Forever Torment, Green Scream, Iron Horse Iron Terror (the train), Fetus of God
+// A stage's scroll screens have a record each. The one of 8-pixel tiles (the furthest back on most stages):
+// where its picture's left edge is in the stage (a word: the scroll register is this less 64), and a byte
+// that is not zero when its picture is wider than the map's 512 columns and the game draws it into the map
+// as the camera moves, a 32-pixel strip at a time (routines 01EE22-01F06E). It is drawn from the stage's
+// plan: eight bytes, two rows of four 256-pixel blocks, the lower row second (copied here from the ROM when
+// the stage is made); a block is 8 x 8 words in the ROM, down then across, each the number of a 32-pixel
+// cell; a cell is 4 x 4 tiles, down then across, two words a tile as the map has them.
+constexpr uint32_t kBackLayer = 0xFF8200, kLayerDrawnAsItGoes = 0x03, kLayerX = 0x20;
+// (the three planes' records follow one another: 8-, 16-, 32-pixel tiles; +10 and +14 are where the plane is
+// shown, across and up, which is what an object riding on it is placed against)
+constexpr uint32_t kLayerSize = 0x80, kLayerShownX = 0x10, kLayerShownY = 0x14;
+constexpr uint32_t kBackPlan = 0xFF4302, kBackBlocks = 0x35AD18, kBackCells = 0x35C918;
 // Who is playing: bit 0 player 1, bit 1 player 2
 constexpr uint32_t kPlayersIn = 0xFF808D;
 // In a player's record while choosing: a step (0 the character, 2 the speed and guard choices, 4 done)
@@ -161,9 +173,34 @@ constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;
 // The camera's record: where it wants the picture's left edge and bottom (words), the ends it stops at
 constexpr uint32_t kCameraRecord = 0xFF8280;
 constexpr uint32_t kCameraWantsX = 0x20, kCameraWantsY = 0x24, kCameraMostX = 0x5C, kCameraMostY = 0x5E;
+constexpr uint32_t kCameraEndLeft = 0x44, kCameraEndRight = 0x46; // words: kCameraLeft and kCameraRight on a stage
+constexpr uint32_t kCameraEndTop = 0x40, kCameraEndBottom = 0x42; // words: the ends it stops at, up and down
 // ... worked out each frame at these, which end by handing the place (D0) to the code at the second address
+// (camera.cpp)
 constexpr uint32_t kCameraAcross = 0x01E36E, kCameraAcrossSet = 0x01E450;
 constexpr uint32_t kCameraUp = 0x01E3F2, kCameraUpSet = 0x01E4A0;
+// The players' outer edges across the stage (D0 the left one, D1 the right), and their heights (D0 the
+// lower, D1 the higher), for the camera
+constexpr uint32_t kPlayersAcross = 0x01E8F4, kPlayersUp = 0x01E962;
+constexpr uint32_t kCameraHeld = 0x60; // byte: not zero: the camera does not follow the players
+// More of a scroll screen's record (the camera's is one: kLayerX and kLayerY are its kCameraWantsX and Y):
+constexpr uint32_t kLayerY = 0x24;                             // word: where its picture's bottom is in the stage
+constexpr uint32_t kLayerStartX = 0x08, kLayerStartY = 0x0C;   // words: its place when the camera is at its own start
+constexpr uint32_t kLayerShakeX = 0x50, kLayerShakeY = 0x54;   // words: added to its place (a stage shaking)
+constexpr uint32_t kLayerBeforeX = 0x28, kLayerBeforeY = 0x2C; // words: where it was the frame before
+constexpr uint32_t kLayerNudgeX = 0x58, kLayerNudgeY = 0x5A;   // words: added to the scroll registers only
+// bytes: which way it went this frame (across: 0C right, 08 left; up: 00 up, 04 down), and the line it last
+// drew a strip of the map for (a bit, kept turned over)
+constexpr uint32_t kLayerGoingX = 0x3B, kLayerGoingY = 0x3A, kLayerStripX = 0x38, kLayerStripY = 0x39;
+constexpr uint32_t kFarLayer = 0xFF8300; // the record of the scroll screen of 32-pixel tiles
+// The row scroll table's record follows the three: where the table is (a long), the row of it that is the
+// stage's own plane at the camera's height (a word: bytes into the table), and a word added to the camera's
+// place for the planes that go at a rate of it
+constexpr int32_t kRowsTable = 0x380, kRowsAt = 0x3A0, kRowsLead = 0x398; // from A5
+constexpr int32_t kStageDip = 0x13E; // from A5, a word: taken off every plane's height (a stage shaking)
+// A player's record: half its width as the camera and the picture's edges take it (a word); bit 7 of a
+// byte set when the camera is not to follow the player, unless the next byte is not zero
+constexpr uint32_t kHalfWidth = 0x132, kNotFollowed = 0x134, kFollowedAnyway = 0x19A;
 
 // More of a player's record:
 constexpr uint32_t kOpponent = 0x32;         // word: the other player's record (in FFxxxx)

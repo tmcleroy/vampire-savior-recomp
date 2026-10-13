@@ -66,6 +66,21 @@ Vampire Savior's sources: `vsav.h` (names for what is known of the game), `cheat
 damage and the clock through hooks), `training.cpp` (damage readout, input display, health that
 refills, and the dummy: `beforeFrame` changes what the game is told player 2 presses).
 
+- **A wider picture** (`machine.video.wide`, video/video.h; set before every frame): `side` more
+  columns on each side of the board's 384, up to 64 (512 columns, the board's whole raster, is 16:9
+  where 384 is 4:3). Nothing about the game changes, only what is drawn of it, so the sources say
+  how: `scroll[n]` draws a scroll screen moved to the right, `object` says how far each object is
+  moved (the stage's go with the view, a panel's stay), and `tile` gives the tiles beyond the
+  board's own columns for a scroll screen whose map the game only keeps up as far as its own
+  picture shows. `TheGame().widestPicture` tells the window what shape to start in. Vampire Savior's
+  `widescreen.cpp` is the example.
+
+- **A switch on the launcher's first page.** A feature with `kFeatureFirstPage` is left out of
+  the list the launcher's Features page is made from; the game's `game.cfg` puts its switch under
+  "Full screen" with `display = name | Title | What it says` (more of them with `||` between). The
+  launcher keeps the switch in its own `launcher.ini` and starts the game with `--features name` or
+  `--features -name`, which goes before what `settings.ini` has. The in-game menu still has it.
+
 ## Finding things out
 
 - `--dump-ram F:FILE` writes work RAM after frame F (and the video memory and registers beside
@@ -79,7 +94,8 @@ refills, and the dummy: `beforeFrame` changes what the game is told player 2 pre
   the instruction that made it; `work/<id>/program.lst` is the disassembly to read it against.
   That is how the damage routine and the clock's tick were found.
 - `--shot-every N:PFX` and `tools/sheet.sh` make a contact sheet of a run; `CPS2RECOMP_LAYERS=mask`
-  draws only some layers (bit 0 objects, bits 1-3 the scroll screens).
+  draws only some layers (bit 0 objects, bits 1-3 the scroll screens); `CPS2RECOMP_WIDE=n` draws n
+  more columns on each side of the picture (64 at most), to see what a game has beyond its edges.
 - `--state-save F:FILE` / `--state-load F:FILE` and movies (`--record`, `--movie`) get back to a
   moment exactly.
 

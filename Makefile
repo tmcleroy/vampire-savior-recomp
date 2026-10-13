@@ -16,3 +16,8 @@ audit:
 .PHONY: check-release
 check-release: port
 	@tools/check_release.sh $(FRAMES)
+
+# Widescreen changes the picture and nothing else, and reads the stage's plan as the game does
+.PHONY: check-widescreen
+check-widescreen: port
+	@games/$(GAME)/check_widescreen.sh

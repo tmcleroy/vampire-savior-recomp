@@ -50,6 +50,12 @@ board does not have. Each mode has a page there with a Start row and its choices
 | --- | --- | --- |
 | Free play | `free_play` | Start works without a coin. |
 
+## Display
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| Widescreen | `widescreen` | Its switch in the launcher is on the first page, under "Full screen" (not on the Features page), and that switch decides at every start; the in-game menu's Display page has it too. Fights are shown and played in 16:9 (512 columns where the board shows 384), with more of the stage on each side. Off unless switched on, in every preset, because it changes how the game plays: the players can go to the wide picture's edges (464 apart at most, where the board allows 336), and the camera stops 64 short of where it did, so that the picture ends where the stage does. The bars stay in the middle. Everything that is not a fight keeps the board's 4:3. Known: some pieces of a stage come in late at the wide picture's edge, and at a stage's very ends a few columns of the planes behind are not painted. |
+
 ## Cheats
 
 | Feature | Name in `settings.ini` | What it does |

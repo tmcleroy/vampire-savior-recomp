@@ -96,6 +96,10 @@ struct Port {
     void MenuPicture(std::vector<uint32_t> &pixels, uint32_t &width, uint32_t &height) const;
     // The picture with the readout over it (runtime/game.h, SetHud), as the window and screenshots show it
     void Shown(std::vector<uint32_t> &pixels) const;
+    // How many pixels a line of it has (the machine's picture: wider when the game's sources ask)
+    int ShownWidth() const {
+        return machine->PictureWidth();
+    }
     std::string StatePath(int slot) const;
 
     bool Init(std::string &error);

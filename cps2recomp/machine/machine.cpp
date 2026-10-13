@@ -43,7 +43,7 @@ Machine::Machine(const RomSet &roms)
     , objectRam(0x4000)
     , extraRam(0x4000)
     , m_roms(roms)
-    , m_picture(static_cast<size_t>(Video::kWidth) * Video::kHeight) {
+    , m_picture(static_cast<size_t>(Video::kMaxWidth) * Video::kHeight) {
     Video::Sources sources;
     sources.graphics = roms.graphics.data();
     sources.graphicsSize = roms.graphics.size();
@@ -56,6 +56,8 @@ Machine::Machine(const RomSet &roms)
         video.layerMask = static_cast<unsigned>(strtoul(layers, nullptr, 0)); // (bit 0 objects, 1-3 scroll screens)
     }
     cpu.ram = ram.data();
+    cpu.video = videoRam.data();
+    cpu.videoSize = static_cast<uint32_t>(videoRam.size());
     cpu.rom = roms.program.data();
     cpu.opcodes = roms.opcodes.data();
     cpu.romSize = static_cast<uint32_t>(roms.program.size());
@@ -129,6 +131,15 @@ void Machine::InterruptAck(unsigned) {
 }
 
 void Machine::RunFrame() {
+    // (the picture's width is the frame's: what is asked for while it runs is for the next)
+    // (for tools: CPS2RECOMP_WIDE=n draws n more columns on each side whatever the game's sources ask, to see
+    // what a game has beyond its picture's edges)
+    static const char *const forced = getenv("CPS2RECOMP_WIDE");
+    if (forced) {
+        video.wide.side = atoi(forced);
+    }
+    video.wide.side = std::clamp(video.wide.side, 0, static_cast<int>(Video::kMaxSide));
+    m_pictureWidth = video.Width();
     do {
         RunLine();
     } while (m_line != kBlankingLine);
@@ -169,7 +180,7 @@ void Machine::RunLine() {
 
     if (m_line >= Video::kFirstLine && m_line < Video::kFirstLine + Video::kHeight) {
         const int row = m_line - Video::kFirstLine;
-        video.RenderLine(row, &m_picture[static_cast<size_t>(row) * Video::kWidth]);
+        video.RenderLine(row, &m_picture[static_cast<size_t>(row) * m_pictureWidth]);
     }
     m_line = (m_line + 1) % kLines;
 }

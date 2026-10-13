@@ -21,6 +21,7 @@
 // frame of and puts away again, every frame. The picture is then made of the two, and the sound mixed.
 #include "modes.h"
 #include "state.h"
+#include "widescreen.h"
 
 #include <algorithm>
 #include <cstring>
@@ -147,9 +148,18 @@ namespace {
     constexpr uint16_t kApart = 0xC0;                  // the players stand this far apart (the camera then keeps their middle in the picture's)
     constexpr int32_t kStick = 384;                    // a frame's scrolling with the stick held, in 256ths of a pixel
     constexpr int32_t kScroll[] = {0, 64, 128, 256};   //   and by itself: slow, medium, fast
-    constexpr int32_t kLeftEnd = kCameraLeft * 256, kRightEnd = kCameraRight * 256;
+    // The camera's ends, in 256ths of a pixel, for the picture being played in (widescreen.h: a wide
+    // picture's camera stops 64 short of where the board's does)
+    int32_t LeftEnd() {
+        return (kCameraLeft + WideMargin()) * 256;
+    }
+    int32_t RightEnd() {
+        return (kCameraRight - WideMargin()) * 256;
+    }
     constexpr int kInfinite = kStages;                 // the "Stage" choice after the stages
-    constexpr int32_t kAcross = Video::kWidth * 256;   // the picture's width: how far a stage slides to be gone
+    int32_t Across() { // the picture's width: how far a stage slides to be gone
+        return (Video::kWidth + 2 * WideSide()) * 256;
+    }
     constexpr int kOnTheWay = 3;                       // frames a frame that the next stage runs until its round is on
     constexpr size_t kSoundAhead = 16;                 // samples of the next stage's sound kept in hand
 
@@ -173,7 +183,7 @@ namespace {
         g.infinite = g_chosenStage == kInfinite;
         g.stage = g.infinite ? 1 : std::clamp(g_chosenStage, 0, kStages - 1) + 1;
         g.next = g.stage % kStages + 1;
-        g.camera = g.infinite ? kLeftEnd : (kLeftEnd + kRightEnd) / 2;
+        g.camera = g.infinite ? LeftEnd() : (LeftEnd() + RightEnd()) / 2;
         Wanted().stage = g.stage;
         machine.Reset();
     }
@@ -201,20 +211,20 @@ namespace {
             // Always onwards by itself; with the stick, back as well, as far as this stage's start. The stage
             // is scrolled to its end, and then slides out as the next comes in (if that one is ready).
             int32_t by = scroll == 0 ? byStick : kScroll[scroll];
-            if (g.slide > 0 || (g.camera + by >= kRightEnd && by > 0)) {
-                by -= kRightEnd - g.camera;
-                g.camera = kRightEnd;
-                g.slide = g.nextReady ? std::clamp(g.slide + by, 0, kAcross) : 0;
+            if (g.slide > 0 || (g.camera + by >= RightEnd() && by > 0)) {
+                by -= RightEnd() - g.camera;
+                g.camera = RightEnd();
+                g.slide = g.nextReady ? std::clamp(g.slide + by, 0, Across()) : 0;
             } else {
-                g.camera = std::max(g.camera + by, kLeftEnd);
+                g.camera = std::max(g.camera + by, LeftEnd());
             }
         } else {
             g.camera += scroll == 0 ? byStick : g.direction * kScroll[scroll];
-            if (g.camera >= kRightEnd) {
-                g.camera = kRightEnd;
+            if (g.camera >= RightEnd()) {
+                g.camera = RightEnd();
                 g.direction = -1;
-            } else if (g.camera <= kLeftEnd) {
-                g.camera = kLeftEnd;
+            } else if (g.camera <= LeftEnd()) {
+                g.camera = LeftEnd();
                 g.direction = 1;
             }
         }
@@ -224,7 +234,9 @@ namespace {
     // The infinite stage, after the shown stage's frame: a frame of the next stage's machine (or a few, while
     // it is on its way to its round), and the picture and the sound made of the two.
     void RunNext(Machine &machine) {
-        const size_t pixels = static_cast<size_t>(Video::kWidth) * Video::kHeight;
+        const int width = machine.PictureWidth();
+        const size_t pixels = static_cast<size_t>(width) * Video::kHeight;
+        const Video::Wide wide = machine.video.wide;
         static std::vector<uint32_t> shown;
         shown.assign(machine.Picture(), machine.Picture() + pixels);
         g_soundBefore = std::min(g_soundBefore, machine.audio.size());
@@ -249,12 +261,13 @@ namespace {
         }
         Wanted().stage = g.next;
         machine.video.hideObject = NotTheStage;
+        WideForSpare(machine); // (its picture as wide as the shown stage's)
         for (int n = 0; n < kOnTheWay; n++) {
             machine.audio.resize(g_soundBefore);
             g.nextReady = g.nextReady || ToRound(machine, g.nextFrames);
             if (g.nextReady) {
                 machine.players[0] = machine.players[1] = 0;
-                Place(kLeftEnd);
+                Place(LeftEnd());
             }
             machine.RunFrame();
             if (g.nextReady || g.nextFrames > kStartMost) {
@@ -267,13 +280,13 @@ namespace {
         machine.audio.resize(g_soundBefore);
 
         // The picture: the shown stage moved left by the slide, the next stage after it
-        const int slide = std::clamp(g.slide / 256, 0, static_cast<int>(Video::kWidth));
-        if (slide > 0) {
+        const int slide = std::clamp(g.slide / 256, 0, width);
+        if (slide > 0 && machine.PictureWidth() == width) {
             const uint32_t *next = machine.Picture();
             for (int y = 0; y < Video::kHeight; y++) {
-                uint32_t *row = &shown[static_cast<size_t>(y) * Video::kWidth];
-                memmove(row, row + slide, static_cast<size_t>(Video::kWidth - slide) * sizeof(uint32_t));
-                memcpy(row + Video::kWidth - slide, next + static_cast<size_t>(y) * Video::kWidth, static_cast<size_t>(slide) * sizeof(uint32_t));
+                uint32_t *row = &shown[static_cast<size_t>(y) * width];
+                memmove(row, row + slide, static_cast<size_t>(width - slide) * sizeof(uint32_t));
+                memcpy(row + width - slide, next + static_cast<size_t>(y) * width, static_cast<size_t>(slide) * sizeof(uint32_t));
             }
         }
         // The sound: one fades into the other as the next stage comes in. As many samples as the shown stage
@@ -282,19 +295,19 @@ namespace {
         if (g_otherSound.size() < count) {
             g_otherSound.resize(count, 0);
         }
-        const int32_t nextGain = slide * 256 / Video::kWidth, shownGain = 256 - nextGain;
+        const int32_t nextGain = slide * 256 / width, shownGain = 256 - nextGain;
         for (size_t i = 0; i < count; i++) {
             const int32_t mixed = (sound[i] * shownGain + (g.nextReady ? g_otherSound[i] : 0) * nextGain) / 256;
             sound[i] = static_cast<int16_t>(std::clamp(mixed, -32768, 32767));
         }
         g_otherSound.erase(g_otherSound.begin(), g_otherSound.begin() + static_cast<std::ptrdiff_t>(count));
 
-        if (g.slide >= kAcross) {
+        if (g.slide >= Across()) {
             // The next stage has come all the way in: its machine is the one the port runs from here, and
             // the stage after it is switched on
             g.stage = g.next;
             g.next = g.stage % kStages + 1;
-            g.camera = kLeftEnd;
+            g.camera = LeftEnd();
             g.slide = 0;
             g.nextReady = false;
             g.nextFrames = 0;
@@ -313,6 +326,8 @@ namespace {
         Wanted().stage = g.stage;
         machine.players[0] = held[0];
         machine.players[1] = held[1];
+        machine.video.wide = wide;
+        WideForPort(machine);
         memcpy(machine.Picture(), shown.data(), pixels * sizeof(uint32_t));
         machine.audio.insert(machine.audio.end(), sound.begin(), sound.end());
     }

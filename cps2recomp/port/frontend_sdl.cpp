@@ -97,7 +97,9 @@ int RunWindowed(Port &port) {
 #else
     const char *title = GAME_NAME;
 #endif
-    SDL_Window *window = SDL_CreateWindow(title, 224 * scale * 4 / 3, 224 * scale,
+    // (4:3 for the board's picture; as much wider as the widest picture the game's sources may ask for)
+    const int columns = TheGame().widestPicture ? std::clamp(TheGame().widestPicture(), +Video::kWidth, +Video::kMaxWidth) : Video::kWidth;
+    SDL_Window *window = SDL_CreateWindow(title, 224 * scale * 4 / 3 * columns / Video::kWidth, 224 * scale,
                                           SDL_WINDOW_RESIZABLE | (port.opt.fullscreen ? SDL_WINDOW_FULLSCREEN : 0) |
                                               (getenv("CPS2RECOMP_HIDDEN_WINDOW") ? SDL_WINDOW_HIDDEN : 0)); // (hidden: for tests)
     // The picture goes to the window through SDL's GPU API, or through SDL's renderer where there is no
@@ -312,12 +314,14 @@ int RunWindowed(Port &port) {
             port.pad[1] = pads[1] & ~heldAtClose;
         }
 
-        // The picture as large as fits the window at 4:3
+        // The picture as large as fits the window at its shape: 4:3 for the board's 384 columns, and as much
+        // wider as a wider picture has more of them (16:9 for 512)
         int width = 0, height = 0;
         presenter.Size(width, height);
+        const float shape = 4.0f / 3.0f * static_cast<float>(port.ShownWidth()) / Video::kWidth;
         SDL_FRect where;
-        where.w = std::min<float>(static_cast<float>(width), height * 4.0f / 3.0f);
-        where.h = where.w * 3.0f / 4.0f;
+        where.w = std::min<float>(static_cast<float>(width), height * shape);
+        where.h = where.w / shape;
         where.x = (width - where.w) / 2;
         where.y = (height - where.h) / 2;
 
@@ -370,7 +374,7 @@ int RunWindowed(Port &port) {
         made.clear();
 
         port.Shown(shown);
-        presenter.Show(shown.data(), Video::kWidth, Video::kHeight, where);
+        presenter.Show(shown.data(), port.ShownWidth(), Video::kHeight, where);
 
         if (!port.opt.unthrottled && !FastForward()) {
             nextFrame += static_cast<uint64_t>(kFrameNs);

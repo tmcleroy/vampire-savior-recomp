@@ -11,6 +11,12 @@ void CheatsFrame(Machine &machine);
 void RegisterCollision(); // collision.cpp
 void RegisterFight();     // fight.cpp
 void RegisterInput();     // input.cpp
+void RegisterCamera();    // camera.cpp
+void RegisterPlanes();    // planes.cpp
+void RegisterRows();      // rows.cpp
+void RegisterPicture();   // picture.cpp
+void RegisterEdges();     // edges.cpp
+void RegisterPieces();    // pieces.cpp
 void RegisterFrames();    // frames.cpp
 void RegisterTraining(); // training.cpp
 void TrainingBeforeFrame(Machine &machine);
@@ -25,6 +31,8 @@ void RegisterBattle();   // battle.cpp
 void BattleBeforeFrame(Machine &machine);
 void BattleFrame(Machine &machine);
 void BattleState(Archive &ar);
+void RegisterWidescreen(); // widescreen.cpp
+void WidescreenBeforeFrame(Machine &machine);
 
 void RegisterGame() {
     RegisterModes();
@@ -35,8 +43,17 @@ void RegisterGame() {
     RegisterCollision();
     RegisterFight();
     RegisterInput();
+    RegisterCamera();
+    RegisterPlanes();
+    RegisterRows();
+    RegisterPicture();
+    RegisterEdges();
+    RegisterPieces();
     RegisterFrames();
+    RegisterWidescreen();
     TheGame().beforeFrame = [](Machine &machine) {
+        // (first: the modes below may run other machines' frames, which are never wide)
+        WidescreenBeforeFrame(machine);
         TrainingBeforeFrame(machine);
         ModesBeforeFrame(machine);
         BattleBeforeFrame(machine);

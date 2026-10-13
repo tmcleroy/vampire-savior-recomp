@@ -40,7 +40,8 @@ the rules it changes (`if (FeatureOn("no_damage")) ...`).
 
 `--check-rewrites` runs, at every call of a rewritten routine: the rewrite; then, with everything
 put back, the game's own code for it (by the interpreter); and compares registers, flags and all
-of work RAM (but for the stack below the stack pointer). The game goes on from what its own code
+of work RAM (but for the stack below the stack pointer). A rewrite that writes video RAM (a scroll
+screen's map, the row scroll table) names `kChecksVideo` beside its free registers, and that is compared too. The game goes on from what its own code
 did. Differences are reported with the rewrite's name and the call's number:
 
     rewrite HitTest (017FF4), call 912, differs: [FF3459] 00 (the game's: 77, was 77)

@@ -57,7 +57,7 @@ build_programs() {
         -DHOME_ENV="$(echo "$GAME" | tr a-z A-Z)_HOME" -DDISCLAIMER="$(cfg disclaimer)" \
         -DROM_SET="$(cfg rom_set)" -DROM_PARENT="$(cfg rom_parent)" -DROM_NAME="$(cfg rom_name)" \
         -DROM_PROGRAM="$(cfg program)" -DROM_GRAPHICS="$(cfg graphics)" -DROM_SOUND_PROGRAM="$(cfg sound_program)" \
-        -DROM_SAMPLES="$(cfg samples)" -DROM_KEY="$(cfg key)" "$@" >/dev/null
+        -DROM_SAMPLES="$(cfg samples)" -DROM_KEY="$(cfg key)" -DDISPLAY_SWITCHES="$(cfg display)" "$@" >/dev/null
     cmake --build "$build/launcher"
 }
 # What every archive carries beside the programs: $1 the folder, $2 the launcher's build folder

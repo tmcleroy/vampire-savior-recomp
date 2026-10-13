@@ -6,6 +6,7 @@
 #include "modes.h"
 
 #include "state.h"
+#include "widescreen.h"
 
 #include <algorithm>
 #include <cstring>
@@ -18,34 +19,6 @@ namespace {
     MatchWanted g_wanted;
     CameraWanted g_camera;
     std::vector<uint8_t> g_mine; // the port's machine, while a spare runs in it
-
-    // 01E36E, 01E3F2. The camera works out where it wants to be, across and up, from where the players are.
-    // When a mode wants it somewhere, it goes there instead, no faster than the game lets it go (the stage's
-    // tiles are drawn in as it moves, a column or a row at a time).
-    bool CameraAcross(M68K &c) {
-        if (g_camera.x < 0) {
-            return false;
-        }
-        const uint32_t camera = c.a[6] & 0xFFFFFF;
-        const int now = static_cast<int16_t>(Ram16(camera + kCameraWantsX)), most = std::max<int>(Ram16(camera + kCameraMostX), 1);
-        const int to = now + std::clamp(g_camera.x - now, -most, most);
-        SetRam16(camera + kCameraWantsX, static_cast<uint16_t>(to));
-        SetLow16(c.d[0], static_cast<uint16_t>(to));
-        c.pc = kCameraAcrossSet;
-        return true;
-    }
-    bool CameraUp(M68K &c) {
-        if (g_camera.y < 0) {
-            return false;
-        }
-        const uint32_t camera = c.a[6] & 0xFFFFFF;
-        const int now = static_cast<int16_t>(Ram16(camera + kCameraWantsY)), most = std::max<int>(Ram16(camera + kCameraMostY), 1);
-        const int to = now + std::clamp(g_camera.y - now, -most, most);
-        SetRam16(camera + kCameraWantsY, static_cast<uint16_t>(to));
-        SetLow16(c.d[0], static_cast<uint16_t>(to));
-        c.pc = kCameraUpSet;
-        return true;
-    }
 } // namespace
 
 MatchWanted &Wanted() {
@@ -100,7 +73,7 @@ bool NotTheFighters(uint32_t tile, uint16_t attributes) {
 }
 
 void Take(Machine &machine, size_t soundBefore, Made &made) {
-    const size_t pixels = static_cast<size_t>(Video::kWidth) * Video::kHeight;
+    const size_t pixels = static_cast<size_t>(machine.PictureWidth()) * Video::kHeight;
     made.picture.assign(machine.Picture(), machine.Picture() + pixels);
     soundBefore = std::min(soundBefore, machine.audio.size());
     made.sound.assign(machine.audio.begin() + static_cast<std::ptrdiff_t>(soundBefore), machine.audio.end());
@@ -123,7 +96,8 @@ void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &
     const MatchWanted wanted = g_wanted;
     const CameraWanted camera = g_camera;
     const size_t sound = machine.audio.size();
-    const size_t pixels = static_cast<size_t>(Video::kWidth) * Video::kHeight;
+    const Video::Wide wide = machine.video.wide;
+    const size_t pixels = static_cast<size_t>(Video::kMaxWidth) * Video::kHeight; // (all of it, whatever its width)
     static std::vector<uint32_t> picture;
     picture.assign(machine.Picture(), machine.Picture() + pixels);
 
@@ -146,6 +120,7 @@ void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &
     machine.video.markObjects = false;
     g_wanted = MatchWanted();
     g_camera = CameraWanted();
+    WideForSpare(machine);
     before(machine);
     machine.RunFrame();
     if (after) {
@@ -170,6 +145,8 @@ void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &
     machine.video.hideObject = hide;
     machine.video.layerMask = layers;
     machine.video.markObjects = mark;
+    machine.video.wide = wide;
+    WideForPort(machine);
     g_wanted = wanted;
     g_camera = camera;
 }
@@ -183,8 +160,6 @@ void Promote(Machine &machine, Spare &spare) {
 }
 
 void RegisterMachines() {
-    AddHook(0x01E36E, "CameraAcross", CameraAcross);
-    AddHook(0x01E3F2, "CameraUp", CameraUp);
 }
 
 } // namespace cps2recomp

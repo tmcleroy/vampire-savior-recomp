@@ -11,6 +11,7 @@
 #include "machine.h"
 #include "modes.h"
 #include "state.h"
+#include "widescreen.h"
 #include "vsav.h"
 
 #include <algorithm>
@@ -177,11 +178,11 @@ namespace {
         if (place % 3 == 1) {
             x[0] = kStageLeft;
             x[1] = kStageLeft + kCornerApart;
-            camera = kCameraLeft;
+            camera = static_cast<uint16_t>(kCameraLeft + WideMargin()); // (the camera's end in the picture played in)
         } else if (place % 3 == 2) {
             x[0] = kStageRight - kCornerApart;
             x[1] = kStageRight;
-            camera = kCameraRight;
+            camera = static_cast<uint16_t>(kCameraRight - WideMargin());
         }
         if (place >= 3) {
             std::swap(x[0], x[1]);
@@ -558,6 +559,10 @@ namespace {
         if (FeatureOn("hit_boxes")) {
             // What the game's memory says now is what the next picture shows, so the boxes are drawn a frame
             // after they are worked out
+            // (in a wide picture the stage is further right than on the board's: widescreen.h)
+            for (HudBox &box : g_nextBoxes) {
+                box.x += WideStage();
+            }
             boxes.insert(boxes.begin(), g_nextBoxes.begin(), g_nextBoxes.end());
             g_nextBoxes.clear();
             const int cameraX = static_cast<int16_t>(Ram16(kCameraX)), cameraY = static_cast<int16_t>(Ram16(kCameraY));

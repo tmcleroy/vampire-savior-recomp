@@ -33,6 +33,10 @@ enum : unsigned {
     kFeatureEnhanced = 2,  // on in the launcher's "Enhanced" preset
     kFeatureExclusive = 4, // only one of its category at a time
     kFeatureSession = 8,   // for this run only: not kept in settings.ini, and off again when the board is reset
+    // Its switch is on the launcher's first page, with "Full screen" (the game's game.cfg names it there:
+    // `display`), and not on the Features page: the launcher says at every start whether it is on
+    // (--features NAME or -NAME), which goes before what settings.ini has. The in-game menu still has it.
+    kFeatureFirstPage = 16,
 };
 
 // Something the game's sources can do when the player asks (a row of the in-game menu, and a key if it has
@@ -67,6 +71,9 @@ struct Game {
     void (*beforeFrame)(Machine &machine) = nullptr; // with the players' input set, before the game runs a frame
     void (*frame)(Machine &machine) = nullptr;       // after every frame the game ran
     void (*state)(Archive &ar) = nullptr;            // the game sources' own state, for save states
+    // For a game whose sources can ask for a wider picture (video.h, Video::wide): how many columns the
+    // widest will have with the player's choices as they are, so that the window starts in its shape
+    int (*widestPicture)() = nullptr;
 };
 Game &TheGame();
 // The game's sources fill it in (games/<id>/src; runtime/no_game.cpp when a game has none)
