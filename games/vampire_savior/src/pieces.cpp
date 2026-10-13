@@ -543,6 +543,431 @@ namespace {
         TurnsFrame(c, turns);
     }
 
+    // --- more scripts, whole ---
+    //
+    // Small ones, most of them a plain piece with one thing of its own. `StepAt` is `Step` for a script
+    // given by where it is and where its four steps are.
+    struct Steps {
+        uint32_t script, at[4];
+    };
+    int StepAt(M68K &c, const Steps &steps) {
+        const int step = Ram8((c.a[6] & 0xFFFFFF) + kStep);
+        SetLow8(c.d[0], step);
+        SetLow16(c.d[1], steps.at[(step >> 1) & 3] - (steps.script + 0x0C));
+        return step;
+    }
+    // The record that made the piece at A6, in A4
+    uint32_t Maker(M68K &c) {
+        c.a[4] = 0xFFFF0000u | Ram16((c.a[6] & 0xFFFFFF) + kMaker);
+        return c.a[4] & 0xFFFFFF;
+    }
+    // A made-up number from 0 to 3 in D0's low byte or word (the game takes one or the other)
+    void Chance(M68K &c, bool word) {
+        Call(c, kRandom);
+        word ? SetLow16(c.d[0], c.d[0] & 3) : SetLow8(c.d[0], c.d[0] & 3);
+    }
+    // 015036. The animation's next frame now, however long the one shown had left
+    void NextFrame(M68K &c) {
+        Call(c, 0x015036);
+    }
+    void StartAs(M68K &c, uint32_t animation) {
+        SetRam8((c.a[6] & 0xFFFFFF) + kStep, Ram8((c.a[6] & 0xFFFFFF) + kStep) + 2);
+        SetStageAnimation(c, animation);
+    }
+    void ByCamera(M68K &c) {
+        Call(c, 0x0154CC); // (picture.cpp)
+    }
+    void IfInPicture(M68K &c) {
+        Call(c, 0x01551A);
+    }
+    constexpr int32_t kRoundOn = 0x107;     // from A5, a byte: not zero once the round's fighting has begun
+    constexpr int32_t kOddFrame = 0xB4;     // from A5, a byte: bit 0 turns over each frame (things drawn every other frame)
+    constexpr uint32_t kCameraStep = 0x285; // the camera's record: the step of its own script (the train's start)
+    constexpr uint32_t kSpare = 0x22;       // byte: the third of an animation frame's four bytes
+
+    // 07FF76 (script 41, the train): goes through its animation once the round is on, and is not there before
+    void Script41(M68K &c) {
+        static constexpr Steps kSteps = {0x07FF76, {0x07FF8A, 0x07FF9A, 0x07FFAE, 0x07FFAE}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, Ram8(piece + kWhich));
+            break;
+        case 2:
+            if (Ram8(Var(c, kRoundOn))) {
+                Animate(c);
+                PieceDrawn(c);
+            }
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07FBC4 (script 36, the train): there until the camera's own script has got to its step 6
+    void Script36(M68K &c) {
+        static constexpr Steps kSteps = {0x07FBC4, {0x07FBD8, 0x07FBE8, 0x07FC06, 0x07FC06}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, Ram8(piece + kWhich));
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                Animate(c);
+                if (Ram8(kCameraRecord + (kCameraStep - 0x280)) == 6) {
+                    SetRam8(piece + kStep, Ram8(piece + kStep) + 2);
+                }
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07FB5E (script 35, the train): one animation until then, the next after
+    void Script35(M68K &c) {
+        static constexpr Steps kSteps = {0x07FB5E, {0x07FB72, 0x07FB82, 0x07FBAC, 0x07FBBE}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, Ram8(piece + kWhich));
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                Animate(c);
+                if (Ram8(kCameraRecord + (kCameraStep - 0x280)) == 6) {
+                    SetLow8(c.d[0], Ram8(piece + kWhich) + 1);
+                    StartAs(c, c.d[0] & 0xFF);
+                }
+            }
+            ByCamera(c);
+            break;
+        case 4:
+            if (!Frozen(c)) {
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07DECE (script 9, Concrete Cave): at an event of its animation, one time in four, the animation again from its start
+    void Script9(M68K &c) {
+        static constexpr Steps kSteps = {0x07DECE, {0x07DEE2, 0x07DEEE, 0x07DF18, 0x07DF18}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, 1);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                Animate(c);
+                if (Ram8(piece + kEvent)) {
+                    SetRam8(piece + kEvent, 0);
+                    Chance(c, false);
+                    if (!(c.d[0] & 0xFF)) {
+                        SetStageAnimation(c, 1);
+                    }
+                }
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07E10E (script 12, Concrete Cave): when its animation ends, another: number 2 one time in four, else 3
+    void Script12(M68K &c) {
+        static constexpr Steps kSteps = {0x07E10E, {0x07E122, 0x07E12E, 0x07E15C, 0x07E15C}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, 3);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                Animate(c);
+                if (Ram8(piece + kOver)) {
+                    Chance(c, false);
+                    SetStageAnimation(c, (c.d[0] & 0xFF) ? 3 : 2);
+                }
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 080768 (script 52, Concrete Cave): waits for the event 2 of the piece that made it, then goes through its animation
+    void Script52(M68K &c) {
+        static constexpr Steps kSteps = {0x080768, {0x08077C, 0x080792, 0x0807A8, 0x0807BA}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + 0x0D, 0xFF);
+            SetRam8(piece + kDepth, 4);
+            StartAs(c, 7);
+            [[fallthrough]]; // (the game's own: the first frame follows at once)
+        case 2:
+            if (Ram8(Maker(c) + kEvent) == 2) {
+                SetRam8(piece + kStep, Ram8(piece + kStep) + 2);
+            }
+            IfInPicture(c);
+            break;
+        case 4:
+            if (!Frozen(c)) {
+                Animate(c);
+            }
+            IfInPicture(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 0806FA (script 51, Concrete Cave): there while the spare byte of its maker's frame is not zero; at an
+    // event, three times in four, another of three animations
+    void Script51(M68K &c) {
+        static constexpr Steps kSteps = {0x0806FA, {0x08070E, 0x080724, 0x080762, 0x080762}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + 0x0D, 0xFF);
+            SetRam8(piece + kDepth, 2);
+            StartAs(c, 9);
+            [[fallthrough]];
+        case 2:
+            if (!Ram8(Maker(c) + kSpare)) {
+                break;
+            }
+            if (!Frozen(c)) {
+                Animate(c);
+                if (Ram8(piece + kEvent) & 0x80) {
+                    SetRam8(piece + kEvent, 0);
+                    Chance(c, false);
+                    if (c.d[0] & 0xFF) {
+                        SetStageAnimation(c, (c.d[0] & 0xFF) + 9);
+                    }
+                }
+            }
+            IfInPicture(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07DDD8 (script 7, Feast of the Damned): its animation is by a word of its maker's (script 6's), and
+    // changes when that does
+    constexpr uint32_t kMakersChoice = 0x44, kChoiceTaken = 0x4C;
+    void TakeChoice(M68K &c, uint32_t piece) {
+        SetRam16(piece + kChoiceTaken, static_cast<uint16_t>(c.d[0]));
+        SetStageAnimation(c, (c.d[0] + 0x0C + Ram8(piece + kWhich)) & 0xFF);
+    }
+    void Script7(M68K &c) {
+        static constexpr Steps kSteps = {0x07DDD8, {0x07DDEC, 0x07DE0A, 0x07DE2C, 0x07DE2C}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + kStep, 2);
+            SetLow16(c.d[0], Ram16(Maker(c) + kMakersChoice));
+            TakeChoice(c, piece);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                SetLow16(c.d[0], Ram16(Maker(c) + kMakersChoice));
+                if ((c.d[0] & 0xFFFF) != Ram16(piece + kChoiceTaken)) {
+                    TakeChoice(c, piece);
+                }
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07EE90 (script 21, Abaraya): its animation over, it waits (180 frames the first time, then 90) and
+    // then, one time in four, goes through it again
+    void Script21(M68K &c) {
+        static constexpr Steps kSteps = {0x07EE90, {0x07EEA4, 0x07EEB6, 0x07EEE6, 0x07EEE6}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam16(piece + kTurn, 0xB4);
+            StartAs(c, 1);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                bool goesOn = !Ram8(piece + kOver);
+                if (!goesOn) {
+                    SetRam16(piece + kTurn, static_cast<uint16_t>(Ram16(piece + kTurn) - 1));
+                    if (Ram16(piece + kTurn) & 0x8000) {
+                        SetRam16(piece + kTurn, 0x5A);
+                        Chance(c, false);
+                        goesOn = !(c.d[0] & 0xFF);
+                    }
+                }
+                if (goesOn) {
+                    Animate(c);
+                }
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07F1A4 (script 25, Vanity Paradise): as the candles of Feast of the Damned, and drawn every other frame
+    void Script25(M68K &c) {
+        static constexpr Steps kSteps = {0x07F1A4, {0x07F1B8, 0x07F1C8, 0x07F1FC, 0x07F1FC}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, Ram8(piece + kWhich));
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                if (Ram8(piece + kEvent)) {
+                    SetRam8(piece + kEvent, 0);
+                    Chance(c, true);
+                    SetRam16(piece + kTimer, static_cast<uint16_t>(Ram16(piece + kTimer) + c.d[0]));
+                }
+                Animate(c);
+            }
+            if (Ram8(Var(c, kOddFrame)) & 1) {
+                ByCamera(c);
+            }
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 080094 (script 44, Fetus of God): its animation's frames by their own time until the round is on,
+    // then one each frame
+    void Script44(M68K &c) {
+        static constexpr Steps kSteps = {0x080094, {0x0800A8, 0x0800B8, 0x0800D4, 0x0800E6}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, Ram8(piece + kWhich));
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                if (Ram8(Var(c, kRoundOn))) {
+                    SetRam8(piece + kStep, Ram8(piece + kStep) + 2);
+                }
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        case 4:
+            if (!Frozen(c)) {
+                NextFrame(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07FA82 (script 33, Green Scream): takes its place on the stage from its maker and its animation by
+    // a word of its maker's, changing when that does
+    void TakeMakersWord(M68K &c, uint32_t piece) {
+        SetRam16(piece + 0x40, static_cast<uint16_t>(c.d[0]));
+        SetLow16(c.d[0], c.d[0] + 0x0A);
+        SetStageAnimation(c);
+    }
+    void Script33(M68K &c) {
+        static constexpr Steps kSteps = {0x07FA82, {0x07FA96, 0x07FADA, 0x07FAFC, 0x07FAFC}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0: {
+            SetRam8(piece + kStep, 2);
+            SetRam8(piece + kDepth, 2);
+            SetRam16(piece + kX, 0x258);
+            SetRam16(piece + kY, 0x70);
+            const uint32_t maker = Maker(c);
+            SetRam8(piece + kFacesRight, Ram8(maker + kFacesRight));
+            SetRam8(piece + kIsRiding, Ram8(maker + kIsRiding));
+            SetRam16(piece + kRow, Ram16(maker + kRow));
+            SetRam32(piece + kPlaces, Ram32(maker + kPlaces));
+            SetLow16(c.d[0], Ram16(maker + 0x40));
+            TakeMakersWord(c, piece);
+            break;
+        }
+        case 2:
+            if (!Frozen(c)) {
+                Animate(c);
+                SetLow16(c.d[0], Ram16(Maker(c) + 0x40));
+                if ((c.d[0] & 0xFFFF) != Ram16(piece + 0x40)) {
+                    TakeMakersWord(c, piece);
+                }
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 0807C0 (script 53, Tower of Arrogance): goes where its maker is, with the animation the spare byte
+    // of its maker's frame names; drawn every other frame
+    void Script53(M68K &c) {
+        static constexpr Steps kSteps = {0x0807C0, {0x0807D4, 0x0807F4, 0x080834, 0x080834}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + 0x0D, 0xFF);
+            SetRam8(piece + kDepth, 2);
+            SetRam8(piece + kHalf, Ram8(Maker(c) + kSpare));
+            StartAs(c, 0x18);
+            [[fallthrough]];
+        case 2:
+            if (!(Ram8(Var(c, kOddFrame)) & 1)) {
+                break;
+            }
+            if (!Frozen(c)) {
+                const uint32_t maker = Maker(c);
+                SetRam16(piece + kX, Ram16(maker + kX));
+                SetRam16(piece + kY, Ram16(maker + kY));
+                SetLow8(c.d[0], Ram8(maker + kSpare));
+                if ((c.d[0] & 0xFF) != Ram8(piece + kHalf)) {
+                    SetRam8(piece + kHalf, c.d[0]);
+                    SetStageAnimation(c);
+                }
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
     // The scripts, by a record's kScript: where each is in the game's program
     constexpr uint32_t kScripts[58] = {
         0x07D354, 0x07D3A2, 0x07D3F6, 0x07D4BA, 0x07D534, 0x07D59C, 0x07D710, 0x07DDD8, 0x07DE32, 0x07DECE, 0x07DF1E, 0x07DF9C,
@@ -609,6 +1034,19 @@ void RegisterPieces() {
     AddRewrite(0x07D4BA, "PieceLady", Lady, kFreeFlags, 166);
     AddRewrite(0x07D534, "PieceThrower", Thrower, kFreeFlags, 134);
     AddRewrite(0x07D240, "AllPieces", AllPieces, kFreeFlags);
+    AddRewrite(0x07FF76, "Script41", Script41, kFreeFlags, 120);
+    AddRewrite(0x07FBC4, "Script36", Script36, kFreeFlags, 120);
+    AddRewrite(0x07FB5E, "Script35", Script35, kFreeFlags, 120);
+    AddRewrite(0x07DECE, "Script9", Script9, kFreeFlags, 120);
+    AddRewrite(0x07E10E, "Script12", Script12, kFreeFlags, 120);
+    AddRewrite(0x080768, "Script52", Script52, kFreeFlags, 120);
+    AddRewrite(0x0806FA, "Script51", Script51, kFreeFlags, 120);
+    AddRewrite(0x07DDD8, "Script7", Script7, kFreeFlags, 120);
+    AddRewrite(0x07EE90, "Script21", Script21, kFreeFlags, 120);
+    AddRewrite(0x07F1A4, "Script25", Script25, kFreeFlags, 120);
+    AddRewrite(0x080094, "Script44", Script44, kFreeFlags, 120);
+    AddRewrite(0x07FA82, "Script33", Script33, kFreeFlags, 120);
+    AddRewrite(0x0807C0, "Script53", Script53, kFreeFlags, 120);
     AddRewrite(0x07DE78, "Piece8ByTurns", ByTurns<kTurns8>, kFreeFlags, 60);
     AddRewrite(0x080A20, "Piece57ByTurns", ByTurns<kTurns57>, kFreeFlags, 60);
     AddRewrite(0x0809A6, "Piece56ByTurns", ByTurns<kTurns56>, kFreeFlags, 60);
