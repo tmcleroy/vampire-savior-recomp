@@ -2618,6 +2618,225 @@ namespace {
         }
     }
 
+    // 07F438 (script 28, War Agony): the thing that crosses the stage from the right every so often,
+    // with three pieces it makes that go with it (script 29). It waits (900 or 964 frames), sets off to
+    // the left gathering speed; from 640 its colours' two animations run; left of 416 it looks for their
+    // ends and starts two more; at 192 it is put back at the right to wait again.
+    constexpr uint32_t kScript28Colours = 0x07F63A;
+    void Script28Waits(M68K &c, uint32_t piece) {
+        SetRam16(piece + kX, 0x400);
+        SetRam16(piece + kY, 0xE6);
+        SetLow16(c.d[2], 0x384);
+        Call(c, kRandom);
+        if (c.d[0] & 1) {
+            SetLow16(c.d[2], 0x3C4);
+        }
+        SetRam16(piece + kTurn, static_cast<uint16_t>(c.d[2]));
+        c.d[0] = 0;
+        SetRam8(piece + kHalf, 0);
+        SetRam32(piece + 0x48, 0);
+        SetRam32(piece + kSpeedY, 0);
+        SetRam32(piece + kSpeedX, 0xFFFF0000);
+        SetRam32(piece + kPullY, 0xFFFFFFF0);
+    }
+    void Script28(M68K &c) {
+        static constexpr Steps kSteps = {0x07F438, {0x07F44C, 0x07F546, 0x07F634, 0x07F634}};
+        static constexpr uint32_t kInnerAt[4] = {0x07F55A, 0x07F56A, 0x07F5A8, 0x07F5DA};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetLow8(c.d[0], 3);
+            SetStageAnimation(c);
+            c.d[6] = 0;
+            // (three records are taken unless there are exactly three: the game's own test, kept)
+            if (Ram8(Var(c, kFreePiecesCount)) != 3) {
+                static constexpr uint16_t kAt[3][2] = {{0x400, 0xDE}, {0x3D0, 0xD6}, {0x3D0, 0xCE}};
+                for (uint32_t n = 0; n < 3; n++) {
+                    Call(c, kTakePiece);
+                    const uint32_t made = c.a[4] & 0xFFFFFF;
+                    SetRam32(made, 0x01001D04 + n);
+                    SetRam16(made + kX, kAt[n][0]);
+                    SetRam16(made + kY, kAt[n][1]);
+                    SetRam32(made + kSpeedX, 0xFFFF1000 + n * 0x1000);
+                    SetRam32(made + 0x48, 0);
+                    SetRam32(made + kSpeedY, 0);
+                    SetRam32(made + kPullY, 0xFFFFFFF0);
+                    SetRam16(made + kMaker, static_cast<uint16_t>(c.a[6]));
+                }
+            }
+            Script28Waits(c, piece);
+            break;
+        case 2:
+            switch (InnerStepOf(c, 0x07F552, kInnerAt)) {
+            case 0:
+                SetRam16(piece + kTurn, static_cast<uint16_t>(Ram16(piece + kTurn) - 1));
+                if (Ram16(piece + kTurn) & 0x8000) {
+                    SetRam8(piece + kInner, 2);
+                    SetRam8(piece + kHalf, 0xFF);
+                }
+                return; // (waiting: not drawn)
+            case 2:
+                if (!Frozen(c)) {
+                    if (Ram16(piece + kX) <= 0x280) {
+                        SetRam8(piece + kInner, 4);
+                        c.d[0] = 0;
+                        ColoursBegin(c, 0x50, kScript28Colours, 0);
+                        c.d[0] = 2;
+                        ColoursBegin(c, 0x58, kScript28Colours, 2);
+                    }
+                    Call(c, kMoveBySpeed);
+                }
+                break;
+            case 4:
+                if (!Frozen(c)) {
+                    ColoursFrame(c, 0x50);
+                    ColoursFrame(c, 0x58);
+                    if (Ram16(piece + kX) <= 0x1A0) {
+                        SetRam8(piece + kInner, 6);
+                    }
+                    Call(c, kMoveBySpeed);
+                }
+                break;
+            default:
+                if (!Frozen(c)) {
+                    for (uint32_t n = 0; n < 2; n++) {
+                        c.a[4] = c.a[6] + 0x50 + n * 8;
+                        if (Ram8((c.a[4] & 0xFFFFFF) + 7)) {
+                            c.d[0] = 1 + n * 2;
+                            ColoursBegin(c, 0x50 + n * 8, kScript28Colours, 1 + n * 2);
+                        }
+                        Call(c, 0x09190A);
+                    }
+                    if (Ram16(piece + kX) <= 0xC0) {
+                        SetRam8(piece + kInner, 0);
+                        Script28Waits(c, piece);
+                        return;
+                    }
+                    Call(c, kMoveBySpeed);
+                }
+                break;
+            }
+            IfInPicture(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07E20E (script 14, Tower of Arrogance): the lights in the sky. One record is two lights, shown on
+    // alternate frames: each has its own eight... thirty-two bytes of the record (from +40 and +60) with
+    // its animation's frame, its place, and where it is in a list in the ROM of moves (a byte for double
+    // speed, a byte for which way of a table of ways, a word of frames; a byte below nothing ends the
+    // list, and the light starts again from its first place).
+    constexpr uint32_t kScript14Lists = 0x07E4E0, kScript14Places = 0x07E360, kScript14Ways = 0x07E3E0;
+    constexpr uint32_t kLightList = 0x08, kLightDouble = 0x10, kLightWay = 0x12, kLightLeft = 0x14, kLightX = 0x18, kLightY = 0x1C;
+    void LightKeepsFrame(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF, light = c.a[4] & 0xFFFFFF;
+        SetRam32(light, Ram32(piece + kFrame));
+        SetRam32(light + 4, Ram32(piece + kTimer));
+    }
+    void LightPlaced(M68K &c) {
+        const uint32_t light = c.a[4] & 0xFFFFFF;
+        SetLow16(c.d[0], c.d[6]);
+        c.a[1] = kScript14Places;
+        SetLow16(c.d[0], c.d[0] << 3);
+        const uint32_t at = c.a[1] + static_cast<uint32_t>(static_cast<int16_t>(c.d[0]));
+        SetRam32(light + kLightX, Mem32(c, at));
+        SetRam32(light + kLightY, Mem32(c, at + 4));
+    }
+    void LightAnimation(M68K &c) {
+        SetLow16(c.d[0], c.d[6]);
+        SetStageAnimation(c);
+    }
+    void LightNextMove(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF, light = c.a[4] & 0xFFFFFF;
+        c.a[3] = Ram32(light + kLightList);
+        if (Mem8(c, c.a[3]) & 0x80) {
+            c.a[3] = Ram32(piece + 0x30);
+            LightPlaced(c);
+            LightAnimation(c);
+            LightKeepsFrame(c);
+        }
+        SetRam8(light + kLightDouble, Mem8(c, c.a[3]));
+        SetRam8(light + kLightWay, Mem8(c, c.a[3] + 1));
+        SetRam16(light + kLightLeft, Mem16(c, c.a[3] + 2));
+        c.a[3] += 4;
+        SetRam32(light + kLightList, c.a[3]);
+    }
+    void LightMoves(M68K &c) {
+        const uint32_t light = c.a[4] & 0xFFFFFF;
+        c.a[1] = kScript14Ways;
+        c.d[0] = Ram8(light + kLightWay);
+        SetLow8(c.d[1], Ram8(light + kLightDouble));
+        for (uint32_t n = 0; n < 2; n++) {
+            c.d[2] = Mem32(c, c.a[1] + c.d[0] + n * 4);
+            if (c.d[1] & 0xFF) {
+                SetLow16(c.d[2], c.d[2] * 2); // (the low half only: the game's own)
+            }
+            SetRam32(light + (n ? kLightY : kLightX), Ram32(light + (n ? kLightY : kLightX)) + c.d[2]);
+        }
+    }
+    void Script14(M68K &c) {
+        static constexpr Steps kSteps = {0x07E20E, {0x07E222, 0x07E2A8, 0x07E2F6, 0x07E2F6}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        auto listOf = [&](uint32_t number) { // (the lists' table has each list's distance from the table)
+            SetLow16(c.d[1], Mem16(c, kScript14Lists + number * 2));
+            c.a[1] = kScript14Lists + static_cast<uint32_t>(static_cast<int16_t>(c.d[1]));
+            return c.a[1];
+        };
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            c.d[6] = Ram16(piece + kY);
+            SetLow8(c.d[6], c.d[6] + Ram8(piece + kWhich));
+            c.a[0] = kScript14Lists;
+            c.d[0] = Ram8(piece + kWhich) * 2u;
+            SetRam32(piece + 0x30, listOf(Ram8(piece + kWhich)));
+            SetLow16(c.d[0], c.d[6] * 2);
+            SetRam32(piece + 0x40 + kLightList, listOf(c.d[6] & 0xFFFF));
+            SetLow16(c.d[0], c.d[0] + 8);
+            SetRam32(piece + 0x60 + kLightList, listOf((c.d[6] & 0xFFFF) + 4));
+            LightAnimation(c);
+            c.a[4] = c.a[6] + 0x40;
+            LightNextMove(c);
+            LightPlaced(c);
+            LightKeepsFrame(c);
+            SetRam16(piece + kX, Ram16(piece + 0x40 + kLightX));
+            SetRam16(piece + kY, Ram16(piece + 0x40 + kLightY));
+            SetLow16(c.d[6], c.d[6] + 4);
+            LightAnimation(c);
+            c.a[4] = c.a[6] + 0x60;
+            LightNextMove(c);
+            LightPlaced(c);
+            LightKeepsFrame(c);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                c.a[4] = c.a[6] + ((Ram8(Var(c, kOddFrame)) & 1) ? 0x60 : 0x40);
+                const uint32_t light = c.a[4] & 0xFFFFFF;
+                SetRam16(light + kLightLeft, static_cast<uint16_t>(Ram16(light + kLightLeft) - 1));
+                if (Ram16(light + kLightLeft) & 0x8000) {
+                    c.d[6] = Ram8(piece + kWhich);
+                    LightNextMove(c);
+                }
+                LightMoves(c);
+                SetRam32(piece + kFrame, Ram32(light));
+                SetRam32(piece + kTimer, Ram32(light + 4));
+                Animate(c);
+                LightKeepsFrame(c);
+                SetRam16(piece + kX, Ram16(light + kLightX));
+                SetRam16(piece + kY, Ram16(light + kLightY));
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
     // The scripts, by a record's kScript: where each is in the game's program
     constexpr uint32_t kScripts[58] = {
         0x07D354, 0x07D3A2, 0x07D3F6, 0x07D4BA, 0x07D534, 0x07D59C, 0x07D710, 0x07DDD8, 0x07DE32, 0x07DECE, 0x07DF1E, 0x07DF9C,
@@ -2689,6 +2908,8 @@ void RegisterPieces() {
     AddRewrite(0x07EA82, "Script17", Script17, kFreeFlags, 200);
     AddRewrite(0x07E62C, "Script16", Script16, kFreeFlags, 200);
     AddRewrite(0x07F2F0, "Script27", Script27, kFreeFlags, 250);
+    AddRewrite(0x07F438, "Script28", Script28, kFreeFlags, 200);
+    AddRewrite(0x07E20E, "Script14", Script14, kFreeFlags, 400);
     AddRewrite(0x07FE5A, "Script40", Script40, kFreeFlags, 200);
     AddRewrite(0x07EBEA, "Script18", Script18, kFreeFlags, 200);
     AddRewrite(0x0800EC, "Script45", Script45, kFreeFlags, 150);
