@@ -541,12 +541,12 @@ namespace {
     void IfInPicture(M68K &c) {
         Call(c, 0x01551A);
     }
-    constexpr int32_t kRoundOn = 0x107;     // from A5, a byte: not zero once the round's fighting has begun
+    constexpr int32_t kRoundDecided = 0x107;     // from A5, a byte: not zero from a knock-out until the next round (the round is decided)
     constexpr int32_t kOddFrame = 0xB4;     // from A5, a byte: bit 0 turns over each frame (things drawn every other frame)
     constexpr uint32_t kCameraStep = 0x285; // the camera's record: the step of its own script (the train's start)
     constexpr uint32_t kSpare = 0x22;       // byte: the third of an animation frame's four bytes
 
-    // 07FF76 (script 41, the train): goes through its animation once the round is on, and is not there before
+    // 07FF76 (script 41, the train): goes through its animation once a round is decided (a knock-out), and is not there before
     void Script41(M68K &c) {
         static constexpr Steps kSteps = {0x07FF76, {0x07FF8A, 0x07FF9A, 0x07FFAE, 0x07FFAE}};
         const uint32_t piece = c.a[6] & 0xFFFFFF;
@@ -555,7 +555,7 @@ namespace {
             StartAs(c, Ram8(piece + kWhich));
             break;
         case 2:
-            if (Ram8(Var(c, kRoundOn))) {
+            if (Ram8(Var(c, kRoundDecided))) {
                 Animate(c);
                 PieceDrawn(c);
             }
@@ -823,7 +823,7 @@ namespace {
         }
     }
 
-    // 080094 (script 44, Fetus of God): its animation's frames by their own time until the round is on,
+    // 080094 (script 44, Fetus of God): its animation's frames by their own time until a round is decided,
     // then one each frame
     void Script44(M68K &c) {
         static constexpr Steps kSteps = {0x080094, {0x0800A8, 0x0800B8, 0x0800D4, 0x0800E6}};
@@ -834,7 +834,7 @@ namespace {
             break;
         case 2:
             if (!Frozen(c)) {
-                if (Ram8(Var(c, kRoundOn))) {
+                if (Ram8(Var(c, kRoundDecided))) {
                     SetRam8(piece + kStep, Ram8(piece + kStep) + 2);
                 }
                 Animate(c);
@@ -975,7 +975,7 @@ namespace {
         }
     }
 
-    // 07EEEC (script 22, Abaraya): once the round is on, a frame of its animation every frame, and at
+    // 07EEEC (script 22, Abaraya): once a round is decided, a frame of its animation every frame, and at
     // each frame with an event it lets a piece go (script 23), told how many frames have gone by
     void Script22(M68K &c) {
         static constexpr Steps kSteps = {0x07EEEC, {0x07EF00, 0x07EF0C, 0x07EF22, 0x07EF76}};
@@ -985,7 +985,7 @@ namespace {
             StartAs(c, 7);
             break;
         case 2:
-            if (Ram8(Var(c, kRoundOn))) {
+            if (Ram8(Var(c, kRoundDecided))) {
                 NextStep(piece);
             }
             Animate(c);
@@ -2052,6 +2052,915 @@ namespace {
         }
     }
 
+    // A word of the game's program as the 68000 reads it when it reads by its program counter (the
+    // deciphered program; reads through an address register get the ROM as it is)
+    uint16_t ProgramWord(M68K &c, uint32_t address) {
+        return static_cast<uint16_t>((c.opcodes[address] << 8) | c.opcodes[address + 1]);
+    }
+
+    // --- pieces that fly a path ---
+    //
+    // A path is legs in the ROM, each: a word of frames, where the leg starts (two words), and six longs:
+    // speed across and up, what is taken off each every frame (twice over: the first two are added to,
+    // the second two are what they are added to by). A word below nothing ends the path.
+    constexpr uint32_t kLegLeft = 0x26, kPathStart = 0x58, kPathAt = 0x5C;
+    constexpr uint32_t kLegFields[6] = {0x40, 0x44, 0x48, 0x50, 0x4C, 0x54};
+
+    // 07E672. The leg at A0 is begun by the piece at A6
+    void TakeLeg(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        SetRam16(piece + kLegLeft, Mem16(c, c.a[0]));
+        SetRam32(piece + kX, static_cast<uint32_t>(Mem16(c, c.a[0] + 2)) << 16);
+        SetRam32(piece + kY, static_cast<uint32_t>(Mem16(c, c.a[0] + 4)) << 16);
+        c.a[0] += 6;
+        for (const uint32_t field : kLegFields) {
+            SetRam32(piece + field, Mem32(c, c.a[0]));
+            c.a[0] += 4;
+        }
+        SetRam32(piece + kPathAt, c.a[0]);
+    }
+
+    // 07E77E. A frame of the leg: the piece moves, and faces the way it is going across
+    void FlyLeg(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        SetRam8(piece + kFacesRight, 0);
+        SetRam32(piece + 0x48, Ram32(piece + 0x48) - Ram32(piece + 0x50));
+        c.d[0] = Ram32(piece + 0x40) + Ram32(piece + 0x48);
+        if (c.d[0] & 0x80000000) {
+            SetRam8(piece + kFacesRight, 1);
+        }
+        SetRam32(piece + kX, Ram32(piece + kX) + c.d[0]);
+        SetRam32(piece + 0x4C, Ram32(piece + 0x4C) - Ram32(piece + 0x54));
+        c.d[0] = Ram32(piece + 0x44) + Ram32(piece + 0x4C);
+        SetRam32(piece + kY, Ram32(piece + kY) + c.d[0]);
+    }
+
+    // 07EA82 (script 17, Deserted Chateau): waits for a round to be decided, then flies its path's legs one
+    // after another (three paths, by kWhich), and at the path's end goes through a last animation and is done
+    constexpr uint8_t kScript17Waits[4] = {10, 40, 70, 90};
+    constexpr uint32_t kScript17Paths[3] = {0x07EB48, 0x07EB88, 0x07EBAA};
+    void Script17(M68K &c) {
+        static constexpr Steps kSteps = {0x07EA82, {0x07EA96, 0x07EAD8, 0x07EB42, 0x07EB42}};
+        static constexpr uint32_t kInnerAt[3] = {0x07EAF6, 0x07EB0A, 0x07EB36};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, 0x0B);
+            Chance(c, true);
+            SetRam8(piece + kTimer, kScript17Waits[c.d[0] & 3]);
+            c.d[0] = Ram8(piece + kWhich) * 4u;
+            c.a[0] = kScript17Paths[Ram8(piece + kWhich) % 3];
+            SetRam32(piece + kPathStart, c.a[0]);
+            TakeLeg(c);
+            break;
+        case 2:
+            switch (InnerStepOf(c, 0x07EAF0, kInnerAt)) {
+            case 0:
+                if (Ram8(Var(c, kRoundDecided))) {
+                    SetRam8(piece + kInner, 2);
+                    SetStageAnimation(c, 9);
+                }
+                break;
+            case 2:
+                SetRam16(piece + kLegLeft, static_cast<uint16_t>(Ram16(piece + kLegLeft) - 1));
+                if (!Ram16(piece + kLegLeft)) {
+                    c.a[0] = Ram32(piece + kPathAt);
+                    if (!(Mem16(c, c.a[0]) & 0x8000)) {
+                        TakeLeg(c);
+                        break;
+                    }
+                    SetRam8(piece + kInner, 4);
+                    SetStageAnimation(c, 0x0A);
+                }
+                FlyLeg(c);
+                break;
+            default:
+                if (Ram8(piece + kOver) & 0x80) {
+                    NextStep(piece);
+                }
+                break;
+            }
+            Animate(c);
+            IfInPicture(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07E62C (script 16, Deserted Chateau): flies its path's legs one after another (four paths, by
+    // kWhich); at the path's end it sits where the next leg starts for a time (one of four by chance, for
+    // its kind) and then flies on, or from the path's start again. Once a round is decided, the first sit
+    // ends at once.
+    constexpr uint32_t kScript16Paths[4] = {0x07E7B4, 0x07E832, 0x07E8B0, 0x07E9A8};
+    constexpr uint16_t kScript16Sits[5][4] = {{180, 360, 900, 1260}, {200, 400, 1000, 1400}, {210, 420, 1050, 1470},
+                                              {240, 480, 1200, 1680}, {190, 380, 950, 1330}};
+    void Script16(M68K &c) {
+        static constexpr Steps kSteps = {0x07E62C, {0x07E640, 0x07E6A4, 0x07E778, 0x07E778}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetRam8(piece + kHalf, 0);
+            c.a[0] = kScript16Paths[Ram8(piece + kWhich) & 3];
+            SetRam32(piece + kPathStart, c.a[0]);
+            TakeLeg(c);
+            SetStageAnimation(c, 9);
+            break;
+        case 2: {
+            const int inner = Ram8(piece + kInner);
+            SetLow8(c.d[0], inner);
+            SetLow16(c.d[0], (inner ? 0x07E746 : 0x07E6C0) - 0x07E6BC); // (the game's way to the step, through D0 here)
+            if (inner == 0) {
+                // (flying)
+                SetRam16(piece + kLegLeft, static_cast<uint16_t>(Ram16(piece + kLegLeft) - 1));
+                if (Ram16(piece + kLegLeft)) {
+                    FlyLeg(c);
+                } else {
+                    c.a[0] = Ram32(piece + kPathAt);
+                    if (!(Mem16(c, c.a[0]) & 0x8000)) {
+                        TakeLeg(c);
+                        Animate(c);
+                        IfInPicture(c);
+                        break;
+                    }
+                    c.a[0] += 2;
+                    if (Mem16(c, c.a[0]) & 0x8000) {
+                        c.a[0] = Ram32(piece + kPathStart);
+                    }
+                    SetRam8(piece + kInner, 2);
+                    SetRam32(piece + kPathAt, c.a[0]);
+                    c.d[2] = Ram8(piece + kWhich) * 8u;
+                    Call(c, kRandom);
+                    SetLow16(c.d[0], c.d[0] & 6);
+                    SetLow16(c.d[2], c.d[2] + c.d[0]);
+                    SetRam16(piece + kLegLeft, kScript16Sits[((c.d[2] & 0xFFFF) >> 3) % 5][((c.d[2] & 0xFFFF) >> 1) & 3]);
+                    SetRam16(piece + kX, Mem16(c, c.a[0] + 2));
+                    SetRam16(piece + kY, Mem16(c, c.a[0] + 4));
+                    SetStageAnimation(c, 0x0B);
+                }
+            } else {
+                // (sitting)
+                SetRam16(piece + kLegLeft, static_cast<uint16_t>(Ram16(piece + kLegLeft) - 1));
+                if (!Ram16(piece + kLegLeft)) {
+                    c.a[0] = Ram32(piece + kPathAt);
+                    TakeLeg(c);
+                    SetRam8(piece + kInner, 0);
+                    SetStageAnimation(c, 9);
+                }
+                if (Ram8(Var(c, kRoundDecided)) && !Ram8(piece + kHalf)) {
+                    SetRam16(piece + kLegLeft, 1);
+                    SetRam8(piece + kHalf, 0xFF);
+                }
+            }
+            Animate(c);
+            IfInPicture(c);
+            break;
+        }
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07EBEA (script 18, Deserted Chateau): when a round is decided it makes the stage's other pieces (two
+    // from another list of records, and four of script 20), and from then lets pieces go (script 19) from
+    // six places by lists in the ROM (which place, and how long till the next; at a list's end another
+    // of four by chance), and every 43 frames one more from one of two places
+    constexpr uint32_t kTakeOther = 0x016FFC;  // a free record of another list in A4
+    constexpr int32_t kOtherCount = 0x79C3;    // from A5, a byte: how many that list has
+    constexpr uint32_t kScript18First = 0x07ED42, kScript18ListEnds = 0x0036A4;
+    constexpr uint32_t kScript18Lists[4] = {0x07ED32, 0x07ED44, 0x07ED52, 0x07ED64};
+    constexpr uint16_t kScript18Places[6][2] = {{523, 47}, {555, 94}, {604, 98}, {660, 72}, {684, 103}, {701, 49}};
+    void Script18(M68K &c) {
+        static constexpr Steps kSteps = {0x07EBEA, {0x07EBFE, 0x07EC0A, 0x07EC6E, 0x07ED2C}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        auto takeOther = [&] {
+            const bool any = Ram8(Var(c, kOtherCount)) != 0;
+            Call(c, kTakeOther);
+            return any;
+        };
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, 0);
+            break;
+        case 2:
+            if (Ram8(Var(c, kRoundDecided))) {
+                NextStep(piece);
+                SetRam16(piece + kTurn, 1);
+                SetRam16(piece + 0x40, 1);
+                SetRam32(piece + 0x44, kScript18First);
+                if (takeOther()) {
+                    SetRam32(c.a[4] & 0xFFFFFF, 0x01000006);
+                    if (takeOther()) {
+                        SetRam32(c.a[4] & 0xFFFFFF, 0x01000007);
+                        c.d[6] = 3;
+                        for (int n = 3; n >= 0 && Take(c); n--) {
+                            SetRam32(c.a[4] & 0xFFFFFF, 0x01001400);
+                            SetRam8((c.a[4] & 0xFFFFFF) + kWhich, n);
+                            SetLow16(c.d[6], n - 1);
+                        }
+                    }
+                }
+            }
+            if (!Frozen(c)) {
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        case 4:
+            if (!Frozen(c)) {
+                SetRam16(piece + kTurn, static_cast<uint16_t>(Ram16(piece + kTurn) - 1));
+                if (!Ram16(piece + kTurn)) {
+                    c.a[2] = Ram32(piece + 0x44);
+                    SetLow16(c.d[4], Mem16(c, c.a[2]));
+                    c.a[2] += 2;
+                    if (c.d[4] & 0x8000) {
+                        Call(c, kScript18ListEnds);
+                        Call(c, kRandom);
+                        SetLow16(c.d[0], c.d[0] & 0x0C);
+                        c.a[2] = kScript18Lists[(c.d[0] >> 2) & 3];
+                        SetLow16(c.d[4], Mem16(c, c.a[2]));
+                        c.a[2] += 2;
+                    }
+                    if (Take(c)) {
+                        const uint32_t made = c.a[4] & 0xFFFFFF;
+                        SetRam32(made, 0x01001300);
+                        SetRam16(piece + kTurn, Mem16(c, c.a[2]));
+                        c.a[2] += 2;
+                        SetLow16(c.d[4], c.d[4] * 4);
+                        // (the lists name a seventh place, which the table has not got: the game takes the
+                        // words that follow the table in its program, and so is this done)
+                        const uint32_t place = (c.d[4] & 0xFFFF) >> 2;
+                        SetRam16(made + kX, place < 6 ? kScript18Places[place][0] : ProgramWord(c, 0x07ED14 + place * 4));
+                        SetRam16(made + kY, place < 6 ? kScript18Places[place][1] : ProgramWord(c, 0x07ED16 + place * 4));
+                        SetRam32(piece + 0x44, c.a[2]);
+                    }
+                }
+                SetRam16(piece + 0x40, static_cast<uint16_t>(Ram16(piece + 0x40) - 1));
+                if (!Ram16(piece + 0x40)) {
+                    SetRam16(piece + 0x40, 0x2B);
+                    if (Take(c)) {
+                        const uint32_t made = c.a[4] & 0xFFFFFF;
+                        SetRam32(made, 0x01001301);
+                        SetRam16(made + kX, 0x1C7);
+                        SetRam16(made + kY, 0x76);
+                        Call(c, kRandom);
+                        if (!(c.d[0] & 0x80)) {
+                            SetRam16(made + kX, 0x26A);
+                            SetRam16(made + kY, 0x4B);
+                        }
+                    }
+                }
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07F2F0 (script 27, Vanity Paradise): a thing that floats up and down about a height (70), pulled back
+    // towards it; each time it is past the height and still being pulled away, the pull is made up anew
+    // (and its speed nudged by a number the game takes from whatever its D3 held: kept). Its picture is
+    // one of twelve in turn (a new one every fifteen frames) and another on every other frame. It makes
+    // two pieces that go with it (script 54).
+    void Script27(M68K &c) {
+        static constexpr Steps kSteps = {0x07F2F0, {0x07F304, 0x07F3A2, 0x07F432, 0x07F432}};
+        constexpr uint16_t kHighest = 0x4E, kHeight = 0x46;
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetRam8(piece + kHalf, 0);
+            SetRam32(piece + kSpeedY, 0x600);
+            SetRam32(piece + kPullY, 0xFFFFFFC0);
+            SetRam8(piece + kTurn, 0x0E);
+            SetRam8(piece + kTurn + 1, 9);
+            for (int n = 0; n < 2 && Take(c); n++) {
+                const uint32_t made = c.a[4] & 0xFFFFFF;
+                SetRam32(made, n == 0 ? 0x01003616 : 0x01003617);
+                SetRam8(made + kDepth, n == 0 ? 2 : 4);
+                SetRam8(made + kFacesRight, Ram8(piece + kFacesRight));
+                LikeMaker(c, made, piece);
+                SetRam32(made + 0x28, 0x02788000);
+                SetRam16(made + kMaker, static_cast<uint16_t>(c.a[6]));
+            }
+            SetStageAnimation(c, 9);
+            break;
+        case 2:
+            c.d[1] = Ram32(piece + kSpeedY);
+            SetRam32(piece + kY, Ram32(piece + kY) + c.d[1]);
+            c.d[2] = Ram32(piece + kPullY);
+            SetRam32(piece + kSpeedY, Ram32(piece + kSpeedY) + c.d[2]);
+            if (Ram16(piece + kY) > kHighest) {
+                SetRam32(piece + kY, Ram32(piece + kY) - c.d[1]);
+            }
+            c.d[1] = (static_cast<uint32_t>(static_cast<uint16_t>(Ram16(piece + kY) - kHeight)) << 16) | (c.d[1] >> 16);
+            c.d[1] ^= c.d[2];
+            if (!(c.d[1] & 0x80000000)) {
+                Call(c, kRandom);
+                c.d[3] &= 3;
+                SetLow16(c.d[3], c.d[3] << 6);
+                Call(c, kRandom);
+                SetLow16(c.d[0], c.d[0] & 1);
+                if (!(c.d[0] & 0xFFFF)) {
+                    c.d[3] = 0u - c.d[3];
+                    c.d[2] = 0u - c.d[2];
+                }
+                SetRam32(piece + kSpeedY, Ram32(piece + kSpeedY) + c.d[3]);
+                SetRam32(piece + kPullY, c.d[2]);
+            }
+            if (!Frozen(c) && CountedDown(piece + kTurn)) {
+                SetRam8(piece + kTurn, 0x0E);
+                SetRam8(piece + kTurn + 1, Ram8(piece + kTurn + 1) + 1 >= 0x15 ? 9 : Ram8(piece + kTurn + 1) + 1);
+            }
+            SetStageAnimation(c, (Ram8(Var(c, kOddFrame)) & 1) ? Ram8(piece + kTurn + 1) : 0x15);
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07FE5A (script 40, the train): a piece whose animation's events change something of the scroll
+    // screens' tiles (the game's own code still: 01520A, by a table at 357CA4). Until a round is decided,
+    // every 180 frames one of two animations; then a last one, and a piece let go (script 41).
+    constexpr uint32_t kScript40Tiles = 0x357CA4, kChangeTiles = 0x01520A;
+    void Script40Tiles(M68K &c, uint32_t piece) {
+        SetLow8(c.d[1], Ram8(piece + kEvent));
+        if ((c.d[1] & 0xFF) == Ram8(piece + kHalf)) {
+            return;
+        }
+        SetRam8(piece + kHalf, c.d[1]);
+        SetLow16(c.d[1], static_cast<int8_t>(c.d[1]) << 4);
+        c.a[0] = kScript40Tiles;
+        SetLow16(c.d[0], Mem16(c, c.a[0] + 0x10) + c.d[1]);
+        c.a[0] += static_cast<uint32_t>(static_cast<int16_t>(c.d[0]));
+        c.a[0] = Mem32(c, c.a[0] + 4);
+        c.d[0] = (static_cast<uint32_t>(Ram16(Var(c, 0x1A))) << 8) + 0x3764;
+        c.a[2] = c.d[0];
+        c.d[2] = 1;
+        Call(c, kChangeTiles);
+    }
+    void Script40(M68K &c) {
+        static constexpr Steps kSteps = {0x07FE5A, {0x07FE6E, 0x07FE84, 0x07FF1A, 0x07FF30}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            SetRam8(piece + kHalf, 0xFF);
+            SetRam16(piece + kTurn, 0xB4);
+            StartAs(c, 0x16);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                if (InnerStep(c, 0x07FEA6, 0x07FEAA, 0x07FECA) == 0) {
+                    SetRam16(piece + kTurn, static_cast<uint16_t>(Ram16(piece + kTurn) - 1));
+                    if (Ram16(piece + kTurn) & 0x8000) {
+                        SetRam8(piece + kInner, 2);
+                        Call(c, kRandom);
+                        SetLow16(c.d[0], c.d[0] & 1);
+                        SetLow8(c.d[0], c.d[0] + 0x16);
+                        SetStageAnimation(c);
+                    }
+                } else if (Ram8(piece + kOver) & 0x80) {
+                    SetRam8(piece + kInner, 0);
+                }
+                if (Ram8(Var(c, kRoundDecided))) {
+                    NextStep(piece);
+                    if (Take(c)) {
+                        const uint32_t made = c.a[4] & 0xFFFFFF;
+                        SetRam32(made, 0x01000029);
+                        SetRam8(made + kDepth, 2);
+                        SetRam16(made + kX, Ram16(piece + kX));
+                        SetRam16(made + kY, Ram16(piece + kY));
+                        LikeMaker(c, made, piece);
+                    }
+                    SetStageAnimation(c, 0x18);
+                }
+            }
+            Script40Tiles(c, piece);
+            Animate(c);
+            ByCamera(c);
+            break;
+        case 4:
+            if (!Frozen(c)) {
+                Script40Tiles(c, piece);
+                Animate(c);
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // --- pieces with colours of their own that change ---
+    //
+    // A record can run up to three animations of colours beside its own (eight bytes each, from +50):
+    // sets of colours copied into the stage's as the animation says. The game's own code does that still
+    // (it writes the board's colours): begun at 09192A (which animation in D0, of the table at A0, for the
+    // eight bytes at A4), and a frame of it at 09190A.
+    void ColoursBegin(M68K &c, uint32_t slot, uint32_t table, uint32_t number) {
+        SetLow16(c.d[0], number);
+        c.a[4] = c.a[6] + slot;
+        c.a[0] = table;
+        Call(c, 0x09192A);
+    }
+    void ColoursFrame(M68K &c, uint32_t slot) {
+        c.a[4] = c.a[6] + slot;
+        Call(c, 0x09190A);
+    }
+
+    // 0800EC (script 45, Fetus of God): at each end of its animation another of four by chance, with that
+    // one's colours; when a round is decided, a last one, and a piece let go (script 20)
+    constexpr uint8_t kScript45Next[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2, 2, 2, 2, 3, 3, 3};
+    constexpr uint32_t kScript45Colours = 0x0801F2;
+    void Script45(M68K &c) {
+        static constexpr Steps kSteps = {0x0800EC, {0x080100, 0x08011C, 0x0801CE, 0x0801EC}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            StartAs(c, 0x0F);
+            c.d[0] = 0;
+            ColoursBegin(c, 0x50, kScript45Colours, 0);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                if (Ram8(piece + kOver) & 0x80) {
+                    c.d[6] = 0;
+                    Call(c, kRandom);
+                    SetLow16(c.d[0], c.d[0] & 0x1F);
+                    SetLow8(c.d[6], kScript45Next[c.d[0] & 0x1F]);
+                    SetLow16(c.d[0], c.d[6] + 0x0F);
+                    SetStageAnimation(c);
+                    ColoursBegin(c, 0x50, kScript45Colours, c.d[6] & 0xFFFF);
+                }
+                if (Ram8(Var(c, kRoundDecided))) {
+                    NextStep(piece);
+                    SetStageAnimation(c, 0x13);
+                    c.d[0] = 4;
+                    ColoursBegin(c, 0x50, kScript45Colours, 4);
+                    if (Take(c)) {
+                        const uint32_t made = c.a[4] & 0xFFFFFF;
+                        SetRam32(made, 0x01000014);
+                        SetRam16(made + kX, 0x228);
+                        SetRam16(made + kY, 0xA0);
+                        SetRam8(made + kDepth, 6);
+                        SetRam8(made + kIsRiding, Ram8(piece + kIsRiding));
+                        SetRam16(made + kRow, Ram16(piece + kRow));
+                        SetRam16(made + kPlaces, 0x2000);
+                        SetRam16(made + kPlaces + 2, 0xA000);
+                    }
+                }
+                ColoursFrame(c, 0x50);
+                Animate(c);
+            }
+            PieceDrawn(c);
+            break;
+        case 4:
+            if (!Frozen(c)) {
+                ColoursFrame(c, 0x50);
+                Animate(c);
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07D710 (script 6, Feast of the Damned): the light of the hall. It has no picture of its own to
+    // speak of: it runs three animations of the stage's colours, by a list of its own in the ROM (one of
+    // four lists by chance: pairs of a colours' number and how long; a number below nothing ends the
+    // list, and then its picture is the other of two and another list is taken). It makes two pieces
+    // (script 7), which take the colours' number from it.
+    constexpr uint32_t kScript6Lists = 0x07D87C;
+    constexpr uint32_t kScript6Colours[3][2] = {{0x50, 0x07D8C4}, {0x58, 0x07D8D4}, {0x60, 0x07D8DC}};
+    void Script6List(M68K &c) {
+        Call(c, kRandom);
+        SetLow16(c.d[0], c.d[0] & 6);
+        c.a[3] = kScript6Lists;
+        SetLow16(c.d[0], Mem16(c, c.a[3] + (c.d[0] & 0xFFFF)));
+        c.a[3] += static_cast<uint32_t>(static_cast<int16_t>(c.d[0]));
+    }
+    void Script6Colours(M68K &c, uint32_t piece) {
+        c.d[0] = Ram8(piece + kHalf) * 4u;
+        ColoursBegin(c, kScript6Colours[0][0], kScript6Colours[0][1], c.d[0] + Ram16(piece + kMakersChoice));
+        ColoursBegin(c, kScript6Colours[1][0], kScript6Colours[1][1], Ram16(piece + kMakersChoice));
+        ColoursBegin(c, kScript6Colours[2][0], kScript6Colours[2][1], Ram16(piece + kMakersChoice));
+    }
+    void Script6(M68K &c) {
+        static constexpr Steps kSteps = {0x07D710, {0x07D724, 0x07D7C6, 0x07D820, 0x07D820}};
+        constexpr uint32_t kListLeft = 0x46, kListAt = 0x40;
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        auto nextOfList = [&] {
+            SetRam16(piece + kListLeft, Mem16(c, c.a[3]));
+            c.a[3] += 2;
+            SetRam32(piece + kListAt, c.a[3]);
+        };
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            for (int n = 0; n < 2 && Take(c); n++) {
+                const uint32_t made = c.a[4] & 0xFFFFFF;
+                SetRam32(made, n == 0 ? 0x01010704 : 0x01010700);
+                SetRam8(made + kDepth, 4);
+                SetRam8(made + kIsRiding, 0x0C);
+                SetRam16(made + kX, n == 0 ? 0x1EE : 0x2C7);
+                SetRam16(made + kY, n == 0 ? 0x84 : 0x83);
+                SetRam16(made + kPlaces, 0x2000);
+                SetRam16(made + kPlaces + 2, n == 0 ? 0x6000 : 0xA000);
+                SetRam32(made + 0x28, n == 0 ? 0x02208000 : 0x80008000);
+                SetRam16(made + kMaker, static_cast<uint16_t>(c.a[6]));
+            }
+            c.d[0] = 0;
+            SetRam8(piece + kHalf, 0);
+            Script6List(c);
+            SetRam16(piece + kMakersChoice, Mem16(c, c.a[3]));
+            c.a[3] += 2;
+            nextOfList();
+            SetStageAnimation(c, 0x19);
+            Script6Colours(c, piece);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                SetRam16(piece + kListLeft, static_cast<uint16_t>(Ram16(piece + kListLeft) - 1));
+                if (Ram16(piece + kListLeft) & 0x8000) {
+                    c.a[3] = Ram32(piece + kListAt);
+                    SetRam16(piece + kMakersChoice, Mem16(c, c.a[3]));
+                    c.a[3] += 2;
+                    if (Ram16(piece + kMakersChoice) & 0x8000) {
+                        SetRam8(piece + kHalf, Ram8(piece + kHalf) ^ 1);
+                        Animate(c);
+                        Script6List(c);
+                        SetRam16(piece + kMakersChoice, Mem16(c, c.a[3]));
+                        c.a[3] += 2;
+                    }
+                    nextOfList();
+                    Script6Colours(c, piece);
+                }
+                for (const auto &colours : kScript6Colours) {
+                    ColoursFrame(c, colours[0]);
+                }
+            }
+            ByCamera(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07F438 (script 28, War Agony): the thing that crosses the stage from the right every so often,
+    // with three pieces it makes that go with it (script 29). It waits (900 or 964 frames), sets off to
+    // the left gathering speed; from 640 its colours' two animations run; left of 416 it looks for their
+    // ends and starts two more; at 192 it is put back at the right to wait again.
+    constexpr uint32_t kScript28Colours = 0x07F63A;
+    void Script28Waits(M68K &c, uint32_t piece) {
+        SetRam16(piece + kX, 0x400);
+        SetRam16(piece + kY, 0xE6);
+        SetLow16(c.d[2], 0x384);
+        Call(c, kRandom);
+        if (c.d[0] & 1) {
+            SetLow16(c.d[2], 0x3C4);
+        }
+        SetRam16(piece + kTurn, static_cast<uint16_t>(c.d[2]));
+        c.d[0] = 0;
+        SetRam8(piece + kHalf, 0);
+        SetRam32(piece + 0x48, 0);
+        SetRam32(piece + kSpeedY, 0);
+        SetRam32(piece + kSpeedX, 0xFFFF0000);
+        SetRam32(piece + kPullY, 0xFFFFFFF0);
+    }
+    void Script28(M68K &c) {
+        static constexpr Steps kSteps = {0x07F438, {0x07F44C, 0x07F546, 0x07F634, 0x07F634}};
+        static constexpr uint32_t kInnerAt[4] = {0x07F55A, 0x07F56A, 0x07F5A8, 0x07F5DA};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetLow8(c.d[0], 3);
+            SetStageAnimation(c);
+            c.d[6] = 0;
+            // (three records are taken unless there are exactly three: the game's own test, kept)
+            if (Ram8(Var(c, kFreePiecesCount)) != 3) {
+                static constexpr uint16_t kAt[3][2] = {{0x400, 0xDE}, {0x3D0, 0xD6}, {0x3D0, 0xCE}};
+                for (uint32_t n = 0; n < 3; n++) {
+                    Call(c, kTakePiece);
+                    const uint32_t made = c.a[4] & 0xFFFFFF;
+                    SetRam32(made, 0x01001D04 + n);
+                    SetRam16(made + kX, kAt[n][0]);
+                    SetRam16(made + kY, kAt[n][1]);
+                    SetRam32(made + kSpeedX, 0xFFFF1000 + n * 0x1000);
+                    SetRam32(made + 0x48, 0);
+                    SetRam32(made + kSpeedY, 0);
+                    SetRam32(made + kPullY, 0xFFFFFFF0);
+                    SetRam16(made + kMaker, static_cast<uint16_t>(c.a[6]));
+                }
+            }
+            Script28Waits(c, piece);
+            break;
+        case 2:
+            switch (InnerStepOf(c, 0x07F552, kInnerAt)) {
+            case 0:
+                SetRam16(piece + kTurn, static_cast<uint16_t>(Ram16(piece + kTurn) - 1));
+                if (Ram16(piece + kTurn) & 0x8000) {
+                    SetRam8(piece + kInner, 2);
+                    SetRam8(piece + kHalf, 0xFF);
+                }
+                return; // (waiting: not drawn)
+            case 2:
+                if (!Frozen(c)) {
+                    if (Ram16(piece + kX) <= 0x280) {
+                        SetRam8(piece + kInner, 4);
+                        c.d[0] = 0;
+                        ColoursBegin(c, 0x50, kScript28Colours, 0);
+                        c.d[0] = 2;
+                        ColoursBegin(c, 0x58, kScript28Colours, 2);
+                    }
+                    Call(c, kMoveBySpeed);
+                }
+                break;
+            case 4:
+                if (!Frozen(c)) {
+                    ColoursFrame(c, 0x50);
+                    ColoursFrame(c, 0x58);
+                    if (Ram16(piece + kX) <= 0x1A0) {
+                        SetRam8(piece + kInner, 6);
+                    }
+                    Call(c, kMoveBySpeed);
+                }
+                break;
+            default:
+                if (!Frozen(c)) {
+                    for (uint32_t n = 0; n < 2; n++) {
+                        c.a[4] = c.a[6] + 0x50 + n * 8;
+                        if (Ram8((c.a[4] & 0xFFFFFF) + 7)) {
+                            c.d[0] = 1 + n * 2;
+                            ColoursBegin(c, 0x50 + n * 8, kScript28Colours, 1 + n * 2);
+                        }
+                        Call(c, 0x09190A);
+                    }
+                    if (Ram16(piece + kX) <= 0xC0) {
+                        SetRam8(piece + kInner, 0);
+                        Script28Waits(c, piece);
+                        return;
+                    }
+                    Call(c, kMoveBySpeed);
+                }
+                break;
+            }
+            IfInPicture(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07E20E (script 14, Tower of Arrogance): the lights in the sky. One record is two lights, shown on
+    // alternate frames: each has its own eight... thirty-two bytes of the record (from +40 and +60) with
+    // its animation's frame, its place, and where it is in a list in the ROM of moves (a byte for double
+    // speed, a byte for which way of a table of ways, a word of frames; a byte below nothing ends the
+    // list, and the light starts again from its first place).
+    constexpr uint32_t kScript14Lists = 0x07E4E0, kScript14Places = 0x07E360, kScript14Ways = 0x07E3E0;
+    constexpr uint32_t kLightList = 0x08, kLightDouble = 0x10, kLightWay = 0x12, kLightLeft = 0x14, kLightX = 0x18, kLightY = 0x1C;
+    void LightKeepsFrame(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF, light = c.a[4] & 0xFFFFFF;
+        SetRam32(light, Ram32(piece + kFrame));
+        SetRam32(light + 4, Ram32(piece + kTimer));
+    }
+    void LightPlaced(M68K &c) {
+        const uint32_t light = c.a[4] & 0xFFFFFF;
+        SetLow16(c.d[0], c.d[6]);
+        c.a[1] = kScript14Places;
+        SetLow16(c.d[0], c.d[0] << 3);
+        const uint32_t at = c.a[1] + static_cast<uint32_t>(static_cast<int16_t>(c.d[0]));
+        SetRam32(light + kLightX, Mem32(c, at));
+        SetRam32(light + kLightY, Mem32(c, at + 4));
+    }
+    void LightAnimation(M68K &c) {
+        SetLow16(c.d[0], c.d[6]);
+        SetStageAnimation(c);
+    }
+    void LightNextMove(M68K &c) {
+        const uint32_t piece = c.a[6] & 0xFFFFFF, light = c.a[4] & 0xFFFFFF;
+        c.a[3] = Ram32(light + kLightList);
+        if (Mem8(c, c.a[3]) & 0x80) {
+            c.a[3] = Ram32(piece + 0x30);
+            LightPlaced(c);
+            LightAnimation(c);
+            LightKeepsFrame(c);
+        }
+        SetRam8(light + kLightDouble, Mem8(c, c.a[3]));
+        SetRam8(light + kLightWay, Mem8(c, c.a[3] + 1));
+        SetRam16(light + kLightLeft, Mem16(c, c.a[3] + 2));
+        c.a[3] += 4;
+        SetRam32(light + kLightList, c.a[3]);
+    }
+    void LightMoves(M68K &c) {
+        const uint32_t light = c.a[4] & 0xFFFFFF;
+        c.a[1] = kScript14Ways;
+        c.d[0] = Ram8(light + kLightWay);
+        SetLow8(c.d[1], Ram8(light + kLightDouble));
+        for (uint32_t n = 0; n < 2; n++) {
+            c.d[2] = Mem32(c, c.a[1] + c.d[0] + n * 4);
+            if (c.d[1] & 0xFF) {
+                SetLow16(c.d[2], c.d[2] * 2); // (the low half only: the game's own)
+            }
+            SetRam32(light + (n ? kLightY : kLightX), Ram32(light + (n ? kLightY : kLightX)) + c.d[2]);
+        }
+    }
+    void Script14(M68K &c) {
+        static constexpr Steps kSteps = {0x07E20E, {0x07E222, 0x07E2A8, 0x07E2F6, 0x07E2F6}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        auto listOf = [&](uint32_t number) { // (the lists' table has each list's distance from the table)
+            SetLow16(c.d[1], Mem16(c, kScript14Lists + number * 2));
+            c.a[1] = kScript14Lists + static_cast<uint32_t>(static_cast<int16_t>(c.d[1]));
+            return c.a[1];
+        };
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            c.d[6] = Ram16(piece + kY);
+            SetLow8(c.d[6], c.d[6] + Ram8(piece + kWhich));
+            c.a[0] = kScript14Lists;
+            c.d[0] = Ram8(piece + kWhich) * 2u;
+            SetRam32(piece + 0x30, listOf(Ram8(piece + kWhich)));
+            SetLow16(c.d[0], c.d[6] * 2);
+            SetRam32(piece + 0x40 + kLightList, listOf(c.d[6] & 0xFFFF));
+            SetLow16(c.d[0], c.d[0] + 8);
+            SetRam32(piece + 0x60 + kLightList, listOf((c.d[6] & 0xFFFF) + 4));
+            LightAnimation(c);
+            c.a[4] = c.a[6] + 0x40;
+            LightNextMove(c);
+            LightPlaced(c);
+            LightKeepsFrame(c);
+            SetRam16(piece + kX, Ram16(piece + 0x40 + kLightX));
+            SetRam16(piece + kY, Ram16(piece + 0x40 + kLightY));
+            SetLow16(c.d[6], c.d[6] + 4);
+            LightAnimation(c);
+            c.a[4] = c.a[6] + 0x60;
+            LightNextMove(c);
+            LightPlaced(c);
+            LightKeepsFrame(c);
+            break;
+        case 2:
+            if (!Frozen(c)) {
+                c.a[4] = c.a[6] + ((Ram8(Var(c, kOddFrame)) & 1) ? 0x60 : 0x40);
+                const uint32_t light = c.a[4] & 0xFFFFFF;
+                SetRam16(light + kLightLeft, static_cast<uint16_t>(Ram16(light + kLightLeft) - 1));
+                if (Ram16(light + kLightLeft) & 0x8000) {
+                    c.d[6] = Ram8(piece + kWhich);
+                    LightNextMove(c);
+                }
+                LightMoves(c);
+                SetRam32(piece + kFrame, Ram32(light));
+                SetRam32(piece + kTimer, Ram32(light + 4));
+                Animate(c);
+                LightKeepsFrame(c);
+                SetRam16(piece + kX, Ram16(light + kLightX));
+                SetRam16(piece + kY, Ram16(light + kLightY));
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // --- pieces let go by other pieces ---
+
+    // 07ED72 (script 19, Deserted Chateau: let go by script 18): one of two animations by chance; a frame
+    // with an event above nothing takes it up 3, one below nothing ends it
+    void Script19(M68K &c) {
+        static constexpr Steps kSteps = {0x07ED72, {0x07ED86, 0x07EDBA, 0x07EDD8, 0x07EDD8}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetRam16(piece + kPlaces + 2, 0x6000);
+            SetRam16(piece + kPlaces, 0x2000);
+            SetRam8(piece + kFacesRight, 0);
+            SetRam8(piece + kDepth, 6);
+            SetRam8(piece + kIsRiding, 8);
+            c.d[6] = 7;
+            Call(c, kRandom);
+            if (!(c.d[0] & 0x80)) {
+                c.d[6] = 0x0C;
+            }
+            SetLow8(c.d[0], c.d[6]);
+            SetStageAnimation(c);
+            break;
+        case 2:
+            Animate(c);
+            if (Ram8(piece + kEvent) & 0x80) {
+                NextStep(piece);
+                break;
+            }
+            if (Ram8(piece + kEvent)) {
+                SetRam16(piece + kY, static_cast<uint16_t>(Ram16(piece + kY) + 3));
+            }
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07EDDE (script 20, Deserted Chateau and Fetus of God: made by scripts 18 and 45): at a place of four
+    // by kWhich; one of two animations by chance, begun again after a wait made up anew each time
+    void Script20(M68K &c) {
+        static constexpr Steps kSteps = {0x07EDDE, {0x07EDF2, 0x07EE64, 0x07EE8A, 0x07EE8A}};
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetRam16(piece + kPlaces + 2, 0x6000);
+            SetRam16(piece + kPlaces, 0x2000);
+            Call(c, kRandom);
+            SetLow16(c.d[0], c.d[0] & 0x3F);
+            SetRam16(piece + kTurn, static_cast<uint16_t>(c.d[0]));
+            SetRam8(piece + kDepth, 6);
+            SetRam8(piece + kIsRiding, 8);
+            SetRam16(piece + kRow, 0x48);
+            SetRam8(piece + kFacesRight, Ram8(piece + kWhich) >> 1);
+            c.d[0] = Ram8(piece + kWhich) * 4u;
+            SetRam16(piece + kX, ProgramWord(c, 0x07EE54 + c.d[0]));
+            SetRam16(piece + kY, ProgramWord(c, 0x07EE56 + c.d[0]));
+            c.d[6] = 8;
+            Call(c, kRandom);
+            if (!(c.d[0] & 0x80)) {
+                c.d[6] = 0x0D;
+            }
+            SetLow8(c.d[0], c.d[6]);
+            SetStageAnimation(c);
+            break;
+        case 2:
+            SetRam16(piece + kTurn, static_cast<uint16_t>(Ram16(piece + kTurn) - 1));
+            if ((Ram16(piece + kTurn) & 0x8000) && (Ram8(piece + kOver) & 0x80)) {
+                Call(c, kRandom);
+                SetLow16(c.d[0], c.d[0] & 0x3F);
+                SetRam16(piece + kTurn, static_cast<uint16_t>(c.d[0]));
+            }
+            Animate(c);
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
+    // 07EF7C (script 23, Abaraya: let go by script 22): thrown up and to one side, by the count its maker
+    // gave it (which side and how far forward by its low two bits, how hard across by the high byte), and
+    // falls; done when its animation ends
+    void Script23(M68K &c) {
+        static constexpr Steps kSteps = {0x07EF7C, {0x07EF90, 0x07F030, 0x07F04C, 0x07F04C}};
+        constexpr uint32_t kPullX = 0x48;
+        const uint32_t piece = c.a[6] & 0xFFFFFF;
+        switch (StepAt(c, kSteps)) {
+        case 0:
+            NextStep(piece);
+            SetRam32(piece + kSpeedX, 0);
+            SetRam32(piece + kSpeedY, 0x18000);
+            SetRam32(piece + kPullY, 0xFFFFF400);
+            SetLow16(c.d[0], (Ram16(piece + kTurn) & 3) * 2);
+            SetRam8(piece + kFacesRight, c.opcodes[0x07EFE8 + (c.d[0] & 0xFFFF)]);
+            SetRam8(piece + kDepth, c.opcodes[0x07EFE9 + (c.d[0] & 0xFFFF)]);
+            SetLow8(c.d[0], Ram8(piece + kTurn));
+            SetLow16(c.d[0], (c.d[0] & 0x0F) << 2);
+            SetRam32(piece + kPullX, (static_cast<uint32_t>(ProgramWord(c, 0x07EFF0 + (c.d[0] & 0xFFFF))) << 16) |
+                                         ProgramWord(c, 0x07EFF2 + (c.d[0] & 0xFFFF)));
+            if (!Ram8(piece + kFacesRight)) {
+                SetRam32(piece + kSpeedX, 0u - Ram32(piece + kSpeedX));
+                SetRam32(piece + kPullX, 0u - Ram32(piece + kPullX));
+            }
+            SetStageAnimation(c, 8);
+            break;
+        case 2:
+            if (Ram8(piece + kOver)) {
+                NextStep(piece);
+            }
+            Call(c, kMoveBySpeed);
+            Animate(c);
+            PieceDrawn(c);
+            break;
+        default:
+            GiveBack(c);
+            break;
+        }
+    }
+
     // The scripts, by a record's kScript: where each is in the game's program
     constexpr uint32_t kScripts[58] = {
         0x07D354, 0x07D3A2, 0x07D3F6, 0x07D4BA, 0x07D534, 0x07D59C, 0x07D710, 0x07DDD8, 0x07DE32, 0x07DECE, 0x07DF1E, 0x07DF9C,
@@ -2118,6 +3027,20 @@ void RegisterPieces() {
     AddRewrite(0x07D4BA, "PieceLady", Lady, kFreeFlags, 166);
     AddRewrite(0x07D534, "PieceThrower", Thrower, kFreeFlags, 134);
     AddRewrite(0x07D240, "AllPieces", AllPieces, kFreeFlags);
+    AddRewrite(0x07E672, "TakeLeg", TakeLeg, kFreeFlags, 180);
+    AddRewrite(0x07E77E, "FlyLeg", FlyLeg, kFreeFlags, 180);
+    AddRewrite(0x07EA82, "Script17", Script17, kFreeFlags, 200);
+    AddRewrite(0x07E62C, "Script16", Script16, kFreeFlags, 200);
+    AddRewrite(0x07F2F0, "Script27", Script27, kFreeFlags, 250);
+    AddRewrite(0x07ED72, "Script19", Script19, kFreeFlags, 150);
+    AddRewrite(0x07EDDE, "Script20", Script20, kFreeFlags, 150);
+    AddRewrite(0x07EF7C, "Script23", Script23, kFreeFlags, 200);
+    AddRewrite(0x07F438, "Script28", Script28, kFreeFlags, 200);
+    AddRewrite(0x07E20E, "Script14", Script14, kFreeFlags, 400);
+    AddRewrite(0x07FE5A, "Script40", Script40, kFreeFlags, 200);
+    AddRewrite(0x07EBEA, "Script18", Script18, kFreeFlags, 200);
+    AddRewrite(0x0800EC, "Script45", Script45, kFreeFlags, 150);
+    AddRewrite(0x07D710, "Script6", Script6, kFreeFlags, 200);
     AddRewrite(0x07F052, "Script24", Script24, kFreeFlags, 150);
     AddRewrite(0x07FCF0, "Script38", Script38, kFreeFlags, 150);
     AddRewrite(0x07DF9C, "Script11", Script11, kFreeFlags, 150);
