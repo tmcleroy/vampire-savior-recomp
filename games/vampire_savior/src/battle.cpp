@@ -10,6 +10,8 @@
 //                   before; over at the first knock-down, with the count of opponents beaten.
 //   Endless battle  two fighters the game plays, with no panel; the one knocked down is replaced. A person
 //                   takes a fighter over by touching the controls, and gives it back by leaving them alone.
+//   Ring out        the player against one opponent after another, with no health: a stage's ends are open,
+//                   and whoever is knocked over one falls. The winner jumps down to the next stage.
 #include "modes.h"
 
 #include "state.h"
@@ -26,6 +28,7 @@ namespace {
     using namespace vsav;
 
     constexpr const char *kModes = "Alternative modes", *kSurvival = "Survival", *kEndless = "Endless battle";
+    constexpr const char *kRingOut = "Ring out";
 
     // The characters by their numbers (11 is nobody), as this set of the game names them
     constexpr const char *kNames[kCharacters] = {"Bulleta", "Demitri", "Gallon", "Victor", "Zabel", "Morrigan", "Anakaris", "Felicia",
@@ -42,7 +45,19 @@ namespace {
     constexpr uint16_t kHealthBack = 0x30;  // health given back for an opponent beaten
     // The endless battle's stage: one stage; or the fighters drawn over a stage that another machine shows
     // (modes.h), which can then change under them: by fading into another, or by scrolling on into the next
-    enum { kStageOne, kStageShuffle, kStageScroll };
+    enum { kStageOne, kStageShuffle, kStageScroll, kStageBehind }; // (the last: behind the fighters, and never changing by itself)
+    // The ring out
+    constexpr uint32_t kKeepIn = 0x028192;   // the game's routine that keeps the player at A6 inside the picture
+    constexpr uint32_t kHalfWidth = 0x132;   //   a player's record: half its width, as that routine takes it (a word)
+    constexpr uint32_t kAtEdge = 0x116;      //   and what it leaves: 1 at the picture's left edge, 2 at its right
+    constexpr int kOutBy = 4;                // a fighter is out when its middle is within this of the picture's edge
+    constexpr int kFallFor = 44;             // frames a fighter that is out is seen falling for
+    constexpr int kDropFor = 80;             // frames the way down to the next stage takes
+    constexpr int kDropJump = 8;             //   the frame of it at which the winner jumps off the old stage
+    constexpr int kDropSlide = 16;           //   ... at which the old stage starts to go up and out
+    constexpr int kDropIn = 38;              //   ... at which the winner jumps above the new stage, to come down onto it
+    constexpr int kDropFrom = 240;           //   and how far above the new stage's floor that is
+    constexpr int kMiddle = (kStageLeft + kStageRight) / 2;
     constexpr int kShuffleAfter = 2 * 60 * 60;  // frames of fighting on a stage before it fades into another
     constexpr int kBlend = 150;                 //   and frames the fade takes
     constexpr int32_t kScrollBy = 64;           // the scrolling stage's speed, in 256ths of a pixel a frame
@@ -52,8 +67,8 @@ namespace {
     constexpr size_t kSoundAhead = 16;          // samples of another machine's sound kept in hand
     constexpr uint16_t kAnyButton = kLeft | kRight | kUp | kDown | kPunch1 | kPunch2 | kPunch3 | kKick1 | kKick2 | kKick3;
 
-    enum class Kind : int32_t { None, Survival, Endless };
-    enum class Phase : int32_t { Starting, Fighting, Decided, Over };
+    enum class Kind : int32_t { None, Survival, Endless, RingOut };
+    enum class Phase : int32_t { Starting, Fighting, Decided, Over, Falling, Dropping };
     struct State {
         Kind kind = Kind::None;
         Phase phase = Phase::Starting;
@@ -61,6 +76,7 @@ namespace {
         int32_t since = 0;               // frames in this phase
         int32_t stage = 0;               // 1-12; 0: the game's choice
         int32_t characters[2] = {-1, -1};
+        int32_t colours = -1;            // the player's character's colours, kept from match to match
         bool computer[2] = {false, false};
         int32_t idle[2] = {0, 0};
         int32_t score = 0;
@@ -75,7 +91,15 @@ namespace {
         int32_t blend = 0;               // shuffle: how far the fade to the next has got (of kBlend)
         int32_t backCamera = 0;          // scroll: where its picture's left edge is, in 256ths of a pixel
         int32_t slide = 0;               //   and how far the next stage has come in
+        // The ring out
+        int32_t out = -1;                // who is out and falling (0, 1)
+        int32_t outSide = 0;             //   over which end (-1 the left, 1 the right)
+        int32_t dropStage = 0;           // the stage the next match is on
+        bool dropped = false;            // the winner has been put above the next stage
+        int32_t dropCameraX = 0, dropCameraY = 0; // where the next match's camera is
     } g;
+    Spare g_dropBack;                    // the ring out: the machine of the next match's stage
+    bool g_open = false;                 // the ring out: the port's machine is running a fight with open ends
     Spare g_next;
     Spare g_back, g_backNext;            // the machines of the stage behind and of the one after
     // Sound another machine has made and that has not been heard yet (two machines' frames do not make quite
@@ -98,7 +122,7 @@ namespace {
             }
             waiting.erase(waiting.begin(), waiting.begin() + static_cast<std::ptrdiff_t>(sound.size()));
         }
-    } g_backSound, g_backNextSound;
+    } g_backSound, g_backNextSound, g_dropSound, g_dropBackSound;
     bool g_fast = false;
     size_t g_soundBefore = 0;
 
@@ -117,6 +141,8 @@ namespace {
         g_next.Clear();
         g_back.Clear();
         g_backNext.Clear();
+        g_dropBack.Clear();
+        g_open = false;
         Wanted() = MatchWanted();
         CameraAt() = CameraWanted();
         Fast(false);
@@ -175,11 +201,17 @@ namespace {
         g.kind = kind;
         g.phase = Phase::Starting;
         g.random = std::random_device()() | 1;
-        if (kind == Kind::Survival) {
+        if (kind != Kind::Endless) {
             g.characters[0] = -1; // (the player's choice)
             g.characters[1] = AnyCharacter();
             g.computer[1] = true;
             g.stage = 0;
+            if (kind == Kind::RingOut) {
+                g.way = kStageBehind;
+                g.back = AnyStage(0);
+                g.dropStage = AnyStage(g.back);
+                g_backSound.Start();
+            }
         } else {
             g.characters[0] = ChosenCharacter("endless_one");
             g.characters[1] = ChosenCharacter("endless_two");
@@ -207,18 +239,25 @@ namespace {
     void StartEndless(Machine &machine) {
         Start(machine, Kind::Endless);
     }
+    void StartRingOut(Machine &machine) {
+        Start(machine, Kind::RingOut);
+    }
+    bool Chooses() {
+        return g.kind != Kind::Endless; // (the player chooses a character)
+    }
 
     void Want() {
         Wanted().stage = g.stage;
         Wanted().characters[0] = g.characters[0];
         Wanted().characters[1] = g.characters[1];
+        Wanted().colours[0] = g.colours;
     }
 
     // Who the game plays, told to the game: the players' records say (vsav.h). Both stay players that are in
     // the game, or the panel would count down for the one that is not to come back.
-    void SayWhoPlays() {
+    void SayWhoPlays(bool nobody = false) {
         for (int n = 0; n < 2; n++) {
-            SetRam8(Player(n) + kComputer, g.computer[n] ? 1 : 0);
+            SetRam8(Player(n) + kComputer, g.computer[n] && !nobody ? 1 : 0);
             SetRam8(Player(n) + kPlays, 2);
         }
     }
@@ -229,17 +268,24 @@ namespace {
         uint16_t &one = machine.players[0], &two = machine.players[1];
         if (g.phase == Phase::Starting) {
             // Survival: the player chooses a character, at the game's own pace; the rest goes by unseen
-            const bool choosing = g.kind == Kind::Survival && Ram16(kMode) == 2 && Ram16(kGameStep) == kGameChoosing && Ram8(kPlayersIn) == 3;
+            const bool choosing = Chooses() && Ram16(kMode) == 2 && Ram16(kGameStep) == kGameChoosing && Ram8(kPlayersIn) == 3;
             Fast(!choosing);
-            if (ToRound(machine, g.frames, g.kind == Kind::Survival) && (!Layered() || g_back.ready)) {
+            if (ToRound(machine, g.frames, Chooses()) && (!Layered() || g_back.ready)) {
                 Fast(false);
                 g.phase = Phase::Fighting;
                 g.since = 0;
                 g.fadeIn = kFade;
                 g.characters[0] = Ram8(Player(0) + kCharacter);
                 g.characters[1] = Ram8(Player(1) + kCharacter);
+                if (Chooses()) {
+                    g.colours = Ram8(Player(0) + kColours);
+                }
                 if (Layered()) {
                     PlaySound(kTuneOff); // (the music is the stage's, from its own machine)
+                }
+                if (g.kind == Kind::RingOut) {
+                    g.characters[1] = AnyCharacter(g.characters[1]); // (from here: who the next match is against)
+                    g_next.Clear();
                 }
             } else if (g.frames > kStartMost && !choosing) {
                 End();
@@ -250,6 +296,16 @@ namespace {
             one = two = 0;
             return;
         }
+        if (g.phase == Phase::Falling || g.phase == Phase::Dropping) {
+            // Nobody fights on; the winner jumps off, over the end the loser went over
+            one = two = 0;
+            if (g.phase == Phase::Dropping && g.since >= kDropJump && g.since < kDropJump + 4) {
+                one = static_cast<uint16_t>(kUp | (g.outSide < 0 ? kLeft : kRight));
+            }
+            SayWhoPlays(true);
+            return;
+        }
+        g_open = g.kind == Kind::RingOut;
         if (g.kind == Kind::Endless) {
             // A press takes a fighter over; none for a while gives it back
             const uint16_t held[2] = {one, two};
@@ -305,6 +361,39 @@ namespace {
         }, made);
     }
 
+    // The fighters laid over a stage's picture: the pixels the fighters' machine drew an object at. `show` of
+    // 256 is how much of them is seen. The pixels of the player `falls` (-1: nobody) are drawn `down` lower:
+    // that player is falling off the stage.
+    void Over(std::vector<uint32_t> &stage, const std::vector<uint32_t> &fighters, int show, int falls = -1, int down = 0) {
+        const uint32_t sets = falls >= 0 ? kPlayerSets[falls] : 0;
+        const uint32_t keep = static_cast<uint32_t>(256 - show), put = static_cast<uint32_t>(show);
+        for (int pass = sets ? 0 : 1; pass < 2; pass++) { // (the one falling first: behind the other)
+            for (int y = 0; y < Video::kHeight; y++) {
+                for (int x = 0; x < Video::kWidth; x++) {
+                    const uint32_t f = fighters[static_cast<size_t>(y) * Video::kWidth + static_cast<size_t>(x)];
+                    if (!(f & 0x80000000)) {
+                        continue;
+                    }
+                    const bool falling = (sets >> ((f >> 24) & 0x1F)) & 1;
+                    if (falling != (pass == 0)) {
+                        continue;
+                    }
+                    const int to = y + (falling ? down : 0);
+                    if (to >= Video::kHeight) {
+                        continue;
+                    }
+                    uint32_t &b = stage[static_cast<size_t>(to) * Video::kWidth + static_cast<size_t>(x)];
+                    b = show >= 256 ? f & 0xFFFFFF :
+                        ((((b & 0xFF00FF) * keep + (f & 0xFF00FF) * put) >> 8) & 0xFF00FF) | ((((b & 0x00FF00) * keep + (f & 0x00FF00) * put) >> 8) & 0x00FF00);
+                }
+            }
+        }
+    }
+    // How far down a fighter that has been out for `frames` has fallen
+    int Fallen(int frames) {
+        return std::min(frames * frames / 5, 400);
+    }
+
     // After the fighters' frame: the stage machines' frames, and the picture and sound put together. `show`
     // of 256 is how much of the fighters is seen (they fade when one match follows another).
     void Layer(Machine &machine, int show) {
@@ -316,7 +405,7 @@ namespace {
 
         // The stage after this one: wanted when this one has been fought on long enough (shuffle), or as
         // soon as this one is the one shown (scroll)
-        if (fighting && !g.backNext && (g.way == kStageScroll || g.backFor >= kShuffleAfter)) {
+        if (fighting && !g.backNext && (g.way == kStageScroll || (g.way == kStageShuffle && g.backFor >= kShuffleAfter))) {
             g.backNext = AnyStage(g.back);
             g_backNext.Clear();
             g_backNextSound.Start();
@@ -378,18 +467,8 @@ namespace {
                 }
             }
         }
-        // The fighters over it: the pixels the fighters' machine drew an object at
-        for (size_t i = 0; i < back.picture.size(); i++) {
-            const uint32_t f = fighters.picture[i];
-            if (f & 0xFF000000) {
-                if (show >= 256) {
-                    back.picture[i] = f & 0xFFFFFF;
-                } else {
-                    const uint32_t b = back.picture[i], keep = static_cast<uint32_t>(256 - show), put = static_cast<uint32_t>(show);
-                    back.picture[i] = ((((b & 0xFF00FF) * keep + (f & 0xFF00FF) * put) >> 8) & 0xFF00FF) | ((((b & 0x00FF00) * keep + (f & 0x00FF00) * put) >> 8) & 0x00FF00);
-                }
-            }
-        }
+        const bool falling = g.out >= 0 && (g.phase == Phase::Falling || g.phase == Phase::Dropping || g.phase == Phase::Over);
+        Over(back.picture, fighters.picture, show, falling ? g.out : -1, falling ? Fallen(g.phase == Phase::Falling ? g.since : kFallFor * 4) : 0);
         fighters.picture = back.picture;
         // The sound: the fighters', and the stages' music, one fading into the other
         g_backSound.Mix(fighters.sound, 256 - nextGain);
@@ -431,7 +510,132 @@ namespace {
         }
     }
 
+    // --- the ring out ---
+
+    // 028192. The game keeps the player at A6 inside the picture. In a ring out fight a player that is not its
+    // own master (reeling from a hit, guarding one, thrown) is not kept in at a side where the picture is at
+    // the stage's end: it goes over the end.
+    bool KeepIn(M68K &c) {
+        const uint32_t player = c.a[6] & 0xFFFFFF;
+        if (!g_open || (player != Player(0) && player != Player(1)) || Ram8(player + kControl) == kControlOwn) {
+            return false;
+        }
+        const int x = static_cast<int16_t>(Ram16(player + kX)), half = Ram16(player + kHalfWidth);
+        const int camera = static_cast<int16_t>(Ram16(kCameraX));
+        const bool left = camera <= kCameraLeft && x - half <= camera;
+        const bool right = camera >= kCameraRight && x + half >= camera + Video::kWidth;
+        if (!left && !right) {
+            return false;
+        }
+        SetRam8(player + kAtEdge, 0);
+        Return(c);
+        return true;
+    }
+
+    // Is a fighter out? Its middle has come to the picture's edge at an end of the stage.
+    void LookForOut() {
+        const int camera = static_cast<int16_t>(Ram16(kCameraX));
+        for (int n = 0; n < 2 && g.out < 0; n++) {
+            const int x = static_cast<int16_t>(Ram16(Player(n) + kX));
+            const int side = camera <= kCameraLeft && x < camera + kOutBy ? -1 : camera >= kCameraRight && x > camera + Video::kWidth - kOutBy ? 1 : 0;
+            if (side) {
+                g.out = n;
+                g.outSide = side;
+                g.phase = Phase::Falling;
+                g.since = 0;
+                g.score += n == 1;
+            }
+        }
+    }
+
+    // The next match, and its stage, made ready while this one is fought (who it is against is known: the
+    // player's character against someone new)
+    void MakeDrop(Machine &machine) {
+        for (int n = 0; n < 2 && !g_next.ready && g_next.frames <= kStartMost; n++) {
+            RunSpare(machine, g_next, [](Machine &spare) {
+                Want();
+                g_next.ready = ToRound(spare, g_next.frames);
+            });
+        }
+        for (int n = 0; n < 2 && !g_dropBack.ready && g_dropBack.frames <= kStartMost; n++) {
+            RunSpare(machine, g_dropBack, [](Machine &spare) {
+                Wanted().stage = g.dropStage;
+                g_dropBack.ready = ToRound(spare, g_dropBack.frames);
+            });
+        }
+    }
+
+    // The way down, after the picture and sound of the old stage are put together: the next match's machines
+    // run, the winner put above the next stage to come down onto it, and the old picture goes up and out as
+    // the new one comes up from below.
+    void Drop(Machine &machine) {
+        static Made old, fighters, stage;
+        Take(machine, g_soundBefore, old);
+        if (g.since == 1) {
+            g_dropSound.Start();
+            g_dropBackSound.Start();
+        }
+        RunSpare(machine, g_next, [](Machine &m) {
+            m.video.hideObject = NotTheFighters;
+            m.video.layerMask = 1;
+            m.video.markObjects = true;
+            m.players[0] = !g.dropped && g.since >= kDropIn ? kUp : 0; // (a jump: the winner is coming down)
+            for (int n = 0; n < 2; n++) {
+                SetRam8(Player(n) + kComputer, 0);
+                SetRam8(Player(n) + kPlays, 2);
+            }
+            if (g.since == 1) {
+                PlaySound(kTuneOff);
+            }
+        }, &fighters, [](Machine &) {
+            if (!g.dropped && Ram8(Player(0) + kAirborne)) {
+                g.dropped = true;
+                SetRam32(Player(0) + kX, static_cast<uint32_t>(kMiddle) << 16);
+                SetRam32(Player(0) + kY, Ram32(Player(0) + kY) + (static_cast<uint32_t>(kDropFrom) << 16));
+                SetRam32(Player(0) + kSpeedY, 0);
+            }
+            g.dropCameraX = static_cast<int16_t>(Ram16(kCameraX));
+            g.dropCameraY = static_cast<int16_t>(Ram16(kCameraY));
+        });
+        RunStage(machine, g_dropBack, g.dropStage, g.dropCameraX, g.dropCameraY, &stage);
+        g_dropSound.Add(fighters.sound);
+        g_dropBackSound.Add(stage.sound);
+        Over(stage.picture, fighters.picture, 256);
+
+        // (slowly off, quickly through, slowly in)
+        const int t = std::clamp((g.since - kDropSlide) * 256 / (kDropFor - kDropSlide), 0, 256);
+        const int eased = t * t * (3 * 256 - 2 * t) / (256 * 256);
+        const int up = eased * Video::kHeight / 256;
+        if (up > 0) {
+            const size_t row = static_cast<size_t>(Video::kWidth) * sizeof(uint32_t);
+            memmove(old.picture.data(), old.picture.data() + static_cast<size_t>(up) * Video::kWidth, static_cast<size_t>(Video::kHeight - up) * row);
+            memcpy(old.picture.data() + static_cast<size_t>(Video::kHeight - up) * Video::kWidth, stage.picture.data(), static_cast<size_t>(up) * row);
+        }
+        for (int16_t &sample : old.sound) {
+            sample = static_cast<int16_t>(sample * (256 - eased) / 256);
+        }
+        g_dropSound.Mix(old.sound, eased);
+        g_dropBackSound.Mix(old.sound, eased);
+        Give(machine, old);
+    }
+
+    // At the bottom: the next match's machines are the ones seen from here, and the match after it is begun
+    void Landed(Machine &machine) {
+        Promote(machine, g_next);
+        g_back = std::move(g_dropBack);
+        g_dropBack.Clear();
+        g_backSound = g_dropBackSound;
+        g.back = g.dropStage;
+        g.dropStage = AnyStage(g.back);
+        g.characters[1] = AnyCharacter(Ram8(Player(1) + kCharacter));
+        g.out = -1;
+        g.dropped = false;
+        g.phase = Phase::Fighting;
+        g.since = 0;
+    }
+
     void Frame(Machine &machine) {
+        g_open = false;
         if (g.phase != Phase::Starting && Ram16(kMode) == 0) {
             End(); // (the board was reset)
             return;
@@ -439,7 +643,31 @@ namespace {
         std::vector<HudLine> lines;
         int dark = 0;         // how far the fighters (or, with one stage, the whole picture) are faded, of 256
         bool layered = false; // the picture and sound have been put together already
-        if (g.phase == Phase::Fighting) {
+        if (g.kind == Kind::RingOut && g.phase != Phase::Starting && g.phase != Phase::Over) {
+            // (there is no knock-down here: a fighter is out, or the fight goes on)
+            if (g.phase == Phase::Fighting) {
+                LookForOut();
+                MakeDrop(machine);
+            } else if (g.phase == Phase::Falling) {
+                g.since++;
+                MakeDrop(machine);
+                if (g.since >= kFallFor && g.out == 0) {
+                    g.phase = Phase::Over;
+                    g.since = 0;
+                    if (g.score > FeatureValue("ringout_best")) {
+                        SetFeatureValue("ringout_best", std::min(g.score, 99));
+                    }
+                } else if (g.since >= kFallFor && g_next.ready && g_dropBack.ready) {
+                    g.phase = Phase::Dropping;
+                    g.since = 0;
+                } else if (g_next.frames > kStartMost || g_dropBack.frames > kStartMost) {
+                    End();
+                    return;
+                }
+            } else if (g.phase == Phase::Dropping) {
+                g.since++;
+            }
+        } else if (g.phase == Phase::Fighting) {
             const uint8_t result = Ram8(kResult);
             if (result) {
                 g.winner = result == 2 ? 1 : 0; // (both down at once: the first player's)
@@ -504,10 +732,11 @@ namespace {
         } else if (g.phase == Phase::Over) {
             g.since++;
             char text[64];
-            lines.push_back({0.5f, 0.36f, 0, "SURVIVAL OVER"});
-            snprintf(text, sizeof(text), "Opponents beaten: %d", g.score);
+            const bool ring = g.kind == Kind::RingOut;
+            lines.push_back({0.5f, 0.36f, 0, ring ? "RING OUT" : "SURVIVAL OVER"});
+            snprintf(text, sizeof(text), ring ? "Ring outs: %d" : "Opponents beaten: %d", g.score);
             lines.push_back({0.5f, 0.46f, 0, text});
-            snprintf(text, sizeof(text), "Best: %d", std::max(g.score, FeatureValue("survival_best")));
+            snprintf(text, sizeof(text), "Best: %d", std::max(g.score, FeatureValue(ring ? "ringout_best" : "survival_best")));
             lines.push_back({0.5f, 0.54f, 0, text});
             if (g.since > kOverFor) {
                 End();
@@ -521,7 +750,14 @@ namespace {
         }
         if (Layered()) {
             if (!layered) {
-                Layer(machine, 256 - dark);
+                // (on the way down the winner is seen over the old stage until it is seen above the new one)
+                Layer(machine, g.phase == Phase::Dropping && g.dropped ? 0 : 256 - dark);
+            }
+            if (g.phase == Phase::Dropping) {
+                Drop(machine);
+                if (g.since >= kDropFor) {
+                    Landed(machine);
+                }
             }
         } else if (dark) {
             Darken(machine, dark);
@@ -543,10 +779,10 @@ void EndBattle() {
     End();
 }
 bool BattleNoClock() {
-    return g.kind == Kind::Endless;
+    return g.kind == Kind::Endless || g.kind == Kind::RingOut;
 }
 bool BattleNoKnockOut() {
-    return false;
+    return g.kind == Kind::RingOut;
 }
 
 void BattleBeforeFrame(Machine &machine) {
@@ -562,7 +798,7 @@ void BattleFrame(Machine &machine) {
     // What the next frame of the port's machine draws: all of it; or no panel; or the fighters alone, marked,
     // to be laid over the stage that another machine shows
     if (g.kind != Kind::None || !StageViewer()) {
-        const bool fighting = g.kind == Kind::Endless && g.phase != Phase::Starting;
+        const bool fighting = (g.kind == Kind::Endless || g.kind == Kind::RingOut) && g.phase != Phase::Starting;
         const bool layered = fighting && Layered();
         machine.video.hideObject = layered ? NotTheFighters : fighting ? ThePanel : nullptr;
         machine.video.layerMask = layered ? 1 : 0xF;
@@ -576,7 +812,7 @@ void BattleState(Archive &ar) {
     ar.Vec(g_next.state);
     ar.Pod(g_next.ready);
     ar.Pod(g_next.frames);
-    for (Spare *spare : {&g_back, &g_backNext}) {
+    for (Spare *spare : {&g_back, &g_backNext, &g_dropBack}) {
         ar.Vec(spare->state);
         ar.Pod(spare->ready);
         ar.Pod(spare->frames);
@@ -590,6 +826,7 @@ void BattleState(Archive &ar) {
 
 void RegisterBattle() {
     Game &game = TheGame();
+    AddHook(0x028192, "KeepIn", KeepIn);
     game.pages.push_back({kSurvival, kModes, "One opponent after another on the health you have left. How many can you beat?"});
     game.pages.push_back({kEndless, kModes, "Two fighters the game plays, for as long as you like. Touch the controls to take one over."});
     game.commands.push_back({"survival_start", kSurvival, "Start",
@@ -608,10 +845,25 @@ void RegisterBattle() {
         }
         game.features.push_back({"survival_best", kSurvival, "Best", "The most opponents beaten in one survival. (Left puts it back.)", 0, choices});
     }
+    game.pages.push_back({kRingOut, kModes, "No health: knock your opponent over the end of the stage, and jump down to the next."});
+    game.commands.push_back({"ringout_start", kRingOut, "Start",
+                             "Choose a character. Nobody loses health: the ends of a stage are open, and a fighter knocked over "
+                             "one falls. Knock your opponent out and you jump down to the next stage; over when you fall.",
+                             StartRingOut});
+    {
+        static std::vector<std::string> numbers;
+        std::vector<const char *> choices;
+        for (int n = 0; n < 100; n++) {
+            numbers.push_back(std::to_string(n));
+        }
+        for (const std::string &number : numbers) {
+            choices.push_back(number.c_str());
+        }
+        game.features.push_back({"ringout_best", kRingOut, "Best", "The most ring outs in one go. (Left puts it back.)", 0, choices});
+    }
     game.commands.push_back({"endless_start", kEndless, "Start",
-                             "Two fighters, played by the game, with no bars and no clock. The one knocked down is replaced. Press "
-                             "anything on a player's controls to take that fighter over; leave them alone for ten seconds to give "
-                             "it back. Reset ends it.",
+                             "Two fighters played by the game: no bars, no clock, and the one knocked down is replaced. Press "
+                             "anything to take a fighter over; ten idle seconds give it back.",
                              StartEndless});
     std::vector<const char *> fighters = {"Random"};
     for (const char *name : kNames) {

@@ -207,8 +207,14 @@ namespace {
                 SetRam8(Player(n) + kCharacterAgain, static_cast<uint8_t>(wanted.characters[n]));
             }
         }
-        if (wanted.characters[0] >= 0 && wanted.characters[1] >= 0) {
-            SetRam8(Player(1) + kColours, wanted.characters[0] == wanted.characters[1] ? Ram8(Player(0) + kColours) ^ 1 : Ram8(Player(1) + kColours));
+        for (int n = 0; n < 2; n++) {
+            if (wanted.colours[n] >= 0) {
+                SetRam8(Player(n) + kColours, static_cast<uint8_t>(wanted.colours[n]));
+            }
+        }
+        if (wanted.characters[0] >= 0 && Ram8(Player(0) + kCharacter) == Ram8(Player(1) + kCharacter) &&
+            Ram8(Player(0) + kColours) == Ram8(Player(1) + kColours)) {
+            SetRam8(Player(1) + kColours, Ram8(Player(1) + kColours) ^ 1);
         }
         // (0: the game's choice)
         const int stage = wanted.stage ? wanted.stage : FeatureOn("training_mode") ? FeatureValue("training_stage") : 0;

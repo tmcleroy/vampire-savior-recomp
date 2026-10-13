@@ -17,11 +17,12 @@
 namespace cps2recomp {
 
 // What the machine that is running is to fight when the game next makes a match, for the game's own choice
-// of stage (training.cpp's hook): the stage (1-12; 0: the game's choice) and the two characters (-1: the ones
-// chosen at the character choice). Whoever runs a machine sets this first.
+// of stage (training.cpp's hook): the stage (1-12; 0: the game's choice), the two characters and their
+// colours (-1: the ones chosen at the character choice). Whoever runs a machine sets this first.
 struct MatchWanted {
     int stage = 0;
     int characters[2] = {-1, -1};
+    int colours[2] = {-1, -1}; // which of a character's sets of colours (-1: as chosen)
 };
 MatchWanted &Wanted();
 
@@ -76,8 +77,10 @@ struct Spare {
 };
 // Runs the spare for a frame in the port's machine, which is left as it was. `before` is called with the
 // spare loaded, before its frame: it sets the controls, Wanted(), CameraAt(), the video's switches, and may
-// change the game's memory. `made`, if given, gets the frame's picture and sound.
-void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made = nullptr);
+// change the game's memory. `made`, if given, gets the frame's picture and sound. `after`, if given, is
+// called after the frame with the spare still loaded (to read its memory, or change it).
+void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made = nullptr,
+              const std::function<void(Machine &)> &after = nullptr);
 // The spare's machine becomes the port's (and the spare is cleared)
 void Promote(Machine &machine, Spare &spare);
 
@@ -87,6 +90,8 @@ bool StageViewer();
 void EndModes();
 bool BattleMode();   // battle.cpp
 void EndBattle();
+// The colour sets of a player's own objects (the first player's 10-15, the second's 16-21), as a mask of bits
+constexpr uint32_t kPlayerSets[2] = {0x0000FC00, 0x003F0000};
 bool BattleNoClock();     // the round's clock stands still
 bool BattleNoKnockOut();  // nobody's health goes below nothing
 

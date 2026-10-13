@@ -5,6 +5,12 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Three more modes under "Alternative modes". Survival: one opponent after another on the health
+  you have left, with the count at the end. Endless battle: two fighters the game plays, with no
+  panel, the loser replaced; either can be taken over from the controls; on one stage, on stages
+  that fade into one another, or on a floor that scrolls through them. Ring out: no health, a
+  stage's ends are open, and the winner jumps down to the next stage.
+
 ## 0.1.0-beta.2 - 2026-10-13
 
 - "Alternative modes" at the top of the in-game menu: Training mode and two new modes, each with

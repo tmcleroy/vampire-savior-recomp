@@ -310,7 +310,7 @@ void Video::RenderLine(int line, uint32_t *out) {
     }
     if (markObjects) {
         for (int x = 0; x < kWidth; x++) {
-            out[x] |= priority[x] == 31 ? 0xFF000000u : 0;
+            out[x] |= priority[x] == 31 ? 0x80000000u | (static_cast<uint32_t>(pens[x] >> 4) & 0x1F) << 24 : 0;
         }
     }
 }

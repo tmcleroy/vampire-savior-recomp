@@ -112,7 +112,8 @@ void Give(Machine &machine, const Made &made) {
     machine.audio.insert(machine.audio.end(), made.sound.begin(), made.sound.end());
 }
 
-void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made) {
+void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made,
+              const std::function<void(Machine &)> &after) {
     // What a save state does not hold is kept by hand: the picture, the controls, the video's switches, what
     // is wanted
     const uint16_t held[2] = {machine.players[0], machine.players[1]};
@@ -147,6 +148,9 @@ void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &
     g_camera = CameraWanted();
     before(machine);
     machine.RunFrame();
+    if (after) {
+        after(machine);
+    }
     if (made) {
         Take(machine, sound, *made);
     }
