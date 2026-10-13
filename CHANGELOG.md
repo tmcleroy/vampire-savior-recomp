@@ -18,6 +18,13 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Endless battle, the stages scrolling by: the next stage is made ready in time for the end of
   the one shown (in the wide picture a stage is crossed sooner, and at the fast speed the
   scrolling waited about a second at each stage's end).
+- The stage's code is readable C++ (58 routines: the camera, the scroll screens' placing, the row
+  scroll table, what is in the picture, the players' edges, the stage's pieces), each checked
+  against the game's own on every stage; widescreen is lines in it. With widescreen on, the lady
+  under the bird cage on Feast of the Damned is there whenever she is in the wide picture.
+
+## 0.1.0-beta.4 - 2026-10-13
+
 - Endless battle: how often the shuffled stage changes (1, 2, 3, 5 or 10 minutes; it was two) and
   how fast the scrolling stage goes by (slow, medium, fast) are chosen on its page.
 - The launcher can be used with a gamepad alone, or with the arrow keys and Space or Enter: a ring
