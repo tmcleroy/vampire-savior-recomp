@@ -5,6 +5,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+## 0.1.0-beta.4 - 2026-10-13
+
 - Endless battle: how often the shuffled stage changes (1, 2, 3, 5 or 10 minutes; it was two) and
   how fast the scrolling stage goes by (slow, medium, fast) are chosen on its page.
 - The launcher can be used with a gamepad alone, or with the arrow keys and Space or Enter: a ring
