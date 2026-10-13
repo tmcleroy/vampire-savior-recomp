@@ -44,8 +44,34 @@ struct WidePlanes {
             uint16_t entries[kTwinEntries][4] = {};
         } piece[2];
         int is = -1, at = 0, count = 0;
+        int16_t ahead = 0;   //   what the game took off its place for its row, in the list being made
     } twins[kTwins];
     int filling = -1; // the twin whose entries the game is putting in the list just now
+    // The scroll screen of 16-pixel tiles has a place of its own on every line (the board's row scroll),
+    // and so a rate of its own: the floor's lines go faster than the camera the nearer they are, and on
+    // some stages the lines of the wall behind go slower. Each row's rate is worked out from where the game
+    // puts the row with the camera off the middle (widescreen.cpp, MeasureRows): in 256ths of the camera's
+    // going, by the row's place in the row scroll table; -1: not known yet. `sure` when it was worked out
+    // with the camera at rest.
+    int16_t rowRate[0x400];
+    uint8_t rowSure[0x400] = {};
+    // A piece of the stage that rides on that scroll screen can be put on one of its rows, and goes at the
+    // row's rate: worked out the same way from what the game takes off the piece's place (Measure). And a
+    // piece can ride on no plane at all: its script puts it in the picture itself, further along as the
+    // camera goes. Its rate is measured: where it was with the camera furthest left and furthest right.
+    static constexpr int kPieces = 48;
+    struct Piece {
+        uint16_t record = 0; // (its address's low half; 0: none)
+        int16_t rate = -1;   //   -1: its plane's
+        bool sure = false;
+        int16_t leftCamera = 0, leftX = 0, rightCamera = 0, rightX = 0;
+    } pieces[kPieces];
+    WidePlanes() {
+        for (int16_t &rate : rowRate) {
+            rate = -1;
+        }
+    }
+    uint8_t piece[0x400] = {}; // which of them each entry of the list is (0: none; else its number and 1)
 };
 // A machine other than the port's is loaded and about to run a frame (modes.h, RunSpare): its picture is to
 // be as wide as the port's this frame, whatever it is showing, so that the two can be put together.

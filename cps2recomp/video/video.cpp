@@ -100,7 +100,8 @@ void Video::DrawScroll(int which, int rasterLine, uint16_t *pens, uint8_t *prior
     const uint32_t y = (rasterLine + scrollY) & mapMask;
     const uint32_t row = y >> shift;
     const int width = kWide ? Width() : +kWidth;
-    const int ownLeft = kWide ? wide.side + wide.scroll[which] : 0, ownRight = ownLeft + kWidth; // the board's own columns
+    const int ownLeft = kWide ? wide.side + wide.scroll[which] + (which == 1 && wide.lines ? wide.lines[rasterLine] : 0) : 0;
+    const int ownRight = ownLeft + kWidth; // the board's own columns
     const uint32_t firstX = static_cast<uint32_t>(kFirstColumn - ownLeft + static_cast<int>(scrollX)) & mapMask;
     const uint16_t colourBase = static_cast<uint16_t>(0x20 * (which + 1));
 
@@ -240,7 +241,7 @@ void Video::DrawObjects(int rasterLine, uint16_t *pens, uint8_t *priority, const
 }
 
 void Video::RenderLine(int line, uint32_t *out) {
-    if (wide.side || wide.scroll[0] || wide.scroll[1] || wide.scroll[2] || wide.object || wide.tile) {
+    if (wide.side || wide.scroll[0] || wide.scroll[1] || wide.scroll[2] || wide.lines || wide.object || wide.tile) {
         RenderLineAs<true>(line, out);
     } else {
         RenderLineAs<false>(line, out);

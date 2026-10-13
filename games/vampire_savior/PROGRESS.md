@@ -148,6 +148,19 @@ played in it, the same day.)
   side with it: the game says which plane as it works out the piece's place (`01BBC2`, `01BC3A`,
   by the byte at `+0C` of its record; `01BC88` for the panel), and hooks there note it for the
   entries of the object list that follow. Each machine a mode keeps has its own note.
+- The scroll screen of 16-pixel tiles has a rate for every line (the board's row scroll): the
+  floor's lines go faster than the camera, and on most stages the wall's lines go slower (0.72 of
+  it on the chateau). Each row's rate is worked out from the row scroll table with the camera off
+  the middle, and each line is kept inside its painting by its own rate (`Video::wide.lines`). A
+  piece on a row (`+24` of its record; the game takes the row's place off the piece's at `01BBC2`)
+  goes at the row's rate; a piece on no plane, which its script puts in the picture itself (the
+  chateau's cave mouth, 41 entries of one record), has its rate measured from where it is at the
+  camera's two furthest places. The half of a shared record that is drawn from a copy is placed
+  by its row too (the lady's arm on Feast of the Damned was off by the row's going). Both corners
+  of all twelve stages in training were compared with the board's corners side by side: the same.
+- Fetus of God's camera goes from 160 to 736 on the board, not 256 to 640: the wide picture's
+  ends there are 224 and 672. (Before this the picture fell back to the board's near that stage's
+  ends.)
 - Survival, the endless battle, the ring out and the viewer's infinite stage are wide: every
   machine's frame is as wide as the port's that frame, and the pictures are put together at that
   width; the ring out's edge is the wide picture's.

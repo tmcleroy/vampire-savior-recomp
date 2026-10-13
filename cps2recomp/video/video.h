@@ -78,6 +78,9 @@ public:
     struct Wide {
         int side = 0;
         int scroll[3] = {0, 0, 0};
+        // (the scroll screen of 16-pixel tiles can have a place of its own on every line: so can this. If
+        // given, 262 numbers, one for each line of the raster, added to scroll[1] on that line.)
+        const int16_t *lines = nullptr;
         int (*object)(uint32_t tile, uint16_t attributes, int entry) = nullptr;
         bool (*tile)(int which, int column, int row, int at, uint16_t &code, uint16_t &attributes) = nullptr;
     } wide;

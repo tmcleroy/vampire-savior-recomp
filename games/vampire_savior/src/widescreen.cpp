@@ -34,6 +34,7 @@
 #include "vsav.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -47,12 +48,21 @@ namespace {
     constexpr int kSide = Video::kMaxSide;
 
     constexpr int kCameraMiddle = (kCameraLeft + kCameraRight) / 2, kCameraTravel = kCameraRight - kCameraLeft;
+    // The camera's ends on the board are 256 and 640 on every stage but the last, Fetus of God, which is
+    // wider: 160 and 736 (seen in the camera's record). The middle is the same.
+    constexpr int kWideStage = 11, kWideStageLeft = 160, kWideStageRight = 736;
+    int CameraLeftEnd() {
+        return Ram16(kStage) / 2 == kWideStage ? kWideStageLeft : kCameraLeft;
+    }
+    int CameraRightEnd() {
+        return Ram16(kStage) / 2 == kWideStage ? kWideStageRight : kCameraRight;
+    }
 
     // How far each stage's planes behind travel while the camera goes from one end to the other (on the
     // board: 384): the scroll screen of 8-pixel tiles and the one of 32. (Seen in their records as the stage
     // viewer went across; the game works a plane's place out with shifts, a routine for each rate. The one
-    // of 16 is the stage's own plane on every stage: its lines have rates of their own for the floor, which
-    // are left alone.)
+    // of 16 is the stage's own plane on every stage: its lines have rates of their own, worked out in
+    // MeasureRows.)
     constexpr int kTravel[kStages][2] = {{265, 265}, {318, 339}, {137, 137}, {77, 114}, {206, 309}, {359, 335},
                                          {306, 218}, {363, 298}, {400, 352}, {306, 262}, {384, 384}, {336, 288}};
 
@@ -64,15 +74,70 @@ namespace {
     // How far to the right a plane is drawn that travels `travel` across the camera's range, with the camera
     // at `camera`: nothing while 64 more columns of it on each side are columns the board shows too
     int ViewShift(int camera, int travel) {
-        const double at = static_cast<double>(camera - kCameraMiddle) * travel / kCameraTravel; // from its middle
-        const double most = std::max(travel / 2.0 - kSide, 0.0);
+        // (`travel` is over 384 of the camera's going, whatever the stage's own range is)
+        const double rate = static_cast<double>(travel) / kCameraTravel;
+        const double at = (camera - kCameraMiddle) * rate; // from its middle
+        const double most = std::max((CameraRightEnd() - CameraLeftEnd()) / 2.0 * rate - kSide, 0.0);
         return static_cast<int>(std::lround(at - std::clamp(at, -most, most)));
     }
-    void SetShifts(int camera) {
+    constexpr int kRowAtMiddle = 192; // what the row scroll table has for every row with the camera at the middle
+    constexpr int kWithItsPlane = INT_MIN;
+    int g_pieceShifts[WidePlanes::kPieces] = {}; // each piece's that is on a row (or kWithItsPlane)
+    int16_t g_lines[Machine::kLines] = {};        // each line's of the scroll screen of 16-pixel tiles, over g_shifts[1]
+    int g_still = 0;                              // frames the camera has been at rest
+    // (the row scroll table as the board reads it: video.cpp)
+    int RowScroll(const Machine &machine, int row) {
+        const uint32_t table = (static_cast<uint32_t>(machine.cpsA[4]) * 256) & ~0x7FFu & 0x3FFFF;
+        const uint8_t *word = &machine.videoRam[table + static_cast<uint32_t>(row & 0x3FF) * 2];
+        return static_cast<int16_t>((word[0] << 8) | word[1]);
+    }
+    // A rate from how far something is ahead of the camera's own plane with the camera `off` its middle. It
+    // is only as good as `off` is large; the game's rates are sixteenths and thirty-seconds, so with the
+    // camera moving (when what is read can be a frame from what `off` says) it is taken to the nearest.
+    bool RateFrom(int ahead, int off, bool still, int16_t &rate, bool &sure) {
+        if (std::abs(off) < 48 || (sure && !still)) {
+            return false;
+        }
+        int measured = 256 + ahead * 256 / off;
+        if (!still) {
+            measured = (measured + 4) / 8 * 8;
+        }
+        rate = static_cast<int16_t>(std::clamp(measured, 0, 1024));
+        sure = still;
+        return true;
+    }
+    // Each row's rate, from the table (the stage's rows are the same rows whatever the camera does)
+    void MeasureRows(const Machine &machine, WidePlanes &planes, int camera, bool still) {
+        if (!(machine.cpsA[17] & 1)) {
+            return; // (no row scroll)
+        }
+        for (int row = 0; row < 0x400; row++) {
+            bool sure = planes.rowSure[row];
+            if (RateFrom(RowScroll(machine, row) - kRowAtMiddle, camera - kCameraMiddle, still, planes.rowRate[row], sure)) {
+                planes.rowSure[row] = sure;
+            }
+        }
+    }
+    void SetShifts(const Machine &machine, int camera, const WidePlanes &planes) {
         const unsigned stage = Ram16(kStage) / 2u;
-        g_shift = g_shifts[1] = ViewShift(camera, kCameraTravel);
-        g_shifts[0] = stage < kStages ? ViewShift(camera, kTravel[stage][0]) : g_shift;
-        g_shifts[2] = stage < kStages ? ViewShift(camera, kTravel[stage][1]) : g_shift;
+        int travel[3] = {kCameraTravel, kCameraTravel, kCameraTravel};
+        if (stage < kStages) {
+            travel[0] = kTravel[stage][0];
+            travel[2] = kTravel[stage][1];
+        }
+        for (int n = 0; n < 3; n++) {
+            g_shifts[n] = ViewShift(camera, travel[n]);
+        }
+        g_shift = g_shifts[1];
+        // (each line's row is where the board will look it up: the raster's line and the register's count)
+        for (int line = 0; line < Machine::kLines; line++) {
+            const int rate = (machine.cpsA[17] & 1) ? planes.rowRate[(line + machine.cpsA[16]) & 0x3FF] : -1;
+            g_lines[line] = rate < 0 ? 0 : static_cast<int16_t>(ViewShift(camera, rate * kCameraTravel / 256) - g_shift);
+        }
+        for (int n = 0; n < WidePlanes::kPieces; n++) {
+            const WidePlanes::Piece &piece = planes.pieces[n];
+            g_pieceShifts[n] = piece.record && piece.rate >= 0 ? ViewShift(camera, piece.rate * kCameraTravel / 256) : kWithItsPlane;
+        }
     }
 
     // Which plane each entry of the object list rides on. The game works out an object's place in the
@@ -85,9 +150,22 @@ namespace {
     constexpr uint32_t kRidesOn = 0x0C; // an object's record: which plane
     enum : uint8_t { kRidesNotKnown, kRidesFirst, kRidesNone = 4 };
     WidePlanes g_planes, g_shown, g_portPlanes, g_portShown;
-    int g_portShifts[3] = {0, 0, 0};
+    int g_portShifts[3] = {0, 0, 0}, g_portPieceShifts[WidePlanes::kPieces] = {};
+    int16_t g_portLines[Machine::kLines] = {};
 
     Machine *g_machine = nullptr; // (the machine whose memory is loaded: for reading the list it is making)
+
+    // What the game takes off the place of an object on a row of the scroll screen of 16-pixel tiles
+    // (01BBC2: the row is named in the object's record, and looked up in the game's own copy of the row
+    // scroll table): how far the row is ahead of the plane. 0 for an object on no row.
+    constexpr uint32_t kPieceRow = 0x24;                              // an object's record: its row (a word; 0: none)
+    constexpr uint32_t kRowTable = 0xFF8380, kRowTableAt = 0xFF83A0;  // the game's table (a long: where) and its place in it (a word)
+    int RowAhead(uint32_t object, uint8_t rides) {
+        if (rides != 2 || !Ram16(object + kPieceRow) || !g_machine) {
+            return 0;
+        }
+        return static_cast<int16_t>(g_machine->Read16(Ram32(kRowTable) + static_cast<uint16_t>(Ram16(kRowTableAt) - 2 * Ram16(object + kPieceRow)))) - kRowAtMiddle;
+    }
 
     // A twin's entries are all in the list (the next object's begin at `end`): kept, for drawing the piece
     // when the record is the other one. An entry's place is across and down the picture; what stays the
@@ -113,7 +191,7 @@ namespace {
                 break;
             }
             uint16_t *kept = piece.entries[piece.count++];
-            kept[0] = static_cast<uint16_t>((x & 0xFC00) | ((x + g_planes.planeX[twin.plane - 1]) & 0x3FF));
+            kept[0] = static_cast<uint16_t>((x & 0xFC00) | ((x + g_planes.planeX[twin.plane - 1] + twin.ahead) & 0x3FF));
             kept[1] = static_cast<uint16_t>((y & 0xFC00) | ((y - g_planes.planeY[twin.plane - 1]) & 0x3FF));
             kept[2] = static_cast<uint16_t>((entry[4] << 8) | entry[5]);
             kept[3] = attributes;
@@ -128,6 +206,69 @@ namespace {
             copy[n + 1] = static_cast<uint8_t>(word);
         }
         return copy;
+    }
+
+    // A piece of the stage on a row of the scroll screen of 16-pixel tiles: the game takes off the piece's
+    // place what the row is ahead of the plane (01BBC2: the row is named in the piece's record, and looked
+    // up in the game's own copy of the row scroll table), so the piece goes at the row's rate. (The
+    // stage's pieces have their records from FFC800; the fighters and what they throw are elsewhere.)
+    // Gives the piece's number and 1 for the list's entries, or 0 for a piece that goes with its plane.
+    constexpr uint32_t kStagePieces = 0xFFC800, kStagePiecesEnd = 0xFFD400;
+    WidePlanes::Piece *PieceOf(uint32_t object, int &number) {
+        WidePlanes::Piece *piece = nullptr;
+        for (int n = 0; n < WidePlanes::kPieces; n++) {
+            if (g_planes.pieces[n].record == (object & 0xFFFF)) {
+                number = n;
+                return &g_planes.pieces[n];
+            }
+            if (!g_planes.pieces[n].record && !piece) {
+                piece = &g_planes.pieces[n];
+                number = n;
+            }
+        }
+        if (piece) {
+            *piece = WidePlanes::Piece();
+            piece->record = static_cast<uint16_t>(object);
+            piece->leftCamera = piece->rightCamera = static_cast<int16_t>(Ram16(kCameraX));
+            piece->leftX = piece->rightX = static_cast<int16_t>(Ram16(object + kX));
+        }
+        return piece;
+    }
+    uint8_t Measure(uint32_t object, uint8_t rides) {
+        if (object < kStagePieces || object >= kStagePiecesEnd || !g_machine) {
+            return 0;
+        }
+        const int16_t camera = static_cast<int16_t>(Ram16(kCameraX));
+        int number = 0;
+        if (rides == kRidesNotKnown) {
+            // On no plane: by where its script has put it at the camera's two furthest places so far
+            WidePlanes::Piece *piece = PieceOf(object, number);
+            if (!piece) {
+                return 0;
+            }
+            const int16_t x = static_cast<int16_t>(Ram16(object + kX));
+            if (camera < piece->leftCamera) {
+                piece->leftCamera = camera;
+                piece->leftX = x;
+            } else if (camera > piece->rightCamera) {
+                piece->rightCamera = camera;
+                piece->rightX = x;
+            }
+            if (piece->rightCamera - piece->leftCamera >= 64) {
+                piece->rate = static_cast<int16_t>(std::clamp((piece->leftX - piece->rightX) * 256 / (piece->rightCamera - piece->leftCamera), 0, 512));
+            }
+            return static_cast<uint8_t>(number + 1);
+        }
+        if (rides != kRidesFirst + 1 || !Ram16(object + kPieceRow)) {
+            return 0;
+        }
+        const int ahead = RowAhead(object, rides);
+        WidePlanes::Piece *piece = PieceOf(object, number);
+        if (!piece) {
+            return 0;
+        }
+        RateFrom(ahead, camera - kCameraMiddle, g_still >= 3, piece->rate, piece->sure);
+        return static_cast<uint8_t>(number + 1);
     }
 
     void Rides(M68K &c, uint8_t rides) {
@@ -148,13 +289,16 @@ namespace {
         // (the entries since the last object's are that object's)
         for (int n = g_planes.last + 1; n < entry; n++) {
             g_planes.rides[n] = g_planes.rides[g_planes.last];
+            g_planes.piece[n] = g_planes.piece[g_planes.last];
         }
         g_planes.rides[entry] = rides;
+        g_planes.piece[entry] = rides == kRidesNotKnown ? Measure(c.a[6] & 0xFFFFFF, rides) : 0;
         g_planes.last = entry;
         if (rides >= kRidesFirst && rides < kRidesNone) {
             const uint32_t object = c.a[6] & 0xFFFFFF, plane = kBackLayer + (rides - kRidesFirst) * kLayerSize;
             g_planes.planeX[rides - kRidesFirst] = static_cast<int16_t>(Ram16(plane + kLayerShownX));
             g_planes.planeY[rides - kRidesFirst] = static_cast<int16_t>(Ram16(plane + kLayerShownY));
+            g_planes.piece[entry] = Measure(object, rides);
             for (int n = 0; n < WidePlanes::kTwins; n++) {
                 WidePlanes::Twin &twin = g_planes.twins[n];
                 if (twin.record == object) {
@@ -162,6 +306,7 @@ namespace {
                     twin.at = entry;
                     twin.count = 0;
                     twin.plane = rides;
+                    twin.ahead = static_cast<int16_t>(RowAhead(object, rides));
                     g_planes.filling = n;
                 }
             }
@@ -269,13 +414,15 @@ namespace {
             }
             memmove(list + (at + other.count) * 4, list + at * 4, static_cast<size_t>(entries - at) * 4 * sizeof(uint16_t));
             memmove(g_shown.rides + at + other.count, g_shown.rides + at, static_cast<size_t>(0x400 - at - other.count));
+            memmove(g_shown.piece + at + other.count, g_shown.piece + at, static_cast<size_t>(0x400 - at - other.count));
             for (int n = 0; n < other.count; n++) {
                 uint16_t *entry = list + (at + n) * 4;
-                entry[0] = static_cast<uint16_t>((other.entries[n][0] & 0xFC00) | ((other.entries[n][0] - g_shown.planeX[twin.plane - 1]) & 0x3FF));
+                entry[0] = static_cast<uint16_t>((other.entries[n][0] & 0xFC00) | ((other.entries[n][0] - g_shown.planeX[twin.plane - 1] - twin.ahead) & 0x3FF));
                 entry[1] = static_cast<uint16_t>((other.entries[n][1] & 0xFC00) | ((other.entries[n][1] + g_shown.planeY[twin.plane - 1]) & 0x3FF));
                 entry[2] = other.entries[n][2];
                 entry[3] = other.entries[n][3];
                 g_shown.rides[at + n] = twin.plane;
+                g_shown.piece[at + n] = at > 0 ? g_shown.piece[twin.at] : 0;
             }
             last += other.count * 4;
         }
@@ -283,16 +430,13 @@ namespace {
 
     // What the picture a frame makes goes by: the list as it stands, the last object's entries to its end
     void Show(WidePlanes &planes, const Machine &machine) {
-        if (planes.filling >= 0) {
+        if (planes.filling >= 0 && &planes == &g_planes) {
             // (the twin was the last thing put in the list, which is the one the board takes next)
-            WidePlanes mine = g_planes;
-            g_planes = planes;
             Filled(machine.ObjectsToCome(), 0x400);
-            planes = g_planes;
-            g_planes = mine;
         }
         g_shown = planes;
         std::fill(g_shown.rides + std::min(planes.last + 1, 0x400), g_shown.rides + 0x400, planes.rides[planes.last]);
+        std::fill(g_shown.piece + std::min(planes.last + 1, 0x400), g_shown.piece + 0x400, planes.piece[planes.last]);
     }
     // The camera's place a frame ago. The picture a frame makes is the one the game worked out the frame
     // before from the camera as it then was: its scroll registers are written and its objects taken at the
@@ -300,7 +444,7 @@ namespace {
     int g_cameraBefore = 0;
 
     bool OnStage(int camera) {
-        return camera >= kCameraLeft && camera <= kCameraRight;
+        return camera >= CameraLeftEnd() && camera <= CameraRightEnd();
     }
 
     // Between a match's screens the game draws a curtain of red blocks across the board's picture, and only
@@ -323,9 +467,12 @@ namespace {
 
     // An object's place: the panel's objects stay, the stage's and the fighters' go with the view
     int MoveObject(uint32_t tile, uint16_t attributes, int entry) {
-        const uint8_t rides = g_shown.rides[entry & 0x3FF];
+        const uint8_t rides = g_shown.rides[entry & 0x3FF], piece = g_shown.piece[entry & 0x3FF];
         if (rides == kRidesNone || ThePanel(tile, attributes)) {
             return 0;
+        }
+        if (piece && g_pieceShifts[piece - 1] != kWithItsPlane) {
+            return g_pieceShifts[piece - 1];
         }
         return g_shifts[rides == kRidesNotKnown ? 1 : rides - kRidesFirst];
     }
@@ -497,9 +644,10 @@ void WideKeepIn(M68K &c) {
 void WideCameraEnds(uint32_t camera) {
     const uint16_t left = Ram16(camera + kCameraEndLeft), right = Ram16(camera + kCameraEndRight);
     // (only a stage's usual ends are moved, and moved back when the feature is switched off in a fight)
-    if ((left == kCameraLeft || left == kCameraLeft + kSide) && (right == kCameraRight || right == kCameraRight - kSide)) {
-        SetRam16(camera + kCameraEndLeft, static_cast<uint16_t>(kCameraLeft + (g_play ? kSide : 0)));
-        SetRam16(camera + kCameraEndRight, static_cast<uint16_t>(kCameraRight - (g_play ? kSide : 0)));
+    const int boardLeft = CameraLeftEnd(), boardRight = CameraRightEnd();
+    if ((left == boardLeft || left == boardLeft + kSide) && (right == boardRight || right == boardRight - kSide)) {
+        SetRam16(camera + kCameraEndLeft, static_cast<uint16_t>(boardLeft + (g_play ? kSide : 0)));
+        SetRam16(camera + kCameraEndRight, static_cast<uint16_t>(boardRight - (g_play ? kSide : 0)));
     }
 }
 
@@ -514,20 +662,29 @@ void WidescreenBeforeFrame(Machine &machine) {
     const int camera = static_cast<int16_t>(Ram16(kCameraX)), shown = g_cameraBefore;
     g_cameraBefore = camera;
     g_side = g_shift = g_shifts[0] = g_shifts[1] = g_shifts[2] = 0;
+    std::fill(std::begin(g_lines), std::end(g_lines), int16_t{0});
+    std::fill(std::begin(g_pieceShifts), std::end(g_pieceShifts), kWithItsPlane);
     g_play = FeatureOn("widescreen");
     if (g_play && OnStage(camera) && OnStage(shown) && !CurtainDrawn(machine)) {
         g_side = kSide;
-        SetShifts(shown);
     }
     g_machine = &machine;
     if (!OnStage(camera)) {
-        g_planes = WidePlanes(); // (no stage: its twins are gone with it)
+        g_planes = WidePlanes(); // (no stage: its twins and its pieces' rates are gone with it)
+    }
+    g_still = camera == shown ? g_still + 1 : 0;
+    if (g_side) {
+        MeasureRows(machine, g_planes, camera, g_still >= 3);
     }
     Show(g_planes, machine);
+    if (g_side) {
+        SetShifts(machine, shown, g_shown);
+    }
     machine.video.objectsTaken = g_side ? ListTaken : nullptr;
     Video::Wide &wide = machine.video.wide;
     wide.side = g_side;
     std::copy(g_shifts, g_shifts + 3, wide.scroll);
+    wide.lines = g_side ? g_lines : nullptr;
     wide.object = g_side ? MoveObject : nullptr;
     // (a stage whose 8-pixel scroll screen is a whole picture in the map needs no help: it goes round)
     g_machine = &machine;
@@ -542,19 +699,28 @@ void WideForSpare(Machine &machine, WidePlanes &planes) {
     g_portPlanes = g_planes;
     g_portShown = g_shown;
     std::copy(g_shifts, g_shifts + 3, g_portShifts);
+    std::copy(std::begin(g_pieceShifts), std::end(g_pieceShifts), g_portPieceShifts);
+    std::copy(std::begin(g_lines), std::end(g_lines), g_portLines);
     const int camera = static_cast<int16_t>(Ram16(kCameraX));
     if (!OnStage(camera)) {
         planes = WidePlanes();
     }
-    Show(planes, machine);
+    g_machine = &machine;
     g_planes = planes;
     g_shift = g_shifts[0] = g_shifts[1] = g_shifts[2] = 0;
+    std::fill(std::begin(g_lines), std::end(g_lines), int16_t{0});
+    std::fill(std::begin(g_pieceShifts), std::end(g_pieceShifts), kWithItsPlane);
     if (g_side && OnStage(camera)) {
-        SetShifts(camera);
+        MeasureRows(machine, g_planes, camera, false);
+    }
+    Show(g_planes, machine);
+    if (g_side && OnStage(camera)) {
+        SetShifts(machine, camera, g_shown);
     }
     Video::Wide &wide = machine.video.wide;
     wide.side = g_side;
     std::copy(g_shifts, g_shifts + 3, wide.scroll);
+    wide.lines = g_side ? g_lines : nullptr;
     wide.object = g_side ? MoveObject : nullptr;
     wide.tile = g_side && Ram8(kBackLayer + kLayerDrawnAsItGoes) ? SideTile : nullptr;
 }
@@ -564,6 +730,8 @@ void WideForPort(Machine &, WidePlanes &planes) {
     g_planes = g_portPlanes;
     g_shown = g_portShown;
     std::copy(g_portShifts, g_portShifts + 3, g_shifts);
+    std::copy(std::begin(g_portPieceShifts), std::end(g_portPieceShifts), g_pieceShifts);
+    std::copy(std::begin(g_portLines), std::end(g_portLines), g_lines);
     g_shift = g_shifts[1];
 }
 
