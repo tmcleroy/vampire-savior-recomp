@@ -54,7 +54,7 @@ board does not have. Each mode has a page there with a Start row and its choices
 
 | Feature | Name in `settings.ini` | What it does |
 | --- | --- | --- |
-| Widescreen | `widescreen` | A fight is shown in 16:9 (512 columns where the board shows 384) with more of the stage on each side. Off unless switched on, in every preset. Only the picture changes: the game runs as it does without it, the players can stand no further apart, and the bars stay in the middle. Everything else (the character choice, the screens between fights, the red curtain) keeps the board's 4:3. |
+| Widescreen | `widescreen` | Fights are shown and played in 16:9 (512 columns where the board shows 384), with more of the stage on each side. Off unless switched on, in every preset, because it changes how the game plays: the players can go to the wide picture's edges, so they can stand further apart than on the board (464 at most, where the board allows 336), and the camera stops 64 short of where it did, so that the picture ends where the stage does. The stage's ends are where they were. The bars stay in the middle. Everything that is not a fight (the character choice, the screens between fights, the red curtain) keeps the board's 4:3. |
 
 ## Cheats
 

@@ -178,11 +178,11 @@ namespace {
         if (place % 3 == 1) {
             x[0] = kStageLeft;
             x[1] = kStageLeft + kCornerApart;
-            camera = kCameraLeft;
+            camera = static_cast<uint16_t>(kCameraLeft + WideMargin()); // (the camera's end in the picture played in)
         } else if (place % 3 == 2) {
             x[0] = kStageRight - kCornerApart;
             x[1] = kStageRight;
-            camera = kCameraRight;
+            camera = static_cast<uint16_t>(kCameraRight - WideMargin());
         }
         if (place >= 3) {
             std::swap(x[0], x[1]);

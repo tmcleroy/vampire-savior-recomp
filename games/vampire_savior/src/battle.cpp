@@ -13,6 +13,7 @@
 //   Ring out        the player against one opponent after another, with no health: a stage's ends are open,
 //                   and whoever is knocked over one falls. The winner jumps down to the next stage.
 #include "modes.h"
+#include "widescreen.h"
 
 #include "state.h"
 
@@ -61,8 +62,20 @@ namespace {
     constexpr int kShuffleMinutes[] = {1, 2, 3, 5, 10}; // of fighting on a stage before it fades into another (the menu's choice)
     constexpr int kBlend = 150;                 //   and frames the fade takes
     constexpr int32_t kScrollSpeeds[] = {64, 128, 256}; // the scrolling stage's speed, in 256ths of a pixel a frame: slow, medium, fast
-    constexpr int32_t kLeftEnd = kCameraLeft * 256, kRightEnd = kCameraRight * 256;
-    constexpr int32_t kAcross = Video::kWidth * 256;
+    // The camera's ends and the picture's width, in 256ths of a pixel, for the picture being played in
+    // (widescreen.h: a wide picture's camera stops 64 short of where the board's does)
+    int32_t LeftEnd() {
+        return (kCameraLeft + WideMargin()) * 256;
+    }
+    int32_t RightEnd() {
+        return (kCameraRight - WideMargin()) * 256;
+    }
+    int PictureWidth() {
+        return Video::kWidth + 2 * WideSide();
+    }
+    int32_t Across() {
+        return PictureWidth() * 256;
+    }
     constexpr int kArena = (kCameraLeft + kCameraRight) / 2; // where the fighters' own camera is kept while the stage scrolls
     constexpr size_t kSoundAhead = 16;          // samples of another machine's sound kept in hand
     constexpr uint16_t kAnyButton = kLeft | kRight | kUp | kDown | kPunch1 | kPunch2 | kPunch3 | kKick1 | kKick2 | kKick3;
@@ -235,7 +248,7 @@ namespace {
             g.way = choice == 0 ? kStageShuffle : choice == 1 ? kStageScroll : kStageOne;
             if (Layered()) {
                 g.back = g.stage;
-                g.backCamera = kLeftEnd;
+                g.backCamera = LeftEnd();
                 g_backSound.Start();
             }
         }
@@ -375,10 +388,14 @@ namespace {
     void Over(std::vector<uint32_t> &stage, const std::vector<uint32_t> &fighters, int show, int falls = -1, int down = 0) {
         const uint32_t sets = falls >= 0 ? kPlayerSets[falls] : 0;
         const uint32_t keep = static_cast<uint32_t>(256 - show), put = static_cast<uint32_t>(show);
+        if (stage.size() != fighters.size()) {
+            return; // (two pictures of different widths: a frame in which one was not yet the stage's)
+        }
+        const int width = static_cast<int>(fighters.size() / Video::kHeight);
         for (int pass = sets ? 0 : 1; pass < 2; pass++) { // (the one falling first: behind the other)
             for (int y = 0; y < Video::kHeight; y++) {
-                for (int x = 0; x < Video::kWidth; x++) {
-                    const uint32_t f = fighters[static_cast<size_t>(y) * Video::kWidth + static_cast<size_t>(x)];
+                for (int x = 0; x < width; x++) {
+                    const uint32_t f = fighters[static_cast<size_t>(y) * width + static_cast<size_t>(x)];
                     if (!(f & 0x80000000)) {
                         continue;
                     }
@@ -390,7 +407,7 @@ namespace {
                     if (to >= Video::kHeight) {
                         continue;
                     }
-                    uint32_t &b = stage[static_cast<size_t>(to) * Video::kWidth + static_cast<size_t>(x)];
+                    uint32_t &b = stage[static_cast<size_t>(to) * width + static_cast<size_t>(x)];
                     b = show >= 256 ? f & 0xFFFFFF :
                         ((((b & 0xFF00FF) * keep + (f & 0xFF00FF) * put) >> 8) & 0xFF00FF) | ((((b & 0x00FF00) * keep + (f & 0x00FF00) * put) >> 8) & 0x00FF00);
                 }
@@ -429,7 +446,7 @@ namespace {
         if (g.backNext) {
             const bool wasReady = g_backNext.ready;
             for (int n = 0; n < (wasReady ? 1 : 3); n++) {
-                RunStage(machine, g_backNext, g.backNext, g.way == kStageScroll ? kCameraLeft : cameraX, cameraY, &next);
+                RunStage(machine, g_backNext, g.backNext, g.way == kStageScroll ? LeftEnd() / 256 : cameraX, cameraY, &next);
                 if (g_backNext.ready) {
                     break;
                 }
@@ -448,6 +465,7 @@ namespace {
 
         // The stage's picture: one stage, or two (faded, or side by side)
         int nextGain = 0;
+        nextShown = nextShown && next.picture.size() == back.picture.size();
         if (nextShown && g.way == kStageShuffle) {
             g.blend = std::min(g.blend + 1, kBlend);
             nextGain = g.blend * 256 / kBlend;
@@ -460,19 +478,20 @@ namespace {
         } else if (g.way == kStageScroll) {
             // (onwards: across this stage, then this stage out and the next in, if that one is ready)
             const int32_t by = ScrollBy();
-            if (g.slide > 0 || g.backCamera + by >= kRightEnd) {
-                g.backCamera = kRightEnd;
-                g.slide = nextShown ? std::min(g.slide + by, kAcross) : 0;
+            if (g.slide > 0 || g.backCamera + by >= RightEnd()) {
+                g.backCamera = RightEnd();
+                g.slide = nextShown ? std::min(g.slide + by, Across()) : 0;
             } else {
                 g.backCamera += by;
             }
-            const int slide = g.slide / 256;
-            nextGain = slide * 256 / Video::kWidth;
+            const int width = static_cast<int>(back.picture.size() / Video::kHeight);
+            const int slide = std::min(g.slide / 256, width);
+            nextGain = slide * 256 / width;
             if (slide > 0) {
                 for (int y = 0; y < Video::kHeight; y++) {
-                    uint32_t *row = &back.picture[static_cast<size_t>(y) * Video::kWidth];
-                    memmove(row, row + slide, static_cast<size_t>(Video::kWidth - slide) * sizeof(uint32_t));
-                    memcpy(row + Video::kWidth - slide, &next.picture[static_cast<size_t>(y) * Video::kWidth], static_cast<size_t>(slide) * sizeof(uint32_t));
+                    uint32_t *row = &back.picture[static_cast<size_t>(y) * width];
+                    memmove(row, row + slide, static_cast<size_t>(width - slide) * sizeof(uint32_t));
+                    memcpy(row + width - slide, &next.picture[static_cast<size_t>(y) * width], static_cast<size_t>(slide) * sizeof(uint32_t));
                 }
             }
         }
@@ -485,7 +504,7 @@ namespace {
             g_backNextSound.Mix(fighters.sound, nextGain);
         }
         // The next stage is all there is: it is the stage now
-        if ((g.way == kStageShuffle && g.blend >= kBlend) || (g.way == kStageScroll && g.slide >= kAcross)) {
+        if ((g.way == kStageShuffle && g.blend >= kBlend) || (g.way == kStageScroll && g.slide >= Across())) {
             g_back = std::move(g_backNext);
             g_backNext.Clear();
             g_backSound = g_backNextSound;
@@ -494,7 +513,7 @@ namespace {
             g.backFor = 0;
             g.blend = 0;
             g.slide = 0;
-            g.backCamera = kLeftEnd;
+            g.backCamera = LeftEnd();
         }
         Give(machine, fighters);
     }
@@ -503,7 +522,7 @@ namespace {
     void Darken(Machine &machine, int part) {
         const int keep = 256 - std::clamp(part, 0, 256);
         uint32_t *picture = machine.Picture();
-        for (int i = 0; i < Video::kWidth * Video::kHeight; i++) {
+        for (int i = 0; i < machine.PictureWidth() * Video::kHeight; i++) {
             const uint32_t p = picture[i];
             picture[i] = ((((p & 0xFF00FF) * static_cast<uint32_t>(keep)) >> 8) & 0xFF00FF) | ((((p & 0x00FF00) * static_cast<uint32_t>(keep)) >> 8) & 0x00FF00);
         }
@@ -526,19 +545,20 @@ namespace {
     // the stage's end: it goes over the end.
     bool KeepIn(M68K &c) {
         const uint32_t player = c.a[6] & 0xFFFFFF;
-        if (!g_open || (player != Player(0) && player != Player(1)) || Ram8(player + kControl) == kControlOwn) {
-            return false;
+        if (g_open && (player == Player(0) || player == Player(1)) && Ram8(player + kControl) != kControlOwn) {
+            const int x = static_cast<int16_t>(Ram16(player + kX)), half = Ram16(player + kHalfWidth);
+            const int camera = static_cast<int16_t>(Ram16(kCameraX));
+            const int margin = WideMargin(); // (the picture's edges and the camera's ends: widescreen.h)
+            const bool left = camera <= kCameraLeft + margin && x - half <= camera - margin;
+            const bool right = camera >= kCameraRight - margin && x + half >= camera + Video::kWidth + margin;
+            if (left || right) {
+                SetRam8(player + kAtEdge, 0);
+                Return(c);
+                return true;
+            }
         }
-        const int x = static_cast<int16_t>(Ram16(player + kX)), half = Ram16(player + kHalfWidth);
-        const int camera = static_cast<int16_t>(Ram16(kCameraX));
-        const bool left = camera <= kCameraLeft && x - half <= camera;
-        const bool right = camera >= kCameraRight && x + half >= camera + Video::kWidth;
-        if (!left && !right) {
-            return false;
-        }
-        SetRam8(player + kAtEdge, 0);
-        Return(c);
-        return true;
+        WideKeepIn(c); // (the game's routine runs: widescreen.h)
+        return false;
     }
 
     // Is a fighter out? Its middle has come to the picture's edge at an end of the stage.
@@ -546,7 +566,9 @@ namespace {
         const int camera = static_cast<int16_t>(Ram16(kCameraX));
         for (int n = 0; n < 2 && g.out < 0; n++) {
             const int x = static_cast<int16_t>(Ram16(Player(n) + kX));
-            const int side = camera <= kCameraLeft && x < camera + kOutBy ? -1 : camera >= kCameraRight && x > camera + Video::kWidth - kOutBy ? 1 : 0;
+            const int margin = WideMargin();
+            const int side = camera <= kCameraLeft + margin && x < camera - margin + kOutBy ? -1 :
+                             camera >= kCameraRight - margin && x > camera + Video::kWidth + margin - kOutBy ? 1 : 0;
             if (side) {
                 g.out = n;
                 g.outSide = side;
@@ -615,10 +637,10 @@ namespace {
         const int t = std::clamp((g.since - kDropSlide) * 256 / (kDropFor - kDropSlide), 0, 256);
         const int eased = t * t * (3 * 256 - 2 * t) / (256 * 256);
         const int up = eased * Video::kHeight / 256;
-        if (up > 0) {
-            const size_t row = static_cast<size_t>(Video::kWidth) * sizeof(uint32_t);
-            memmove(old.picture.data(), old.picture.data() + static_cast<size_t>(up) * Video::kWidth, static_cast<size_t>(Video::kHeight - up) * row);
-            memcpy(old.picture.data() + static_cast<size_t>(Video::kHeight - up) * Video::kWidth, stage.picture.data(), static_cast<size_t>(up) * row);
+        if (up > 0 && old.picture.size() == stage.picture.size()) {
+            const size_t width = old.picture.size() / Video::kHeight, row = width * sizeof(uint32_t);
+            memmove(old.picture.data(), old.picture.data() + static_cast<size_t>(up) * width, static_cast<size_t>(Video::kHeight - up) * row);
+            memcpy(old.picture.data() + static_cast<size_t>(Video::kHeight - up) * width, stage.picture.data(), static_cast<size_t>(up) * row);
         }
         for (int16_t &sample : old.sound) {
             sample = static_cast<int16_t>(sample * (256 - eased) / 256);

@@ -170,6 +170,7 @@ constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;
 // The camera's record: where it wants the picture's left edge and bottom (words), the ends it stops at
 constexpr uint32_t kCameraRecord = 0xFF8280;
 constexpr uint32_t kCameraWantsX = 0x20, kCameraWantsY = 0x24, kCameraMostX = 0x5C, kCameraMostY = 0x5E;
+constexpr uint32_t kCameraEndLeft = 0x44, kCameraEndRight = 0x46; // words: kCameraLeft and kCameraRight on a stage
 // ... worked out each frame at these, which end by handing the place (D0) to the code at the second address
 constexpr uint32_t kCameraAcross = 0x01E36E, kCameraAcrossSet = 0x01E450;
 constexpr uint32_t kCameraUp = 0x01E3F2, kCameraUpSet = 0x01E4A0;

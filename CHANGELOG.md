@@ -5,11 +5,13 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
-- Widescreen (Display page; off unless switched on, in every preset): a fight is shown in 16:9 with
-  more of the stage on each side. Only the picture changes. The game runs as before, frame for
-  frame (`make check-widescreen`): the players can stand no further apart, and the bars stay where
-  they were. Not in survival, the endless battle, the ring out or the viewer's infinite stage,
-  which keep the board's picture.
+- Widescreen (Display page; off unless switched on, in every preset, because it changes how the
+  game plays): fights are shown and played in 16:9, with more of the stage on each side. The
+  players can go to the wide picture's edges (464 apart at most, where the board allows 336), the
+  camera stops where the wide picture comes to the stage's ends, and the stage's pieces and the
+  things thrown that the game only keeps while they are in the picture are kept while they are in
+  the wide one. The bars stay in the middle. Survival, the endless battle, the ring out and the
+  viewer's infinite stage are wide too. With it off the game is exactly the board's.
 - Endless battle: how often the shuffled stage changes (1, 2, 3, 5 or 10 minutes; it was two) and
   how fast the scrolling stage goes by (slow, medium, fast) are chosen on its page.
 - The launcher can be used with a gamepad alone, or with the arrow keys and Space or Enter: a ring

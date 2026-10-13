@@ -103,34 +103,44 @@ The Japanese arcade release of 1997-05-19 (ROM set `vsavj`), on Capcom's CPS-2 b
 ## Widescreen (2026-10-13)
 
 `src/widescreen.cpp`, a feature on the menu's and the launcher's Display page, off unless switched
-on (in the Enhanced preset too: it shows more of the stage than the board does). A fight is 512
-columns wide where the board shows 384, 16:9 for 4:3, on the toolkit's wider picture
-(`Video::wide`).
+on (in the Enhanced preset too: it changes how the game plays). A fight is 512 columns wide where
+the board shows 384, 16:9 for 4:3, on the toolkit's wider picture (`Video::wide`), and is played
+in that picture. (The first version changed the picture only; the owner asked for the game to be
+played in it, the same day.)
 
-- Only the picture changes. `make check-widescreen` runs the ladder movie with it off and on and
-  compares the game's memory at three frames (work RAM, video and object memory, the registers):
-  the same. So the players can stand no further apart than on the board, and nothing that decides
-  a fight knows of it.
-- The view is the board's with 64 columns more on each side; within 64 of a stage's end it stays
-  where it was, and the stage (scroll screens, fighters, the stage's pieces, sparks, things thrown)
-  is drawn to the side instead. The panel's objects (bars, names, clock, gauges, the words of a
-  round) stay in the middle.
-- The sides of the 8-pixel scroll screen are read from the stage's plan in the ROM, as the game's
-  own routine reads it. The check compares the plan with what the game drew, where the board shows
-  it: 36 million tiles over the ladder movie, none differ.
-- While the red curtain is drawn, and wherever there is no stage, the picture is the board's.
+- The picture is the board's with 64 columns more on each side. The panel's objects (bars, names,
+  clock, gauges, the words of a round) stay in the middle. The sides of the 8-pixel scroll screen
+  are read from the stage's plan in the ROM, as the game's own routine reads it;
+  `make check-widescreen` compares the plan with what the game drew, where the board shows it (32
+  million tiles over the ladder movie's controls, none differ). While the red curtain is drawn,
+  and wherever there is no stage, the picture is the board's.
+- The players are kept inside the wide picture: the game's two routines for that (`028192`,
+  `02824C`) come to the picture's edges only through the player's half width, so they run with 64
+  less in that word and it is put back where they return. Driven apart, two players stand 464
+  apart (336 on the board); both still come to the stage's ends (280 and 1000).
+- The camera's ends in its record are 320 and 576 (256 and 640 on the board), so the wide
+  picture ends where the stage does. (If the camera is ever nearer an end than that, the stage is
+  drawn to the side by what is missing: the first version's rule, still there.)
+- What the game asks "is it in the picture?" of, in routines all its objects share, is asked of
+  the wide one: a thing thrown is done away with outside it (`0154AC`), a piece of the stage is
+  drawn inside it (`015512`, `01552E`) or while the camera is to one side of a place (`0154E2`,
+  `0154F4`). Each is one comparison, made by a hook with the wider numbers.
+- Survival, the endless battle, the ring out and the viewer's infinite stage are wide: every
+  machine's frame is as wide as the port's that frame, and the pictures are put together at that
+  width; the ring out's edge is the wide picture's.
 - Hit boxes and the frame meter are drawn where the stage and the middle are in the wide picture;
-  the readouts go to its edges.
-- Seen in pictures only (every stage from end to end in the stage viewer, the ladder movie, a
-  training session with the boxes on); not yet in a window, and nobody has played it.
-- Known: the planes behind move less than the camera, so the view shows up to 64 columns of them
-  that the board never shows. On the desert stage the tent (objects) ends about 30 columns short
-  of the picture's right edge at some places of the camera. Not looked at: where the game
-  takes away a thing thrown that has left the board's picture (if it is at the board's edge, it
-  goes 64 columns inside the wide one's). Survival,
-  the endless battle, the ring out and the viewer's infinite stage keep the board's picture (they
-  put theirs together 384 wide). A save state loaded in a fight can show the view a frame late
-  for one frame.
+  the readouts go to its edges. Training's "Start over" puts the camera at the wide picture's end.
+- With the feature off: the same state hashes as before over 20,000 frames of the ladder movie,
+  and the same speed.
+- Seen in pictures only (every stage from end to end, the ladder movie's controls, a training
+  session with the boxes on, each mode for a minute); not yet in a window, and nobody has played
+  it. The movies do not replay with it on.
+- Known, not done: each character's own code that knows the board's width (helpers and things
+  that come in from the picture's edge, moves that go to an edge: dozens of places with 384,
+  416 or 448 in them) still uses the board's, so such a thing comes in 64 columns inside the wide
+  picture's edge. The planes behind move less than the camera, so the view shows up to 64 columns
+  of them that the board never shows; on the desert stage the tent ends about 30 columns short of
+  the picture's right edge at some places of the camera.
 
 ## Modes (2026-10-12)
 
