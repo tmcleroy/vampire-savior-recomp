@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <iterator>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -248,7 +249,7 @@ namespace {
         }
         y += 25;
         // What the controls do
-        const char *const help[] = {"Up/Down: a row", "Left/Right: change", "LP copy  MP paste", "HP the game's"};
+        const char *const help[] = {"Up/Down: a row", "Left/Right: change", "LP copy  MP paste", "HP game's LK random"};
         for (const char *line : help) {
             text(x + 6, y, line, dim, -1);
             y += 10;
@@ -279,6 +280,22 @@ namespace {
             }
         }
         g.unsaved = 0;
+    }
+    // Every colour of the set that is seen (each line's first 15) at random: any of the board's 16 levels of
+    // each of red, green and blue
+    void Randomise(Machine &) {
+        if (!g.on || g.character < 0) {
+            return;
+        }
+        static std::mt19937 random(std::random_device{}());
+        std::uniform_int_distribution<int> level(0, 0x0FFF);
+        for (int line = 0; line < kPalettesInSet; line++) {
+            for (int n = 0; n < kSeen; n++) {
+                SetColour(g.character, g.set, line, n, static_cast<uint16_t>(level(random)));
+            }
+        }
+        g.unsaved = 0;
+        Say("Random colours");
     }
     void ResetCharacter(Machine &) {
         if (!g.on || g.character < 0) {
@@ -350,6 +367,8 @@ void ColourEditorBeforeFrame(Machine &machine) {
         Change(static_cast<uint16_t>(g.copied));
     } else if (pressed & kPunch3) {
         Change(GameColour(g.character, g.set, g.line, g.colour));
+    } else if (pressed & kKick1) {
+        Randomise(machine);
     }
     if (g.unsaved >= 0 && ++g.unsaved >= kSaveAfter) {
         Save();
@@ -374,7 +393,7 @@ void RegisterColourEditor() {
     game.commands.push_back({"colours_edit", kPage, "Start",
                              "Shows the model viewer's character with a panel at the right, worked with player 1's controls: "
                              "up and down choose a row, left and right change it. LP copies the colour, MP pastes it, HP puts "
-                             "back the game's. What is changed is saved in the palettes folder (switching on Custom colours, "
+                             "back the game's, LK gives every colour of the set a random one. What is changed is saved in the palettes folder (switching on Custom colours, "
                              "which uses it in play). Reset ends it.",
                              Start});
     game.features.push_back({kAnimation, kPage, "Animation",
@@ -384,6 +403,10 @@ void RegisterColourEditor() {
                              0, ModelAnimationNames()});
     game.commands.push_back({"colours_reset_set", kPage, "Game's colours for this set",
                              "While editing: every colour of the set being edited back to the game's.", ResetSet});
+    game.commands.push_back({"colours_random", kPage, "Random colours for this set",
+                             "While editing: every colour of the set being edited (its four lines) at random. \"Game's colours "
+                             "for this set\" puts them back.",
+                             Randomise});
     game.commands.push_back({"colours_reset_character", kPage, "Game's colours for this character",
                              "While editing: every set of the character being edited back to the game's colours.", ResetCharacter});
 }
