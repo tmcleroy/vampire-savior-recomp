@@ -53,7 +53,9 @@ one by itself, leave the outer ones out: `CPS2RECOMP_SKIP_REWRITES=HitTest,AllHi
 `--no-rewrites` runs the game's own code everywhere.
 
 `make check-rewrites` runs the game's `check_rewrites.sh`: every movie, with the outer rewrites
-left out layer by layer, so that every rewrite is checked on its own calls.
+left out layer by layer, so that every rewrite is checked on its own calls. The runs are each other's
+business only at the end: `tools/at-once.sh` (sourced) runs them a few at a time and prints what each
+wrote in order (`at_once run ...`, then `at_once_wait`).
 
 `make check` (translated code against the interpreter run the same way) runs with the rewrites in
 both, so it covers the hooks' and rewrites' calls being made at the same places either way.
@@ -74,7 +76,6 @@ both, so it covers the hooks' and rewrites' calls being made at the same places 
 | Routine | Address | File |
 | --- | --- | --- |
 | ReadControls: the control panel, once a frame | 001576 | `input.cpp` |
-| ChooseColours, CountShadowCode: the character choice's buttons, and the hidden characters' codes | 020B38, 020C98 | `choosing.cpp` |
 | RoundFighting: a frame of a round: knock-outs, the clock, the round's end | 0097DC | `fight.cpp` |
 | AllHitTests, PlayersAgainstPlayers, ThrownAgainstPlayers: a frame's hit tests | 017F0C, 017F22, 0193B8 | `collision.cpp` |
 | HitTest, AttackAgainst: does this attack hit that object, and where | 017FF4, 018054 | `collision.cpp` |
