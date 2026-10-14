@@ -130,8 +130,27 @@ player, and lists the other keys. Only the menu's "Quit game" row (or closing th
 the game.
 
 macOS: the app is not notarized, so the first time, right-click it and choose Open.
-Linux and Steam Deck: unpack the archive anywhere and run `vampire_savior-launcher`; its "Add to
-Steam" button puts it in your library.
+Linux: unpack the archive anywhere and run `vampire_savior-launcher`.
+
+### Steam Deck
+
+1. Hold the power button and choose **Switch to Desktop**.
+2. Download `VampireSavior-linux-x86_64.tar.gz` from the [releases page](../../releases). In the
+   file manager (Dolphin), right-click it and choose **Extract → Extract archive here**, then move
+   the `VampireSavior` folder where it can stay (for example a new `Applications` folder in your
+   home folder). If you move it later, do step 5 again.
+3. Copy your ROM set (`vsavj.zip` with its key file, or its folder) onto the Deck, for example from
+   a USB stick or the SD card.
+4. In the `VampireSavior` folder, open `vampire_savior-launcher` and choose your ROM set (or drop
+   it on the window).
+5. On the launcher's Game page, press **Add to Steam**. It adds two entries to your library:
+   **Vampire Savior** (straight into the game) and **Vampire Savior Launcher** (the ROM set,
+   features and controls).
+6. Go back to Gaming Mode with the **Return to Gaming Mode** icon on the desktop. Both are in your
+   Library under **Non-Steam**.
+
+In the game, click the left stick, or press View and Menu together (the two buttons either side
+of the screen's top), to open the in-game menu; its "Quit game" row ends the game.
 
 ## Building from source
 
