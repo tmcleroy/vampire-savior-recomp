@@ -5,6 +5,11 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Colour editor: "Save set" keeps the set being edited in the character's library
+  (`palettes/library/<Character>/`, one file a set, named `Lilith 1`, `Lilith 2`...) and "Load"
+  puts a saved one into any set: left and right try each on the character, LP loads it, MK twice
+  deletes it, and moving off the row without loading puts the colours back.
+
 ## 0.1.0-beta.5 - 2026-10-14
 
 - Custom colours (Display page; on in Enhanced): the characters in colours of your own, from files

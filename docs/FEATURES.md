@@ -36,7 +36,11 @@ board does not have. Each mode has a page there with a Start row and its choices
   the page too); the page has rows to put back the game's colours for the whole set or the
   whole character. What is changed is saved to the character's file in the `palettes` folder (only
   the sets and lines that are not the game's) a moment after the last change and when the editor
-  ends, and Custom colours is switched on, so that it is used in play. The hidden characters are not
+  ends. "Save set" keeps the set in the character's library (`palettes/library/<Character>/`,
+  named `Lilith 1`, `Lilith 2`... one file a set, its four lines of colours), and "Load" puts a saved
+  one into the set being edited: left and right try each on the character, LP loads it, MK twice
+  deletes the file, and leaving the row without loading puts the set's colours back. Files put in
+  that folder by hand are listed too, and Custom colours is switched on, so that it is used in play. The hidden characters are not
   in it (the viewer has not got them).
 
 - **Survival**: choose a character, then one opponent after another, each beaten by one
