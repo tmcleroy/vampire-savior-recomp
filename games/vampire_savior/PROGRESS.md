@@ -258,6 +258,35 @@ Widescreen behaviour put inside the rewrites so far, beyond the simple form:
   wide, is the same but for moving colours and the floor; 450 frames of the infinite stage (every 20th
   of 9,000, fast) have no column that is black above the floor, where 24 of 130 had before.
 
+- Every piece script a stage was seen to use is written again whole (`pieces.cpp`), each checked on its
+  stage: 0-41, 43-48, 51-57 (55 of the 58). The game's own code still: 42, 49 and 50, which nothing was
+  seen to make or run. Scripts 19, 20 and 23 are for pieces that other pieces make (18 and 45; 22). The check is of the
+  paths the made-up play reached: a script's rarer steps (script 11's second and third animations,
+  script 38's events) may not have been among them. The two pieces the finder still names are explained
+  by their scripts: 41 (the train) is not there until the round is on, and 29 (War Agony) waits, not
+  drawn, on a byte of the piece that made it. Script 11 reads two longs from below its own record where
+  script 24 reads the players' states (the game's slip, kept); script 48's piece is neither moved nor
+  drawn again once the camera has taken its place below 496.
+- A path a piece flies (scripts 16 and 17, `07E672`, `07E77E`): legs in the ROM of a word of frames, a
+  start, and six longs of speed and what changes it; a word below nothing ends it. A record's own
+  animations of colours (scripts 6 and 45) are still the game's code (`09190A`, `09192A`, `01538C`: they
+  write the board's colours). A table the 68000 reads by its program counter is in the deciphered
+  program; one read through an address register is the ROM as it is (`ProgramWord` for the first).
+  Script 18's lists name a seventh place of six: the game reads on into its own code, and so does the
+  rewrite.
+- More of a piece's record: `+05` a step within the frame's step; `+30` the record that made it (a word);
+  `+0D` set by pieces made by others; `+40`/`+44`/`+48`/`+4C` speed and pull (longs) for the ones that
+  move by `015466`. From A5: `107` not zero from a knock-out until the next round (the round is decided: many pieces
+  change then: the chateau's bats fly off, the train's and Fetus of God's pieces go to a last animation;
+  a training session never sets it, so the check holds it on for a run of each stage), `B4` bit 0 turning over
+  each frame (pieces drawn every other frame: Vanity Paradise's flames, the train's), `10B` ends Green
+  Scream's script 32.
+
+- Script 11 (Concrete Cave) was asleep with the camera left of `1D0`; written again, it is awake in a
+  wide picture whenever it is near the picture, as the other such pieces are. The piece it makes
+  (script 51) is drawn only on the frames of 11's animation that say so, so with 11 awake the finder
+  now names it at some places of the camera: that is the piece working, not a piece missed.
+
 Open: in the same made-up play the pieces' animations step on 75% of the frames with the board's picture
 and 62% with the wide one, the same before and after the rewrites. The fights are not the same fights
 (the players stand further apart), so this may be nothing; whether the wide picture leaves the game short
@@ -301,6 +330,15 @@ has yet used them in a window or listened.
   quite the same number. When the next is all the way in, its machine becomes the port's. Over
   4,200 frames at the fast speed: five stages in order, no silence, no jump in the sound larger
   than a plain viewer run has; 1,016 frames a second on the Mac with both machines running.
+- **Model viewer** (2026-10-13, `src/model.cpp`). One character by itself on a stage or on white or
+  black, from a quarter to 25 times its size, standing (player 1's controls move it) or going through any
+  of its animations. A two-player round reached unseen, the second player not followed by the camera
+  (the game's own flag, `+134`), stood 768 to the right and never drawn. The frame's own picture is the
+  stage alone; the character is drawn again by itself (objects only, marked) and laid over it at the size
+  wanted. Nothing of it is in a save state (the states made before it still load; loading one ends it).
+  Checked with no window: pictures of five characters, a stage, white and black, four sizes, animations
+  of two lists; an animation switched on and off in mid view (the character stands again); walking with
+  the controls; a wide picture. The menu's page has not been looked at, and nobody has used it.
 - **The menu** (2026-10-13): Training mode's Start, Start over and aids, and the dummy's page, are
   under Alternative modes too.
 
@@ -318,6 +356,14 @@ has yet used them in a window or listened.
 - Known of them: with the stage behind, a stage's pieces that belong in front of the fighters are
   behind them, and a super move's own backdrop is not shown; a fighter that has fallen leaves its
   shadow; the two "Best" counts are features, so a preset chosen in the launcher clears them.
+
+Facts found for the model viewer:
+- A character's animations: three tables of longs by the character's number, at `0BCEFA`, `0BCF7A` and
+  `0BCE7A` (the game starts one of each at `027EB8`, `027EC0`, `027EC8`, the number in D0): each long is a
+  list of words, an animation's distance from the list. The lists are not counted; by what is a frame,
+  about 100, 130 and 60 a character. A frame is `18` bytes: frames of the game it is shown for, then a
+  byte for what follows (0 the next, bit 7 a jump to the long at `+18`, bit 6 the end), its picture at
+  `+04`, the number of its boxes at `+08`.
 
 Facts found for these:
 - A "round" is one of a player's two lives: `FF810C` (the round's result) is set at each

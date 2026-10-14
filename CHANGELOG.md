@@ -5,6 +5,10 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Model viewer, on the menu's "Alternative modes" page: one character by itself on a stage or on
+  plain white or black, drawn from a quarter of its size to 25 times, standing (player 1's controls
+  move it) or going through any of its animations (three lists a character; they have numbers, not
+  names).
 - Widescreen (a switch on the launcher's first page, under "Full screen", and on the in-game
   menu's Display page; off unless switched on, in every preset, because it changes how the game
   plays): fights are shown and played in 16:9, with more of the stage on each side. The players
@@ -18,6 +22,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Endless battle, the stages scrolling by: the next stage is made ready in time for the end of
   the one shown (in the wide picture a stage is crossed sooner, and at the fast speed the
   scrolling waited about a second at each stage's end).
+- 55 of the 58 scripts of the stages' pieces are readable C++ too: every one a stage was seen to use, each checked against the game's own
+  on its stage.
 - The stage's code is readable C++ (58 routines: the camera, the scroll screens' placing, the row
   scroll table, what is in the picture, the players' edges, the stage's pieces), each checked
   against the game's own on every stage; widescreen is lines in it. With widescreen on, the lady
