@@ -48,6 +48,9 @@ namespace {
     constexpr uint32_t kAnimationTables[3] = {0x0BCEFA, 0x0BCF7A, 0x0BCE7A};
     constexpr const char *kTableNames[3] = {"A", "B", "C"};
     constexpr int kMostAnimations = 256;
+    constexpr int kFramesASecond = 60;
+    // The "Speed" choice: a frame of the game in this many pictures of the screen (as the menu's own speeds)
+    constexpr int kSlowBy[] = {1, 2, 4, 8};
     constexpr uint32_t kFrameBytes = 0x18, kFramePicture = 0x04, kFrameJump = 0x18;
     constexpr uint32_t kTimer = 0x20;     // a player's record: frames the animation's frame is still shown for
     constexpr uint32_t kActionStep = 0x06; //   the action and its own step (a word): nothing, from its start
@@ -62,6 +65,7 @@ namespace {
         int32_t table = 0, number = 0;
         uint32_t first = 0, frame = 0;
         int32_t left = 0;
+        int32_t held = 0; // frames its last frame is still held for before it starts again (the "Repeat after" choice)
         // Where the character stood in the picture a frame ago (the picture a frame shows is the game's of
         // the frame before)
         int32_t anchorX = 0, anchorY = 0;
@@ -79,6 +83,7 @@ namespace {
             g = State();
             Wanted() = MatchWanted();
             Fast(false);
+            SetSlowMotion(1);
         }
     }
 
@@ -136,6 +141,15 @@ namespace {
         machine.Reset();
     }
 
+    // The menu's "Reset options": every choice of the viewer's page back to what it is when nothing is chosen
+    constexpr const char *kChoices[] = {"model_character", "model_background", "model_size", "model_animation",
+                                        "model_number",    "model_speed",      "model_repeat"};
+    void ResetChoices(Machine &) {
+        for (const char *choice : kChoices) {
+            SetFeatureValue(choice, 0);
+        }
+    }
+
     // The second player out of the way: the camera does not follow it (the game's own flag, which also
     // keeps it out of the hit tests and lets it leave the picture), and it stands far off to the right
     void PutAway() {
@@ -168,6 +182,9 @@ namespace {
             g.number = number;
             g.first = g.frame = first;
             g.left = machine.Read8(first);
+            g.held = 0;
+        } else if (g.held > 0) {
+            g.held--; // (between repeats: the last frame stays)
         } else if (--g.left <= 0) {
             // (the frame's time is up: the next, by what the frame says follows it; the end is the start again)
             const uint8_t follows = machine.Read8(g.frame + kFrameEnd);
@@ -175,8 +192,16 @@ namespace {
             if (!IsFrame(machine, next)) {
                 next = g.first;
             }
-            g.frame = next;
-            g.left = machine.Read8(next);
+            // (going back, to the start or to an earlier frame, is a repeat: after the wait chosen, if any.
+            // The wait is counted once: when it is over the frame's time is up still, and this comes again.)
+            const int wait = std::clamp(FeatureValue("model_repeat"), 0, 10) * kFramesASecond;
+            if (next <= g.frame && wait && g.left == 0) {
+                g.held = wait;
+                g.left = -1;
+            } else {
+                g.frame = next;
+                g.left = machine.Read8(next);
+            }
         }
         SetRam32(Player(0) + kFrame, g.frame);
         SetRam32(Player(0) + kTimer, Read32(machine, g.frame));
@@ -282,6 +307,7 @@ void ModelBeforeFrame(Machine &machine) {
     }
     machine.players[1] = 0;
     PutAway();
+    SetSlowMotion(kSlowBy[std::clamp(FeatureValue("model_speed"), 0, static_cast<int>(std::size(kSlowBy)) - 1)]);
     SetRam8(kClock, kClockFull);
     ShowAnimation(machine);
 }
@@ -326,6 +352,10 @@ void RegisterModel() {
     game.commands.push_back({"model_start", kModel, "Start",
                              "Shows the character chosen below by itself. Player 1's controls move it while it stands. Reset ends it.",
                              StartModel});
+    game.commands.push_back({"model_reset", kModel, "Reset options",
+                             "Puts every choice of this page back: the first character and stage, its own size, standing, full "
+                             "speed, repeating at once. (While viewing, the viewer goes to that character and stage.)",
+                             ResetChoices});
     game.features.push_back({"model_character", kModel, "Character", "Who is shown. Changing it while viewing goes to the new one.", 0,
                              {std::begin(kCharacterNames), std::end(kCharacterNames)}});
     game.features.push_back({"model_background", kModel, "Background",
@@ -342,6 +372,14 @@ void RegisterModel() {
                              "of its animations over and over (they are in three lists in the game: A, B and C; Number picks "
                              "which of the list).",
                              0, {"Standing (you control it)", "List A", "List B", "List C"}});
+    game.features.push_back({"model_speed", kModel, "Speed",
+                             "How fast the viewer runs: slow motion for looking at an animation frame by frame. (The menu's own "
+                             "speed, and the - and = keys, slow it further.)",
+                             0, {"Full", "1/2", "1/4", "1/8"}});
+    game.features.push_back({"model_repeat", kModel, "Repeat after",
+                             "How long an animation's last frame is held before it starts again.", 0,
+                             {"At once", "1 second", "2 seconds", "3 seconds", "4 seconds", "5 seconds", "6 seconds", "7 seconds",
+                              "8 seconds", "9 seconds", "10 seconds"}});
     game.features.push_back({"model_number", kModel, "Number",
                              "Which animation of the list chosen above (a list has fewer than 256: the count goes round).", 0, Numbers()});
 }
