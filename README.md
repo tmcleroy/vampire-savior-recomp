@@ -129,17 +129,6 @@ macOS: the app is not notarized, so the first time, right-click it and choose Op
 Linux and Steam Deck: unpack the archive anywhere and run `vampire_savior-launcher`; its "Add to
 Steam" button puts it in your library.
 
-## Status
-
-| | |
-| --- | --- |
-| Game | Boots, attract mode, the whole one-player ladder to the ending and credits, two-player games, the operator's test menu |
-| Picture | Three scroll screens and the objects with the board's priorities, drawn line by line |
-| Sound | The game's sound driver on a model of the QSound chip. No "Q1" stereo filter (plain panning instead): it needs a ROM inside the chip that is not part of a game's ROM set |
-| Speed | Far above what the game needs on any recent machine |
-| Checked | Every translated block against the interpreter over the whole ladder; every readable rewrite against the routine it replaces |
-| Not yet | Other releases of the game (`vsav`, `vsavu`, ...); netplay; frame data compared with published tables |
-
 ## Building from source
 
 With your own ROM set in `rom/` (ignored by Git), CMake, Ninja, SDL 3 and Python 3:
