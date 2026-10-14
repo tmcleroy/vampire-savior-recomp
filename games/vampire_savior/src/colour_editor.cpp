@@ -41,9 +41,9 @@ namespace {
     constexpr const char *kPage = "Colour editor";
 
     enum Row { kRowCharacter, kRowBackground, kRowSize, kRowAnimation, kRowSet, kRowLine, kRowColour, kRowRed, kRowGreen, kRowBlue,
-               kRowRandom, kRows };
+               kRowRandom, kRowSave, kRowLoad, kRows };
     constexpr const char *kRowNames[kRows] = {"Character", "Background", "Size", "Animation", "Set", "Line", "Colour",
-                                              "Red", "Green", "Blue", "Random colours"};
+                                              "Red", "Green", "Blue", "Random colours", "Save set", "Load"};
     // The editor's own "Animation" choice (the viewer's is left as it was): standing, the game's idle, unless chosen
     constexpr const char *kAnimation = "colours_animation";
     const std::vector<const char *> &AnimationNames() { // (the viewer's, with standing named shortly)
@@ -79,6 +79,13 @@ namespace {
         int blink = 0;        // frames the colour chosen still blinks for
         int unsaved = -1;     // frames since the last change not yet written (-1: none)
         int copied = -1;      // a colour copied with LP (-1: none)
+        // The character's saved sets (palettes.h), and the one being tried on the Load row (0: none; n: the
+        // n-th), with the set's colours as they were before it, to put back if it is not loaded
+        std::vector<std::string> saved;
+        int loading = 0;
+        bool trying = false;
+        uint16_t kept[kPalettesInSet][kColoursInPalette] = {};
+        int deleteFor = 0;    // frames MK can still be pressed again to delete the saved set
         std::string said;     // a message, and frames it is still shown for
         int saidFor = 0;
     } g;
@@ -94,8 +101,10 @@ namespace {
         g.unsaved = -1;
         Say(SaveColours(g.character) ? std::string("Saved ") + ColourName(g.character) : std::string("Not saved: no data folder"));
     }
+    void PutBack();
     void End() {
         if (g.on) {
+            PutBack();
             Save();
             g = State();
         }
@@ -139,6 +148,67 @@ namespace {
 
     void Randomise(Machine &machine);
 
+    // Trying a saved set: the set's colours kept to put back, then the saved ones over them (a "-" in the
+    // file keeps the set's own); stopping puts them back unless the saved one was loaded
+    void PutBack() {
+        if (g.trying) {
+            for (int line = 0; line < kPalettesInSet; line++) {
+                for (int n = 0; n < kColoursInPalette; n++) {
+                    SetColour(g.character, g.set, line, n, g.kept[line][n]);
+                }
+            }
+            g.trying = false;
+        }
+        g.loading = 0;
+    }
+    void Try(int choice) {
+        PutBack();
+        g.loading = choice;
+        if (!choice) {
+            return;
+        }
+        for (int line = 0; line < kPalettesInSet; line++) {
+            for (int n = 0; n < kColoursInPalette; n++) {
+                g.kept[line][n] = Colour(g.character, g.set, line, n);
+            }
+        }
+        uint16_t colours[kPalettesInSet][kColoursInPalette];
+        std::copy(&g.kept[0][0], &g.kept[0][0] + kPalettesInSet * kColoursInPalette, &colours[0][0]);
+        if (!ReadSavedSet(g.character, g.saved[choice - 1], colours)) {
+            Say("Cannot read it");
+            return;
+        }
+        g.trying = true;
+        for (int line = 0; line < kPalettesInSet; line++) {
+            for (int n = 0; n < kSeen; n++) {
+                SetColour(g.character, g.set, line, n, colours[line][n]);
+            }
+        }
+    }
+    void Load() {
+        if (!g.trying) {
+            return;
+        }
+        g.trying = false; // (kept)
+        g.unsaved = 0;
+        Say("Loaded " + g.saved[g.loading - 1]);
+    }
+    void Delete() {
+        if (!g.loading) {
+            return;
+        }
+        if (g.deleteFor <= 0) {
+            g.deleteFor = 90;
+            Say("MK again: delete");
+            return;
+        }
+        const std::string name = g.saved[g.loading - 1];
+        PutBack();
+        g.deleteFor = 0;
+        Say(RemoveSavedSet(g.character, name) ? "Deleted " + name : std::string("Not deleted"));
+        g.saved = SavedSets(g.character);
+    }
+
     // Left or right on a row
     void Step(Machine &machine, int by) {
         switch (g.row) {
@@ -159,6 +229,18 @@ namespace {
             g.blink = kBlinkFor;
             break;
         case kRowRandom: Randomise(machine); break;
+        case kRowSave: {
+            std::string name;
+            Say(SaveSet(g.character, g.set, name) ? "Saved as " + name : std::string("Not saved: no data folder"));
+            break;
+        }
+        case kRowLoad:
+            if (g.saved.empty()) {
+                Say("None saved yet");
+            } else {
+                Try((g.loading + by + static_cast<int>(g.saved.size()) + 1) % (static_cast<int>(g.saved.size()) + 1));
+            }
+            break;
         default: {
             const int part = g.row - kRowRed;
             Change(WithLevel(Current(), part, Level(Current(), part) + by));
@@ -221,7 +303,12 @@ namespace {
             case kRowSet: snprintf(value, sizeof(value), "%s", kSetNames[g.set]); break;
             case kRowLine: snprintf(value, sizeof(value), "%s", kLineNames[g.line]); break;
             case kRowColour: snprintf(value, sizeof(value), "%d", g.colour + 1); break;
-            case kRowRandom: snprintf(value, sizeof(value), "%s", chosen ? "< >" : ""); break;
+            case kRowRandom:
+            case kRowSave: snprintf(value, sizeof(value), "%s", chosen ? "< >" : ""); break;
+            case kRowLoad:
+                snprintf(value, sizeof(value), "%s",
+                         g.loading ? g.saved[g.loading - 1].c_str() : !chosen ? "" : g.saved.empty() ? "none saved" : "< >");
+                break;
             default: {
                 // a bar of 16 levels, and the level
                 const int part = row - kRowRed, level = Level(colour, part);
@@ -249,7 +336,7 @@ namespace {
         }
         y += 12;
         // The colour chosen, large, with its value and the game's
-        canvas.Fill(static_cast<float>(x + 6), static_cast<float>(y), 26, 20, Shown(colour));
+        canvas.Fill(static_cast<float>(x + 6), static_cast<float>(y), 26, 18, Shown(colour));
         char hex[16];
         snprintf(hex, sizeof(hex), "#%02X%02X%02X", Level(colour, 0) * 0x11, Level(colour, 1) * 0x11, Level(colour, 2) * 0x11);
         text(x + 38, y + 1, hex, white, -1);
@@ -261,17 +348,20 @@ namespace {
             text(x + 80, y + 11, "copy", dim, -1);
             canvas.Fill(static_cast<float>(x + 106), static_cast<float>(y + 11), 10, 8, Shown(static_cast<uint16_t>(g.copied)));
         }
-        y += 25;
-        // What the controls do
+        y += 22;
+        // What the controls do (on the Load row, its own), the last line giving way to a message
         const char *const help[] = {"Arrows: choose/change", "LP copy  MP paste", "HP game's  LK random"};
-        for (const char *line : help) {
-            text(x + 6, y, line, dim, -1);
-            y += 10;
+        const char *const loadHelp[] = {"Left/Right: try one", "LP load it  MK delete", "Up/Down: put it back"};
+        const char *const *lines = g.row == kRowLoad ? loadHelp : help;
+        for (int n = 0; n < 2; n++) {
+            text(x + 6, y + 10 * n, lines[n], dim, -1);
         }
         if (g.saidFor > 0) {
-            text(x + 6, y + 4, g.said.c_str(), white, -1);
+            text(x + 6, y + 20, g.said.c_str(), white, -1);
         } else if (g.unsaved >= 0) {
-            text(x + 6, y + 4, "Saving...", dim, -1);
+            text(x + 6, y + 20, "Saving...", dim, -1);
+        } else {
+            text(x + 6, y + 20, lines[2], dim, -1);
         }
     }
 
@@ -288,6 +378,7 @@ namespace {
         if (!g.on || g.character < 0) {
             return;
         }
+        PutBack();
         for (int line = 0; line < kPalettesInSet; line++) {
             for (int n = 0; n < kColoursInPalette; n++) {
                 SetColour(g.character, g.set, line, n, GameColour(g.character, g.set, line, n));
@@ -301,6 +392,7 @@ namespace {
         if (!g.on || g.character < 0) {
             return;
         }
+        PutBack();
         static std::mt19937 random(std::random_device{}());
         std::uniform_int_distribution<int> level(0, 0x0FFF);
         for (int line = 0; line < kPalettesInSet; line++) {
@@ -315,6 +407,7 @@ namespace {
         if (!g.on || g.character < 0) {
             return;
         }
+        PutBack();
         for (int set = 0; set < kColourSetsEach; set++) {
             for (int line = 0; line < kPalettesInSet; line++) {
                 for (int n = 0; n < kColoursInPalette; n++) {
@@ -363,18 +456,34 @@ void ColourEditorBeforeFrame(Machine &machine) {
     const uint16_t direction = now & (kUp | kDown | kLeft | kRight);
     g.heldFor = direction && direction == g.held ? g.heldFor + 1 : 0;
     g.held = direction;
-    const int every = g.row >= kRowRed ? kHeldEveryLevel : kHeldEvery;
+    const int every = g.row >= kRowRed && g.row <= kRowBlue ? kHeldEveryLevel : kHeldEvery;
     const bool acts = g.heldFor == 0 || (g.heldFor >= kHeldFirst && (g.heldFor - kHeldFirst) % every == 0);
     if (direction && acts) {
-        if (direction & kUp) {
-            g.row = (g.row + kRows - 1) % kRows;
-        } else if (direction & kDown) {
-            g.row = (g.row + 1) % kRows;
+        if (direction & (kUp | kDown)) {
+            // (leaving the Load row puts back a set tried and not loaded; coming to it reads the saved ones)
+            if (g.row == kRowLoad) {
+                if (g.trying) {
+                    Say("Put back");
+                }
+                PutBack();
+            }
+            g.row = (g.row + (direction & kUp ? kRows - 1 : 1)) % kRows;
+            if (g.row == kRowLoad) {
+                g.saved = SavedSets(g.character);
+                g.loading = 0;
+            }
         } else {
             Step(machine, direction & kRight ? 1 : -1);
         }
     }
-    if (pressed & kPunch1) {
+    g.deleteFor = std::max(g.deleteFor - 1, 0);
+    if (g.row == kRowLoad) {
+        if (pressed & kPunch1) {
+            Load();
+        } else if (pressed & kKick2) {
+            Delete();
+        }
+    } else if (pressed & kPunch1) {
         g.copied = Current();
         Say("Copied");
     } else if ((pressed & kPunch2) && g.copied >= 0) {

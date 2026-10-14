@@ -531,6 +531,13 @@ movies: the rows, the levels, copy and paste, the set changed (HP: Morrigan in r
 the character changed, the save when training mode takes over. Not checked by hand: holding a
 direction (repeats), a gamepad, the effect lines in play.
 
+Saved sets (2026-10-14): `palettes/library/<Character>/<Name N>.txt`, one set (four lines of 16) a
+file, named by the next free number. Load tries a file over the set (its colours kept first, a `-`
+keeps the set's own, the 16th of a line never changed) and puts them back on leaving the row unless
+LP loaded it; MK twice (within 1.5 s) deletes the file. Checked headless with a movie: two saved,
+each tried, back to none, one loaded, one tried and put back, one deleted; the files and the
+character's file agree.
+
 ## Approximate, or left to the interpreters
 
 - The Z80 sound driver is translated too (4,498 instructions, 62 routines; 142 million of its

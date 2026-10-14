@@ -140,6 +140,10 @@ change it.
 - **Colour, Red, Green, Blue**: one of the line's 15 colours (it blinks on the character when you
   choose it), and its red, green and blue in the board's 16 levels each.
 - **Random colours**: every colour of the set at random. Again for another.
+- **Save set** and **Load**: keep a set you like in the character's library and put it back later,
+  into this set or any other (a design made on LP can go on KK). Left and right on Load try each
+  saved one on the character; LP loads it, MK twice deletes it, and moving off the row without
+  loading puts your colours back.
 - LP copies a colour, MP pastes it, HP gives back the game's; the menu page puts back the game's
   colours for the whole set or the whole character.
 
@@ -150,7 +154,9 @@ button of the set you changed** (Lilith with LP, say), anywhere: arcade, versus,
 `~/Library/Application Support/Vampire Savior/palettes/`), a text file a character (`Lilith.txt`)
 holding only the sets that are not the game's. You can write or share them by hand: "Write the
 game's colours" (on the Display page) puts every character's own colours in `palettes/original` to
-start from, and [docs/FEATURES.md](docs/FEATURES.md) has the format.
+start from, and [docs/FEATURES.md](docs/FEATURES.md) has the format. Saved sets are files too, one a
+set, in `palettes/library/<Character>/` (`Lilith 1.txt`, `Lilith 2.txt`...): to share a design, share
+its file, and to use one someone gave you, put it in that folder.
 
 **PalMod.** Colours made with [PalMod](https://github.com/Preppy/PalMod), the community's palette
 editor, work too: edit a copy of your set's `vm3j.10b` with it (never the one in your ROM set) and

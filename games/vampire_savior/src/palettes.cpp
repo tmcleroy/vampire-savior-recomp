@@ -13,6 +13,7 @@
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <sstream>
@@ -437,6 +438,125 @@ bool SaveColours(int number) {
          << "# a line that is - is the game's). The format is in palettes/original, \"Write the game's colours\".\n"
          << text.str();
     return static_cast<bool>(file);
+}
+
+namespace {
+    constexpr const char *kLibrary = "library";
+    std::string LibraryPath(int number) {
+        const std::string folder = FolderPath();
+        const char *name = ColourName(number);
+        return folder.empty() || !*name ? std::string() : folder + "/" + kLibrary + "/" + name;
+    }
+    // (names in the order a person counts them: the numbers in them by their value)
+    bool Before(const std::string &a, const std::string &b) {
+        size_t i = 0, j = 0;
+        while (i < a.size() && j < b.size()) {
+            if (std::isdigit(static_cast<unsigned char>(a[i])) && std::isdigit(static_cast<unsigned char>(b[j]))) {
+                size_t ei = i, ej = j;
+                while (ei < a.size() && std::isdigit(static_cast<unsigned char>(a[ei]))) {
+                    ei++;
+                }
+                while (ej < b.size() && std::isdigit(static_cast<unsigned char>(b[ej]))) {
+                    ej++;
+                }
+                const unsigned long x = std::stoul(a.substr(i, ei - i)), y = std::stoul(b.substr(j, ej - j));
+                if (x != y) {
+                    return x < y;
+                }
+                i = ei;
+                j = ej;
+                continue;
+            }
+            const int x = std::tolower(static_cast<unsigned char>(a[i])), y = std::tolower(static_cast<unsigned char>(b[j]));
+            if (x != y) {
+                return x < y;
+            }
+            i++;
+            j++;
+        }
+        return a.size() - i < b.size() - j;
+    }
+} // namespace
+
+std::vector<std::string> SavedSets(int number) {
+    std::vector<std::string> names;
+    const std::string path = LibraryPath(number);
+    std::error_code error;
+    if (path.empty() || !std::filesystem::is_directory(path, error)) {
+        return names;
+    }
+    for (const auto &entry : std::filesystem::directory_iterator(path, error)) {
+        if (entry.is_regular_file(error) && entry.path().extension() == ".txt") {
+            names.push_back(entry.path().stem().string());
+        }
+    }
+    std::sort(names.begin(), names.end(), Before);
+    return names;
+}
+
+bool SaveSet(int number, int set, std::string &saved) {
+    const std::string path = LibraryPath(number);
+    if (path.empty()) {
+        return false;
+    }
+    std::error_code error;
+    std::filesystem::create_directories(path, error);
+    // (the next number after the character's name that is free)
+    for (int n = 1;; n++) {
+        saved = std::string(ColourName(number)) + " " + std::to_string(n);
+        if (!std::filesystem::exists(path + "/" + saved + ".txt", error)) {
+            break;
+        }
+    }
+    std::ofstream file(path + "/" + saved + ".txt");
+    file << "# " << ColourName(number) << ": a set of colours saved in the colour editor (" << kSetNames[set]
+         << "), to load into any of the character's sets.\n"
+            "# Four lines of 16 colours: the character's own, then its effects'. A colour is #RRGGBB or #RGB;\n"
+            "# - keeps the colour of the set it is loaded into.\n";
+    for (int line = 0; line < kPalettesInSet; line++) {
+        for (int n = 0; n < kColoursInPalette; n++) {
+            file << (n ? " " : "") << ColourText(Colour(number, set, line, n));
+        }
+        file << "\n";
+    }
+    return static_cast<bool>(file);
+}
+
+bool ReadSavedSet(int number, const std::string &saved, uint16_t colours[kPalettesInSet][kColoursInPalette]) {
+    const std::string path = LibraryPath(number);
+    std::ifstream in(path + "/" + saved + ".txt");
+    if (path.empty() || !in) {
+        return false;
+    }
+    // (lines of colours, as in a character's file; a [name] line, if any, is passed over)
+    int line = 0;
+    for (std::string text; line < kPalettesInSet && std::getline(in, text);) {
+        std::istringstream words(text);
+        std::vector<std::string> list;
+        for (std::string word; words >> word;) {
+            if (word[0] == '#' && (word.size() == 1 || HexDigit(word[1]) < 0)) {
+                break;
+            }
+            list.push_back(word);
+        }
+        if (list.empty() || list[0].front() == '[') {
+            continue;
+        }
+        for (size_t n = 0; n < list.size() && n < kColoursInPalette; n++) {
+            const int colour = ParseColour(list[n]);
+            if (colour >= 0) {
+                colours[line][n] = static_cast<uint16_t>(colour);
+            }
+        }
+        line++;
+    }
+    return line > 0;
+}
+
+bool RemoveSavedSet(int number, const std::string &saved) {
+    const std::string path = LibraryPath(number);
+    std::error_code error;
+    return !path.empty() && std::filesystem::remove(path + "/" + saved + ".txt", error);
 }
 
 void PalettesBeforeFrame(Machine &) {
