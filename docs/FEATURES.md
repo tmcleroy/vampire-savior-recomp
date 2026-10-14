@@ -32,7 +32,8 @@ board does not have. Each mode has a page there with a Start row and its choices
   the set of colours (LP to HK, PP, KK, AUTO1, AUTO2), its line (the character's own colours or its
   effects'), the colour (one of 15; it blinks on the character when chosen), and its red, green and
   blue (the board's 16 levels each). Changes are seen at once. LP copies the colour, MP pastes it, HP
-  puts back the game's, LK gives every colour of the set a random one (a row of the page too); the page has rows to put back the game's colours for the whole set or the
+  puts back the game's, LK or the panel's last row, Random colours, gives every colour of the set a random one (a row of
+  the page too); the page has rows to put back the game's colours for the whole set or the
   whole character. What is changed is saved to the character's file in the `palettes` folder (only
   the sets and lines that are not the game's) a moment after the last change and when the editor
   ends, and Custom colours is switched on, so that it is used in play. The hidden characters are not

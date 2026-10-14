@@ -40,10 +40,20 @@ namespace {
 
     constexpr const char *kPage = "Colour editor";
 
-    enum Row { kRowCharacter, kRowBackground, kRowSize, kRowAnimation, kRowSet, kRowLine, kRowColour, kRowRed, kRowGreen, kRowBlue, kRows };
-    constexpr const char *kRowNames[kRows] = {"Character", "Background", "Size", "Animation", "Set", "Line", "Colour", "Red", "Green", "Blue"};
+    enum Row { kRowCharacter, kRowBackground, kRowSize, kRowAnimation, kRowSet, kRowLine, kRowColour, kRowRed, kRowGreen, kRowBlue,
+               kRowRandom, kRows };
+    constexpr const char *kRowNames[kRows] = {"Character", "Background", "Size", "Animation", "Set", "Line", "Colour",
+                                              "Red", "Green", "Blue", "Random colours"};
     // The editor's own "Animation" choice (the viewer's is left as it was): standing, the game's idle, unless chosen
     constexpr const char *kAnimation = "colours_animation";
+    const std::vector<const char *> &AnimationNames() { // (the viewer's, with standing named shortly)
+        static std::vector<const char *> names;
+        if (names.empty()) {
+            names = ModelAnimationNames();
+            names[0] = "Standing";
+        }
+        return names;
+    }
     constexpr const char *kSetNames[kColourSetsEach] = {"LP", "MP", "HP", "LK", "MK", "HK", "PP", "KK", "AUTO1", "AUTO2"};
     constexpr const char *kLineNames[kPalettesInSet] = {"Body", "Effect 1", "Effect 2", "Effect 3"};
     // The viewer's "Background" and "Size" choices, as short as the panel needs them (model.cpp has them in full)
@@ -127,6 +137,8 @@ namespace {
         return count;
     }
 
+    void Randomise(Machine &machine);
+
     // Left or right on a row
     void Step(Machine &machine, int by) {
         switch (g.row) {
@@ -146,6 +158,7 @@ namespace {
             g.colour = (g.colour + by + kSeen) % kSeen;
             g.blink = kBlinkFor;
             break;
+        case kRowRandom: Randomise(machine); break;
         default: {
             const int part = g.row - kRowRed;
             Change(WithLevel(Current(), part, Level(Current(), part) + by));
@@ -201,13 +214,14 @@ namespace {
             case kRowSize: snprintf(value, sizeof(value), "%s", kSizes[std::clamp(FeatureValue("model_size"), 0, 12)]); break;
             case kRowAnimation: {
                 const int choice = FeatureValue(kAnimation);
-                const auto &names = ModelAnimationNames();
+                const auto &names = AnimationNames();
                 snprintf(value, sizeof(value), "%s", choice <= 0 || choice >= static_cast<int>(names.size()) ? "Standing" : names[choice]);
                 break;
             }
             case kRowSet: snprintf(value, sizeof(value), "%s", kSetNames[g.set]); break;
             case kRowLine: snprintf(value, sizeof(value), "%s", kLineNames[g.line]); break;
             case kRowColour: snprintf(value, sizeof(value), "%d", g.colour + 1); break;
+            case kRowRandom: snprintf(value, sizeof(value), "%s", chosen ? "< >" : ""); break;
             default: {
                 // a bar of 16 levels, and the level
                 const int part = row - kRowRed, level = Level(colour, part);
@@ -249,7 +263,7 @@ namespace {
         }
         y += 25;
         // What the controls do
-        const char *const help[] = {"Up/Down: a row", "Left/Right: change", "LP copy  MP paste", "HP game's LK random"};
+        const char *const help[] = {"Arrows: choose/change", "LP copy  MP paste", "HP game's  LK random"};
         for (const char *line : help) {
             text(x + 6, y, line, dim, -1);
             y += 10;
@@ -391,21 +405,18 @@ void RegisterColourEditor() {
                           "The characters' colours changed while you watch: any set, the character's own colours or its "
                           "effects', 16 levels of red, green and blue."});
     game.commands.push_back({"colours_edit", kPage, "Start",
-                             "Shows the model viewer's character with a panel at the right, worked with player 1's controls: "
-                             "up and down choose a row, left and right change it. LP copies the colour, MP pastes it, HP puts "
-                             "back the game's, LK gives every colour of the set a random one. What is changed is saved in the palettes folder (switching on Custom colours, "
-                             "which uses it in play). Reset ends it.",
+                             "The model viewer's character with a panel worked with player 1's controls. Changes are "
+                             "saved to the palettes folder and used in play (Custom colours). Reset ends it.",
                              Start});
     game.features.push_back({kAnimation, kPage, "Animation",
-                             "What the character does while its colours are changed: stands as in a fight (the game's idle), "
-                             "or goes through one of its animations over and over (as the model viewer's Animation). The "
-                             "panel's Animation row changes it too.",
-                             0, ModelAnimationNames()});
+                             "What the character does in the editor: stands in the game's idle, or goes through one of "
+                             "its animations (as in the model viewer). The panel has this row too.",
+                             0, AnimationNames()});
     game.commands.push_back({"colours_reset_set", kPage, "Game's colours for this set",
                              "While editing: every colour of the set being edited back to the game's.", ResetSet});
     game.commands.push_back({"colours_random", kPage, "Random colours for this set",
-                             "While editing: every colour of the set being edited (its four lines) at random. \"Game's colours "
-                             "for this set\" puts them back.",
+                             "While editing: every colour of the set being edited at random (the panel's last row too, "
+                             "and LK). \"Game's colours for this set\" puts them back.",
                              Randomise});
     game.commands.push_back({"colours_reset_character", kPage, "Game's colours for this character",
                              "While editing: every set of the character being edited back to the game's colours.", ResetCharacter});
