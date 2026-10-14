@@ -249,6 +249,36 @@ void Video::RenderLine(int line, uint32_t *out) {
     }
 }
 
+// Pixels that nothing was drawn at (the backdrop's pen), in runs no wider than the added side, take the line's
+// own picture mirrored at the nearest drawn pixel (or that pixel where the mirror finds nothing). Wider runs are
+// left: a stage that shows the backdrop on purpose shows more of it than that.
+void Video::FillHoles(uint16_t *pens, int width) const {
+    constexpr uint16_t kBackdrop = 0xBFF;
+    uint16_t drawn[kMaxWidth]; // (the line as drawn: what is mirrored)
+    memcpy(drawn, pens, static_cast<size_t>(width) * sizeof(uint16_t));
+    for (int start = 0; start < width;) {
+        if (drawn[start] != kBackdrop) {
+            start++;
+            continue;
+        }
+        int end = start;
+        while (end < width && drawn[end] == kBackdrop) {
+            end++;
+        }
+        const bool left = start > 0, right = end < width;
+        if (end - start <= wide.side && (left || right)) {
+            for (int x = start; x < end; x++) {
+                // (mirrored at the nearer drawn pixel; at the line's ends, the one there is)
+                const bool fromLeft = left && (!right || x - (start - 1) <= end - x);
+                const int edge = fromLeft ? start - 1 : end;
+                const int mirror = 2 * edge - x;
+                pens[x] = mirror >= 0 && mirror < width && drawn[mirror] != kBackdrop ? drawn[mirror] : drawn[edge];
+            }
+        }
+        start = end;
+    }
+}
+
 template <bool kWide>
 void Video::RenderLineAs(int line, uint32_t *out) {
     const int rasterLine = line + kFirstLine;
@@ -334,6 +364,9 @@ void Video::RenderLineAs(int line, uint32_t *out) {
     }
     if (layerMask & 1) {
         DrawObjects<kWide>(rasterLine, pens, priority, masks);
+    }
+    if (kWide && wide.fillHoles && wide.side > 0) {
+        FillHoles(pens, width);
     }
     for (int x = 0; x < width; x++) {
         out[x] = m_palette[pens[x]];

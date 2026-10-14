@@ -158,20 +158,25 @@ void RegisterDummy(const DummyOptions &options) {
         for (const auto &action : options.guardActions) {
             names.push_back(action.name);
         }
+        names.push_back("At random");
         game.features.push_back({"dummy_guard_action", "Dummy", "While guarding", options.guardActionsWords, 0, names});
     }
     game.features.push_back({"dummy_reversal", "Dummy", "Answers with the recording",
                              "Player 2 plays the recording once as soon as it can act after guarding, after being hit (or knocked "
                              "down, or thrown), or both.",
                              0, {"Off", "After guarding", "After being hit", "After either"}});
+    game.features.push_back({"dummy_reversal_random", "Dummy", "Answers now and then",
+                             "With an answer chosen: player 2 answers only one time in two, with any slot that has a recording, "
+                             "so you cannot learn when or how it will."});
     if (options.heldAction) {
-        game.features.push_back({"dummy_tech", "Dummy", options.heldActionTitle, options.heldActionWords});
+        game.features.push_back({"dummy_tech", "Dummy", options.heldActionTitle, options.heldActionWords, 0, {"Off", "Always", "At random"}});
     }
     if (!options.getUp.empty()) {
         std::vector<const char *> names = {"Where it fell"};
         for (const auto &action : options.getUp) {
             names.push_back(action.name);
         }
+        names.push_back("At random");
         game.features.push_back({"dummy_getup", "Dummy", "Gets up", options.getUpWords, 0, names});
     }
 }
@@ -221,6 +226,7 @@ void Dummy::Afresh() {
     m_g.was = Doing::Free;
     m_g.stunFrames = 0;
     m_g.inRange = m_g.guardThis = false;
+    m_g.down = false;
 }
 
 void Dummy::BeforeFrame(uint16_t &one, uint16_t &two, const DummyView &view) {
@@ -275,7 +281,9 @@ void Dummy::BeforeFrame(uint16_t &one, uint16_t &two, const DummyView &view) {
     if (doing == Doing::Free && m_g.was != Doing::Free && !m_g.reversal) {
         const bool guarded = m_g.was == Doing::GuardStun;
         const bool hit = m_g.was == Doing::HitStun || m_g.was == Doing::Held;
-        if (((guarded && (reversal & 1)) || (hit && (reversal & 2))) && StartReplay(replayAny)) {
+        const bool sometimes = FeatureOn("dummy_reversal_random");
+        if (((guarded && (reversal & 1)) || (hit && (reversal & 2))) && (!sometimes || (Random() & 0x100)) &&
+            StartReplay(replayAny || sometimes)) {
             m_g.reversal = true;
         }
     }
@@ -329,21 +337,42 @@ void Dummy::BeforeFrame(uint16_t &one, uint16_t &two, const DummyView &view) {
     }
     // While guarding a hit
     if (doing == Doing::GuardStun) {
-        const int action = FeatureValue("dummy_guard_action");
-        if (action >= 1 && action <= static_cast<int>(g_options.guardActions.size())) {
+        const int actions = static_cast<int>(g_options.guardActions.size());
+        int action = FeatureValue("dummy_guard_action");
+        if (action == actions + 1) {
+            // (at random: one of them, or nothing, chosen as each guarding begins)
+            if (m_g.stunFrames == 1) {
+                m_g.guardPick = static_cast<int32_t>(Random() % static_cast<uint32_t>(actions + 1));
+            }
+            action = m_g.guardPick;
+        }
+        if (action >= 1 && action <= actions) {
             const DummyOptions::Action &chosen = g_options.guardActions[action - 1];
             const uint16_t does = chosen.held(m_g.stunFrames, towards, away);
             held = chosen.whileGuarding ? static_cast<uint16_t>(held | does) : does;
         }
     }
     // Held (thrown)
-    if (doing == Doing::Held && g_options.heldAction && FeatureOn("dummy_tech")) {
+    if (doing == Doing::Held && m_g.stunFrames == 1) {
+        m_g.techPick = (Random() & 0x100) != 0; // (at random: decided as each throw begins)
+    }
+    const int tech = FeatureValue("dummy_tech");
+    if (doing == Doing::Held && g_options.heldAction && (tech == 1 || (tech == 2 && m_g.techPick))) {
         held = g_options.heldAction(m_g.stunFrames, towards, away);
     }
     // Knocked down
-    if (view.knowsDown ? view.down : (doing == Doing::HitStun && m_g.stunFrames > g_options.downAfter)) {
-        const int getUp = FeatureValue("dummy_getup");
-        if (getUp >= 1 && getUp <= static_cast<int>(g_options.getUp.size())) {
+    const bool down = view.knowsDown ? view.down : (doing == Doing::HitStun && m_g.stunFrames > g_options.downAfter);
+    const int ways = static_cast<int>(g_options.getUp.size());
+    if (down && !m_g.down) {
+        m_g.getUpPick = static_cast<int32_t>(Random() % static_cast<uint32_t>(ways + 1)); // (at random: as it goes down)
+    }
+    m_g.down = down;
+    if (down) {
+        int getUp = FeatureValue("dummy_getup");
+        if (getUp == ways + 1) {
+            getUp = m_g.getUpPick;
+        }
+        if (getUp >= 1 && getUp <= ways) {
             held = g_options.getUp[getUp - 1].held(m_g.stunFrames, towards, away);
         }
     }
