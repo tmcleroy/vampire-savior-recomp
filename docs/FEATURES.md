@@ -55,6 +55,7 @@ board does not have. Each mode has a page there with a Start row and its choices
 | Model viewer: Animation | `model_animation` | Standing (you control it), or one of the character's animations, named by the game's list and a number: A0 to A255, B0 to B255, C0 to C255 (a character has fewer; the ones it has not got are passed over). |
 | Model viewer: Speed | `model_speed` | Full, 1/2, 1/4 or 1/8: slow motion for the viewer (the menu's own speed slows it further). |
 | Model viewer: Repeat after | `model_repeat` | How long an animation's last frame is held before it starts again: at once, or 1 to 10 seconds. |
+| Model viewer: Play all | `model_all` | Every animation the character has, one after another: each shown once (its last frame held for "Repeat after"), then the next, round from the last to the first. Left and right still step through them. |
 
 ## Game
 
