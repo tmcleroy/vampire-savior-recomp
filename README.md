@@ -20,6 +20,15 @@ This project is not affiliated with, endorsed by, or sponsored by Capcom. *Vampi
 
 ![The title screen](docs/screenshots/title.png)
 
+### New: dress the characters in your own colours
+
+A colour editor in the game, with the character in front of you: any of their ten colour sets, 16
+levels each of red, green and blue, random colours at the press of a button, and PalMod's colours
+too. Then choose the character with that button and fight in them. [More, with a video
+→](#custom-colours)
+
+![The colour editor's Random colours, six times on Lilith](docs/screenshots/random-colours.gif)
+
 ## What it is
 
 The game's 68000 program is translated ahead of time into C++ and compiled into the port, and the
