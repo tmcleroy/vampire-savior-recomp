@@ -119,6 +119,7 @@ bool Port::Init(std::string &error) {
     machine = std::make_unique<Machine>(roms);
     machine->cpuSpeed = opt.cpuSpeed > 0 ? opt.cpuSpeed : 1;
     SetRam(machine->ram.data());
+    SetProgram(roms.program.data(), static_cast<uint32_t>(roms.program.size()));
     SetEeprom(&machine->eeprom);
     RegisterGame();
     RegisterPortFeatures();

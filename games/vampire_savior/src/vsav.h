@@ -171,8 +171,9 @@ constexpr int kCharacters = 16; // numbers 0-15, of which 11 is nobody
 inline constexpr const char *kCharacterNames[kCharacters] = {"Bulleta", "Demitri", "Gallon", "Victor", "Zabel", "Morrigan",
                                                             "Anakaris", "Felicia", "Bishamon", "Aulbath", "Sasquatch", nullptr,
                                                             "Q-Bee", "Lei-Lei", "Lilith", "Jedah"};
-constexpr int kDarkGallon = 0x12; // the hidden character, chosen at Gallon with a code (two sets of colours)
-// A character's colours, in the ROM: a long a character (by its number, 0-19) at kColourSets points to its
+// The hidden characters' numbers (choosing.cpp): Gallon's and Bishamon's with bit 4
+constexpr uint8_t kDarkGallon = 0x12, kOboroBishamon = 0x18;
+// A character's colours, in the ROM: a long a character (by its number, 0-31) at kColourSets points to its
 // sets, kColourSetSize bytes each: four palettes of 16 colours (words, 4 bits each of red, green and blue;
 // the game keeps the brightness the palette RAM had). kColours picks the set: 0-5 the button the character was
 // chosen with (LP MP HP LK MK HK), 6 two or more punches, 7 two or more kicks, 8-9 chosen for auto guard. The
@@ -180,11 +181,12 @@ constexpr int kDarkGallon = 0x12; // the hidden character, chosen at Gallon with
 // palette RAM (02AD3C: the first palette at A0; 02ADC8 a palette of the set by number).
 constexpr uint32_t kColourSets = 0x38C198, kColourSetSize = 0x80, kColourSet = 0x3A4;
 constexpr int kColourSetsEach = 10, kPalettesInSet = 4, kColoursInPalette = 16;
-// More of a character's colours: a long a character (by its number, 0-31) at kEffectColours points to
+// More of a character's colours: a long a character (by its number) at kEffectColours points to
 // kEffectPalettes palettes of 16 colours for what is done to it (poisoned, a shock, burned, the mummy's curse
 // and so on), each by the set: 02AD20 copies palette D0 of the character's (kColours added to the effect's
 // first: 02ABC0).
 constexpr uint32_t kEffectColours = 0x38C218;
+constexpr int kColourNumbers = 32; // entries of the two tables (kEffectColours follows kColourSets' last)
 constexpr int kEffectPalettes = 66;
 // How fast a player is moving, and how that changes each frame (longs: 65536 a pixel)
 constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;

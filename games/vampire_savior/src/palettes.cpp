@@ -39,7 +39,7 @@ namespace {
         {6, "Anakaris", nullptr},      {7, "Felicia", nullptr},        {8, "Bishamon", nullptr},
         {9, "Aulbath", "Rikuo"},       {10, "Sasquatch", nullptr},     {12, "Q-Bee", nullptr},
         {13, "Lei-Lei", "Hsien-Ko"},   {14, "Lilith", nullptr},        {15, "Jedah", nullptr},
-        {kDarkGallon, "Dark Gallon", "Dark Talbain"},
+        {kDarkGallon, "Dark Gallon", "Dark Talbain"}, {kOboroBishamon, "Oboro Bishamon", nullptr},
     };
     // The sets by what chooses them (vsav.h, kColours)
     constexpr const char *kSetNames[kColourSetsEach] = {"LP", "MP", "HP", "LK", "MK", "HK", "PP", "KK", "AUTO1", "AUTO2"};
@@ -119,9 +119,11 @@ namespace {
         return text;
     }
 
+    // (beside settings.ini; none when the game was started without one)
     std::string FolderPath() {
-        const std::string data = DataFolder();
-        return data.empty() ? std::string() : data + "/" + kFolder;
+        const std::string &settings = SettingsPath();
+        const size_t slash = settings.find_last_of("/\\");
+        return settings.empty() ? std::string() : (slash == std::string::npos ? std::string(".") : settings.substr(0, slash)) + "/" + kFolder;
     }
 
     // Reads a character's file, if it has one, into the ROM image; how many sets it changed
@@ -215,7 +217,7 @@ namespace {
         auto at = [&](uint32_t address) { return file[(address - kRomFileAt) ^ 1]; };
         // (the tables of where the colours are must be the game's: it is this set's file)
         bool same = file.size() == kRomFileSize;
-        for (uint32_t a = kColourSets; same && a < kEffectColours + 32 * 4; a++) {
+        for (uint32_t a = kColourSets; same && a < kEffectColours + kColourNumbers * 4; a++) {
             same = at(a) == *Program(a);
         }
         if (!same) {
@@ -250,10 +252,10 @@ namespace {
     void Apply() {
         if (g_original.empty()) {
             auto add = [](uint32_t from, uint32_t size) { g_ranges.push_back({from, from + size}); };
-            for (int n = 0; n < 20; n++) {
+            for (int n = 0; n < kColourNumbers; n++) {
                 add(SetsOf(n), kSetsSize);
             }
-            for (int n = 0; n < 32; n++) {
+            for (int n = 0; n < kColourNumbers; n++) {
                 add(Long(kEffectColours + 4u * static_cast<uint32_t>(n)), kEffectsSize);
             }
             uint32_t from = UINT32_MAX, to = 0;
