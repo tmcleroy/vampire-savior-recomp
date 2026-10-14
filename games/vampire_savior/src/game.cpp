@@ -42,6 +42,10 @@ void RegisterTitle(); // title.cpp
 void TitleFrame(Machine &machine);
 void RegisterWidescreen(); // widescreen.cpp
 void WidescreenBeforeFrame(Machine &machine);
+void RegisterPalettes(); // palettes.cpp
+void RegisterColourEditor(); // colour_editor.cpp
+void ColourEditorCheck();
+void PalettesBeforeFrame(Machine &machine);
 
 void RegisterGame() {
     RegisterModes();
@@ -66,7 +70,11 @@ void RegisterGame() {
     // The training aids work only in a training session (the dummy's are the toolkit's: fight::RegisterDummy)
     TrainingAids({"damage_readout", "frame_data", "frame_log", "frame_meter", "health_refill", "hit_boxes", "input_display"});
     TheGame().inTraining = [] { return FeatureOn("training_mode"); };
+    RegisterPalettes();
+    RegisterColourEditor();
     TheGame().beforeFrame = [](Machine &machine) {
+        ColourEditorCheck();
+        PalettesBeforeFrame(machine);
         // (first: the modes below may run other machines' frames, which are never wide)
         WidescreenBeforeFrame(machine);
         TrainingBeforeFrame(machine);

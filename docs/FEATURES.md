@@ -25,6 +25,19 @@ board does not have. Each mode has a page there with a Start row and its choices
   before and the one after, and the name is shown for two seconds when it changes). Drawn from a quarter of its size to 25 times, at full
   speed or in slow motion, an animation starting again at once or after up to ten seconds. "Reset
   options" puts the page's choices back.
+- **Colour editor**: the model viewer's character with a panel at the right, worked with player 1's
+  controls (up and down choose a row, left and right change it): the character, background and size,
+  what it does (its own Animation choice: standing in the game's idle unless changed, or any of its
+  animations, as in the viewer; the viewer's choice is left as it was),
+  the set of colours (LP to HK, PP, KK, AUTO1, AUTO2), its line (the character's own colours or its
+  effects'), the colour (one of 15; it blinks on the character when chosen), and its red, green and
+  blue (the board's 16 levels each). Changes are seen at once. LP copies the colour, MP pastes it, HP
+  puts back the game's, LK or the panel's last row, Random colours, gives every colour of the set a random one (a row of
+  the page too); the page has rows to put back the game's colours for the whole set or the
+  whole character. What is changed is saved to the character's file in the `palettes` folder (only
+  the sets and lines that are not the game's) a moment after the last change and when the editor
+  ends, and Custom colours is switched on, so that it is used in play. The hidden characters are not
+  in it (the viewer has not got them).
 
 - **Survival**: choose a character, then one opponent after another, each beaten by one
   knock-down. Your health is what the last fight left you, and a little back. Over the first time
@@ -70,6 +83,7 @@ board does not have. Each mode has a page there with a Start row and its choices
 | Feature | Name in `settings.ini` | What it does |
 | --- | --- | --- |
 | Widescreen | `widescreen` | Its switch in the launcher is on the first page, under "Full screen" (not on the Features page), and that switch decides at every start; the in-game menu's Display page has it too. Fights are shown and played in 16:9 (512 columns where the board shows 384), with more of the stage on each side. Off unless switched on, in every preset, because it changes how the game plays: the players can go to the wide picture's edges (464 apart at most, where the board allows 336), and the camera stops 64 short of where it did, so that the picture ends where the stage does. The bars stay in the middle. Everything that is not a fight keeps the board's 4:3. Known: some pieces of a stage come in late at the wide picture's edge, and at a stage's very ends a few columns of the planes behind are not painted. |
+| Custom colours | `custom_colours` | On in the Enhanced preset. Characters in colours of your own: a text file a character in the folder `palettes` beside `settings.ini` (on macOS `~/Library/Application Support/Vampire Savior/palettes/`), named after the character as this set of the game calls them or as the game abroad does (`Morrigan.txt`, `Gallon.txt` or `Talbain.txt`, `Dark Gallon.txt`). A file has a section for each set it changes, named by how the set is chosen (`[LP]` to `[HK]`, `[PP]` two punches at once, `[KK]` two kicks, `[AUTO1]` and `[AUTO2]` for auto guard), and under it up to four lines of 16 colours (`#RRGGBB` or `#RGB`; `-` keeps the game's). The first line is the character's own colours, the others its effects; the 16th of a line is never seen. The board has 16 levels of red, green and blue, so a colour is rounded to the nearest. Colours made with PalMod (the community's palette editor) work too: edit a copy of your set's `vm3j.10b` with it and put the copy in `palettes`; the characters' colours it changed are used (their sets and their effects': poisoned, a shock, burned and the like), anything else it changed is left as the game's, and the text files go over it. With no files, or switched off, the game's own colours. New colours are taken when a player is next coloured (at the next round). The Display page's "Write the game's colours" puts every character's own colours in `palettes/original` to start from; "Load colour files again" reads files changed while the game runs. |
 
 ## Cheats
 

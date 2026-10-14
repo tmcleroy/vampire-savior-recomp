@@ -482,6 +482,55 @@ played by hand; Shadow's change of character through a one-player game not run.
 - `make audit` (`tools/audit.sh`); `tools/audit.sh --public` lists what is left before the
   repository can be public. `docs/RELEASING.md` is the release process.
 
+## Custom colours (2026-10-14)
+
+`palettes.cpp`, feature `custom_colours`. A player asked for it after the release. Facts (vsav.h):
+- `38C198`: a long for each character number 0-19 (16-19: 0x12 is Dark Gallon, the others repeat
+  0, 1, 3) pointing at its colour sets. Each set is 0x80 bytes: four palettes of 16 words. There
+  are 10 sets for every character; they follow each other at 0x500, with a gap of 0x400 after
+  Sasquatch's that nothing is known to read.
+- Player `+3AE` picks the set (020B38: 0-5 the button; 6 two or more punches; 7 two or more
+  kicks; 020FC0: 8 + (set & 1) when auto guard was chosen; a mirror match gets the next set,
+  Dark Gallon's only 0-1). `01BEC0`, `01C164` and `01C670` keep where the set is at `+3A4`.
+  `02AD3C` copies a palette from A0 to the player's place in the palette RAM (`+18B` of the
+  buffer at `D0(A5)`), keeping the brightness that was there; `02ADC8` copies palette D1 of the
+  set; `02AD82` a palette of the effects table at `39A900` (some entries by `+3AE` too: 02A946).
+- Each palette's 16th colour is the see-through pen for objects (video.cpp), never shown.
+
+The feature writes the files' colours over the ROM image's (the game reads them with `movem`, so
+its code is the same) and puts the game's back when it is switched off. Checked: an export of
+every character, and Morrigan's LP body palette with its channels turned seen in the model viewer
+(on and off). Not checked: the effect palettes (lines 2-4) and the `39A900` entries in a fight; a
+change taken in the middle of a round (it waits for the next copy); nobody has made colours by hand.
+- `38C218`: a long for each character number 0-31 pointing at 66 palettes for what is done to it
+  (0x840 bytes; `02AD20` copies palette D0 of the player's character's; `02ABC0` adds `+3AE` to an
+  effect's first, so effects are in tens by the set). They follow each other from `391BA0` to
+  `39A7E0`; the shared effects table `39A900` comes after.
+
+PalMod's own definitions (Preppy/PalMod, `VSAV_A_DEF.h`; facts only, its licence is not stated) know
+this set's `vm3j.10b` (CRC `434518e9`) and name these palettes: a set's four are the character, then
+for Bulleta "Critters", "Weapons", "Explosions"; the effects block holds Poisoned, Zapped, Burned,
+Pharaoh's Curse, Midnight Bliss. The program files have each word's bytes swapped against
+`RomSet::program` (checked over the whole of `vm3j.10b`).
+
+A copy of `vm3j.10b` in `palettes` is compared with the game's: words changed inside the two
+tables' places are taken, the rest are counted and left (the file holds the game's rules too), and a
+file whose tables of places differ is refused. Checked with a made copy (Morrigan's LP body, one
+effect palette, a word at `3AC0E0`); never with a file PalMod itself wrote. Not taken yet: the
+portraits (character select, win screen; `3AC0E0` and around, `008216`) and `39A900`.
+
+Colour editor (`colour_editor.cpp`, 2026-10-14): the model viewer with a panel. Each frame it puts
+the player's set at `+3AE`/`+3A4` and writes the set's palettes into the palette buffer (`D0(A5)`,
+`90C000`) from the player's slot `+18B`, the brightness kept, so a change shows at once; only the
+first line for the characters whose bit is set in `EF92EF96` (02ADB2: their other lines go
+elsewhere when an effect needs them, so changes to those are seen only then, not in the viewer).
+Edits go into the ROM image through palettes.h and are saved to the character's file (only the sets
+and lines that differ from the game's; a line that is `-` is the game's) 45 frames after the last
+change and when the editor ends (`ColourEditorCheck`, before every frame). Checked headless with
+movies: the rows, the levels, copy and paste, the set changed (HP: Morrigan in red), the blink,
+the character changed, the save when training mode takes over. Not checked by hand: holding a
+direction (repeats), a gamepad, the effect lines in play.
+
 ## Approximate, or left to the interpreters
 
 - The Z80 sound driver is translated too (4,498 instructions, 62 routines; 142 million of its

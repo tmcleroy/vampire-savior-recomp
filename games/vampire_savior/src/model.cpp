@@ -29,6 +29,15 @@
 
 namespace cps2recomp {
 
+// The colour editor (colour_editor.cpp) works in the viewer: the controls are its, and it has the right of
+// the picture, so the character is drawn further left
+void ColourEditorBeforeFrame(Machine &machine);
+void ColourEditorFrame(Machine &machine);
+int ColourEditorShift();
+void EndColourEditor();
+// ... and its own "Animation" choice, used in place of the viewer's while it is on
+const char *ColourEditorAnimation(); // (nullptr: the editor is off)
+
 namespace {
     using namespace vsav;
 
@@ -191,16 +200,20 @@ namespace {
         return 0;
     }
 
+    const char *AnimationChoice() {
+        return ColourEditorAnimation() ? ColourEditorAnimation() : "model_animation";
+    }
+
     void ShowAnimation(Machine &machine) {
         const int character = kCharacterNumbers[g.character];
-        int choice = std::clamp(FeatureValue("model_animation"), 0, kAnimationChoices - 1);
+        int choice = std::clamp(FeatureValue(AnimationChoice()), 0, kAnimationChoices - 1);
         // (one the character has not got: the next it has)
         if (choice && !Has(machine, character, choice)) {
             choice = Step(machine, character, choice, 1);
-            SetFeatureValue("model_animation", choice);
+            SetFeatureValue(AnimationChoice(), choice);
         }
         // ("Play all" with nothing chosen: the first animation the character has)
-        const bool all = FeatureOn("model_all");
+        const bool all = FeatureOn("model_all") && !ColourEditorAnimation(); // (the colour editor's own choice is one animation)
         if (all && !choice) {
             choice = Step(machine, character, 0, 1);
             SetFeatureValue("model_animation", choice);
@@ -213,7 +226,7 @@ namespace {
                 g.stickHeld = g.stick == stick ? g.stickHeld + 1 : 0;
                 if (g.stickHeld == 0 || (g.stickHeld >= kHeldFirst && (g.stickHeld - kHeldFirst) % kHeldEvery == 0)) {
                     choice = Step(machine, character, choice, stick == kRight ? 1 : -1);
-                    SetFeatureValue("model_animation", choice);
+                    SetFeatureValue(AnimationChoice(), choice);
                 }
             }
         }
@@ -312,7 +325,7 @@ namespace {
         const int size = kSizes[std::clamp(FeatureValue("model_size"), 0, static_cast<int>(std::size(kSizes)) - 1)];
         const bool large = size > 8;
         const int fromX = g.anchorX, fromY = g.anchorY - (large ? 56 : 0);
-        const int toX = large ? width / 2 : g.anchorX, toY = large ? height / 2 : g.anchorY;
+        const int toX = (large ? width / 2 : g.anchorX) - ColourEditorShift(), toY = large ? height / 2 : g.anchorY;
         auto back = [size](int to, int about, int from) { // (rounded down, for places left of or above `about` too)
             const int quarters = (to - about) * 4 + 2;
             return from + (quarters >= 0 ? quarters / size : -((-quarters + size - 1) / size));
@@ -353,6 +366,31 @@ namespace {
     }
 } // namespace
 
+void StartModelViewer(Machine &machine) {
+    StartModel(machine);
+}
+// The character being shown, by its number in the game; and the number of a choice of "Character" (-1: none)
+int ModelCharacter() {
+    return kCharacterNumbers[g.character];
+}
+int ModelCharacterNumber(int choice) {
+    return choice >= 0 && choice < static_cast<int>(std::size(kCharacterNumbers)) ? kCharacterNumbers[choice] : -1;
+}
+
+// The animation after `choice` (by 1) or before it (by -1) that the character being shown has, with standing
+// (0) before the first and after the last; and the choices' names
+int ModelAnimationStep(Machine &machine, int choice, int by) {
+    const int character = kCharacterNumbers[g.character];
+    const int next = Step(machine, character, choice, by);
+    if (!next || (choice && (by > 0 ? next <= choice : next >= choice))) {
+        return 0; // (gone round)
+    }
+    return next;
+}
+const std::vector<const char *> &ModelAnimationNames() {
+    return AnimationNames();
+}
+
 bool ModelViewer() {
     return g.on;
 }
@@ -379,6 +417,7 @@ void ModelBeforeFrame(Machine &machine) {
     }
     machine.players[1] = 0;
     PutAway();
+    ColourEditorBeforeFrame(machine); // (takes player 1's controls, when it is on)
     SetSlowMotion(kSlowBy[std::clamp(FeatureValue("model_speed"), 0, static_cast<int>(std::size(kSlowBy)) - 1)]);
     SetRam8(kClock, kClockFull);
     ShowAnimation(machine);
@@ -405,6 +444,7 @@ void ModelFrame(Machine &machine) {
     machine.video.hideObject = NotTheStage;
     Compose(machine);
     NameAnimation();
+    ColourEditorFrame(machine);
     g.anchorX = static_cast<int16_t>(Ram16(Player(0) + kX)) - static_cast<int16_t>(Ram16(kCameraX)) + WideStage();
     g.anchorY = 239 - (static_cast<int16_t>(Ram16(Player(0) + kY)) - static_cast<int16_t>(Ram16(kCameraY)));
 }
@@ -424,7 +464,10 @@ void RegisterModel() {
                           "of its animations."});
     game.commands.push_back({"model_start", kModel, "Start",
                              "Shows the character chosen below by itself. Player 1's controls move it while it stands. Reset ends it.",
-                             StartModel});
+                             [](Machine &machine) {
+                                 EndColourEditor();
+                                 StartModel(machine);
+                             }});
     game.commands.push_back({"model_reset", kModel, "Reset options",
                              "Puts every choice of this page back: the first character and stage, its own size, standing, full "
                              "speed, repeating at once, one animation only. (While viewing, the viewer goes to that character and stage.)",
