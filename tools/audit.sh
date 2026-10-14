@@ -22,7 +22,7 @@ grep_files() { grep -vE '^tools/(audit|release/check_archive)\.sh$' "$LIST" | tr
 
 check "no game or archive file types" "$(grep -iE '\.(zip|7z|rar|key|bin|rom|chd|state|sav|eep|nv|wav|lst)$|(^|/)[a-z0-9]{2,5}\.[0-9]{2}[a-z]?m?$' "$LIST" || true)"
 check "no code or lists generated from a game" "$(grep -E '(^|/)(work|build)/|(^|/)(native|z80)_[0-9]+\.cpp$|(^|/)(entries|guessed)\.txt|(^|/)game_info\.h$' "$LIST" || true)"
-check "no pictures but the README's" "$(grep -iE '\.(png|jpe?g|gif|bmp|ppm|webp)$' "$LIST" | grep -vE '^docs/screenshots/[a-z0-9-]+\.(png|jpg)$' || true)"
+check "no pictures but the README's" "$(grep -iE '\.(png|jpe?g|gif|bmp|ppm|webp)$' "$LIST" | grep -vE '^docs/screenshots/[a-z0-9-]+\.(png|jpg|gif)$' || true)"
 # (the published checksums of the libraries a build downloads, and the hashes of the copied toolkit's
 # own files, are not keys)
 check "no key-like hex strings (32 digits or more)" "$(grep_files '\b[0-9a-fA-F]{32,}\b' | grep -vE 'URL_HASH SHA256=[0-9a-f]{64}$|(^|/)COMMIT:|_SHA256=[0-9a-f]{64}$' || true)"
@@ -33,7 +33,9 @@ check "no tool that writes key files" "$(grep -iE '(^|/)makekey' "$LIST" || true
 check "no home folder paths" "$(grep_files -e '/Users/' -e '/home/[a-z]' -e 'C:\\\\Users' || true)"
 check "no private session links or private network addresses" "$(grep_files -e 'claude\.ai/code/session' -e '\b192\.168\.[0-9]+\.[0-9]+' -e '\b10\.[0-9]+\.[0-9]+\.[0-9]+\b' || true)"
 check "nothing that says where game files or keys can be found" "$(grep_files -i -e 'archive\.org' -e 'rom ?sites?\b' -e 'emuparadise' -e 'cps2crpt\.c' -e 'torrent' || true)"
-check "no file over 256 KB" "$(tr '\n' '\0' < "$LIST" | xargs -0 find 2>/dev/null -prune -type f -size +256k || true)"
+# (the README's pictures may be larger: the model viewer's moving picture is a few megabytes)
+check "no file over 256 KB (the README's pictures: 6 MB)" "$( (grep -v '^docs/screenshots/' "$LIST" | tr '\n' '\0' | xargs -0 find 2>/dev/null -prune -type f -size +256k; \
+    grep '^docs/screenshots/' "$LIST" | tr '\n' '\0' | xargs -0 find 2>/dev/null -prune -type f -size +6144k) || true)"
 # Files of another project's say so in their first lines; each must be one THIRD_PARTY_NOTICES.md lists
 check "files of another project's are only the ones the notices list" "$(grep_files -l -e '^(//|#) *license: *BSD' -e 'SPDX-License-Identifier: (GPL-3\.0-or-later|BSD|MIT|Zlib)' \
     | grep -vE '^cps2recomp/machine/cps2crypt\.cpp$|^cps2recomp/recomp-common/launcher/src/(ui\.cpp|ui\.h|embedded\.h)$' || true)"

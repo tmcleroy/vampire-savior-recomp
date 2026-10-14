@@ -26,10 +26,17 @@ ahead of time into C++ ([how it works](docs/PORT.md)).
 
 - Plays with a keyboard, a gamepad or an arcade stick; every key and button can be changed, for
   each player, in the launcher.
+- An in-game menu (Esc or `F1`; on a gamepad, the left stick's click or Start and Select together)
+  with the training mode and the other modes, save states, speed, the cheats and every feature.
 - **Pure** plays exactly as the board does. **Enhanced** (the default) adds free play. Every other
   feature is a switch of its own.
 - Your ROM set is only ever read. Settings, save states and the board's settings memory go in your
   own user folder.
+
+| | |
+| --- | --- |
+| ![The launcher: choose your ROM set and press Play](docs/screenshots/launcher.png) | ![The in-game menu, over a fight](docs/screenshots/menu.png) |
+| ![Endless battle in widescreen: Felicia and Morrigan in Vanity Paradise](docs/screenshots/endless-widescreen.png) | ![The model viewer: Lilith's animations A60 to A90 on white](docs/screenshots/model-viewer.gif) |
 
 ## Training mode
 
@@ -39,13 +46,14 @@ the page holds the aids below.
 
 | Feature | What it does |
 | --- | --- |
-| Hit boxes | The boxes the game itself tests: where a player can be hit, attacks, and the boxes that keep the players apart |
-| Frame data and frame meter | Startup, active and recovery of each move and the advantage after a hit or a guarded hit, counted in the game's own steps |
+| Hit boxes | The boxes the game itself tests: where a player can be hit (blue), attacks (red; orange for things thrown), and the boxes that keep the players apart (green) |
+| Frame data and frame meter | Startup, active and recovery of each move and the advantage after a hit or a guarded hit, counted in the game's own steps; a row of coloured cells for each player, one a step |
 | Input display | What each player presses and for how long, the stick as a keypad number |
 | Combo readout | Hits, damage, how much is lost for good and how much comes back, the round's best |
-| The dummy | Stands, crouches, jumps; guards (always, after a hit, at random; high or low as each attack needs); pushes away or guard cancels; softens throws; rolls on getting up; records and replays in three slots, and can answer with a recording after guarding or being hit |
-| Start over | The round as it began, in the middle or a corner, sides swapped or not |
-| Stage | Any of the twelve stages |
+| Health refills | A player's health comes back when they have not been hit for a moment |
+| The dummy | Stands, crouches, jumps; guards (always, after a hit, at random; high or low as each attack needs); pushes away or guard cancels; softens throws; gets up where it fell or rolls towards or away; records and replays in three slots (one, or any at random), and can answer with a recording after guarding or being hit |
+| Start over | The round as it began, in the middle or a corner, sides swapped or not (Backspace, or a gamepad's left shoulder) |
+| Stage | Any of the twelve stages, or the game's own choice |
 | Stop, step, slow | Stop the game, go on one frame at a time, or play at a half, a quarter or an eighth of the speed (anywhere, not only in training) |
 
 Also: save states in nine slots, free play, and a few cheats (no damage, one-hit knockouts, full
@@ -53,14 +61,25 @@ gauge, infinite time). [docs/FEATURES.md](docs/FEATURES.md) has the whole list.
 
 ![Training mode: hit boxes, input display, frame data and the frame meter](docs/screenshots/training.png)
 
-| | |
+## Alternative modes
+
+The in-game menu's first row, "Alternative modes", has ways of playing and watching the game that
+the board does not have. Each has a page with a Start row and its own choices, and runs until
+another is started or the menu's Reset.
+
+| Mode | What it does |
 | --- | --- |
-| ![A fight](docs/screenshots/fight.png) | ![Another fight](docs/screenshots/fight-2.png) |
-| ![A beam across the screen](docs/screenshots/action-1.png) | ![A Dark Force, the stage gone](docs/screenshots/action-2.png) |
-| ![Bats, in a Dark Force](docs/screenshots/action-3.png) | ![A hit in the forest](docs/screenshots/action-4.png) |
-| ![A hit lands](docs/screenshots/action-5.png) | ![A super move](docs/screenshots/action-6.png) |
-| ![Another Dark Force](docs/screenshots/action-7.png) | ![The launcher: features](docs/screenshots/launcher-features.png) |
-| ![The launcher: controllers](docs/screenshots/launcher-controls.png) | |
+| Training mode | A fight with no clock that nobody loses, and the aids above |
+| Attract mode | The game's own show on a loop, as a cabinet left alone plays it, with no coin to keep out: everything, the introduction only, or its eight demonstration fights one after another |
+| Stage viewer | Any of the twelve stages with nobody on it and no panel, its own pieces moving and its music playing (or another stage's). Scroll it with the stick, or let it drift from end to end. "Infinite" is all twelve in turn, each scrolling into the next as its tune fades into the next one's |
+| Model viewer | One character by itself, on a stage or on plain white or black, from a quarter of its size to 25 times. It stands and moves with your controls, or goes through any of its animations (named A0, B12, C3... as the game's own lists number them; left and right step through them), at full speed or in slow motion |
+| Survival | One opponent after another on the health you have left. How many can you beat? |
+| Endless battle | Two fighters the game plays, for as long as you like, with no bars and no clock, on one stage, on stages that fade one into another, or on a floor that scrolls through them all. Touch the controls to take a fighter over |
+| Ring out | No health. Knock your opponent over the end of the stage and jump down to the next one |
+
+![The model viewer: Lilith's animations A60 to A90, one after another, on white](docs/screenshots/model-viewer.gif)
+
+![Endless battle in widescreen: Felicia and Morrigan in Vanity Paradise](docs/screenshots/endless-widescreen.png)
 
 ## Widescreen
 
@@ -85,25 +104,6 @@ It is **off unless you switch it on**, in every preset, because it changes how t
 With it off the game is exactly the board's. Nothing here stretches the picture: the extra
 columns are the game's own stage, drawn by the port from what the game already has.
 
-## Other modes
-
-"Alternative modes" also has:
-
-- **Attract mode**: the game's own show on a loop, as a cabinet left alone plays it, with no coin
-  to keep out: everything, the introduction only, or its eight demonstration fights one after
-  another.
-- **Stage viewer**: any of the twelve stages with nobody on it and no panel, its own pieces
-  moving and its music playing (or another stage's). Scroll it with the stick, or let it drift
-  from end to end. "Infinite" is all twelve in turn, each stage scrolling into the next as its
-  tune fades into the next one's.
-
-- **Survival**: one opponent after another on the health you have left. How many can you beat?
-- **Endless battle**: two fighters the game plays, for as long as you like, with no bars and no
-  clock, on one stage, on stages that fade one into another, or on a floor that scrolls through
-  them all. Touch the controls to take a fighter over.
-- **Ring out**: no health. Knock your opponent over the end of the stage and jump down to the
-  next one.
-
 ## What you need
 
 - The ROM set `vsavj` (*Vampire Savior: The Lord of Vampire*, Japan 970519): `vsavj.zip` (with
@@ -122,29 +122,14 @@ columns are the game's own stage, drawn by the port from what the game already h
    or choose it. It stays where it is.
 3. Press **Play**.
 
+While playing, Esc or `F1` (on a gamepad, the left stick's click, or Start and Select together)
+opens the in-game menu. The launcher's Controllers page changes any key or button, for each
+player, and lists the other keys. Only the menu's "Quit game" row (or closing the window) ends
+the game.
+
 macOS: the app is not notarized, so the first time, right-click it and choose Open.
 Linux and Steam Deck: unpack the archive anywhere and run `vampire_savior-launcher`; its "Add to
 Steam" button puts it in your library.
-
-## Controls
-
-| | Keyboard | Gamepad |
-| --- | --- | --- |
-| Move | Arrows | D-pad or left stick |
-| Punches (light, medium, hard) | `A` `S` `D` | West, North, right shoulder (Xbox: X, Y, RB) |
-| Kicks (light, medium, hard) | `Z` `X` `C` | South, East, right trigger (Xbox: A, B, RT) |
-| Start | `1` or Return | Start |
-| Coin | `5` | Back (Select) |
-| In-game menu | Esc or `F1` | Left stick click, or Start and Select together |
-| Stop the game (and start it again) / one frame on | `P` / `O` | Right stick click / left trigger, once stopped |
-| Speed | `-` `=` | |
-| Start over (training) | Backspace | Left shoulder |
-| Save / load a state, slot | `F5` / `F9`, `F6` `F7` | |
-| Operator's test switch | `F2` | |
-| Full screen | `F11` | |
-
-The launcher's Controllers page changes any of these for each player. Only the menu's "Quit game"
-row (or closing the window) ends the game.
 
 ## Status
 

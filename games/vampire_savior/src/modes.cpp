@@ -435,7 +435,7 @@ void ModesState(Archive &ar) {
 void RegisterModes() {
     Game &game = TheGame();
     // The page at the head of the menu, and a page under it for each mode (and the dummy's under training's)
-    game.pages.push_back({kModes, "", "Other ways to run the game: training, attract mode on a loop, a viewer for the stages.", true});
+    game.pages.push_back({kModes, "", "Other ways to run the game: training, attract mode, viewers for the stages and the characters, survival, endless battle, ring out.", true});
     game.pages.push_back({kTraining, kModes, "A fight with no clock that nobody loses, and the aids for practising in it."});
     game.pages.push_back({kDummy, kTraining, "What player 2 does in a training session."});
     game.pages.push_back({kAttract, kModes,
