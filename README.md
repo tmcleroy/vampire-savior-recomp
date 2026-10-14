@@ -20,6 +20,15 @@ This project is not affiliated with, endorsed by, or sponsored by Capcom. *Vampi
 
 ![The title screen](docs/screenshots/title.png)
 
+### New: dress the characters in your own colours
+
+A colour editor in the game, with the character in front of you: any of their ten colour sets, 16
+levels each of red, green and blue, random colours at the press of a button, and PalMod's colours
+too. Then choose the character with that button and fight in them. [More, with a video
+→](#custom-colours)
+
+![The colour editor's Random colours, six times on Lilith](docs/screenshots/random-colours.gif)
+
 ## What it is
 
 The game's 68000 program is translated ahead of time into C++ and compiled into the port, and the
@@ -32,8 +41,8 @@ QSound chip, the sound CPU and its registers) is code written for this project, 
   each player, in the launcher.
 - An in-game menu (Esc or `F1`; on a gamepad, the left stick's click or Start and Select together)
   with the training mode and the other modes, save states, speed, the cheats and every feature.
-- **Pure** plays exactly as the board does. **Enhanced** (the default) adds free play. Every other
-  feature is a switch of its own.
+- **Pure** plays exactly as the board does. **Enhanced** (the default) adds free play and your own
+  [character colours](#custom-colours). Every other feature is a switch of its own.
 - Your ROM set is only ever read. Settings, save states and the board's settings memory go in your
   own user folder.
 
@@ -80,6 +89,7 @@ another is started or the menu's Reset.
 | Survival | One opponent after another on the health you have left. How many can you beat? |
 | Endless battle | Two fighters the game plays, for as long as you like, with no bars and no clock, on one stage, on stages that fade one into another, or on a floor that scrolls through them all. Touch the controls to take a fighter over |
 | Ring out | No health. Knock your opponent over the end of the stage and jump down to the next one |
+| Colour editor | Change a character's colours while you watch: [custom colours](#custom-colours) |
 
 ![The model viewer: Lilith's animations A60 to A90, one after another, on white](docs/screenshots/model-viewer.gif)
 
@@ -105,6 +115,51 @@ It is **off unless you switch it on**, in every preset, because it changes how t
 
 With it off the game is exactly the board's. Nothing here stretches the picture: the extra
 columns are the game's own stage, drawn by the port from what the game already has.
+
+## Custom colours
+
+Give any character colours of your own: change them in the game's colour editor, or bring the ones
+you have made with PalMod.
+
+https://github.com/user-attachments/assets/bb498cab-aac9-4e74-94a5-6c4f0d958ff6
+
+| | |
+| --- | --- |
+| ![The colour editor: Lilith with cyan hair and a blue outfit, the panel at the right](docs/screenshots/colour-editor.png) | ![Lilith in a fight in colours from the editor's Random colours](docs/screenshots/custom-colours-fight.png) |
+
+**The colour editor** is on the in-game menu's "Alternative modes" page. It shows the character
+with a panel at the right, worked with player 1's controls: up and down choose a row, left and right
+change it.
+
+- **Character, background, size, animation**: who you are dressing, on what, how large, standing
+  or going through one of their animations.
+- **Set**: which of the character's ten colour sets, by how it is chosen at the character choice:
+  LP, MP, HP, LK, MK, HK, two punches together (PP), two kicks together (KK), and the two used with
+  auto guard.
+- **Line**: the character's own colours, or one of three lines for their effects.
+- **Colour, Red, Green, Blue**: one of the line's 15 colours (it blinks on the character when you
+  choose it), and its red, green and blue in the board's 16 levels each.
+- **Random colours**: every colour of the set at random. Again for another.
+- LP copies a colour, MP pastes it, HP gives back the game's; the menu page puts back the game's
+  colours for the whole set or the whole character.
+
+Changes show at once and are saved as you go. **To play in them, choose the character with the
+button of the set you changed** (Lilith with LP, say), anywhere: arcade, versus, training.
+
+**Files.** What you change goes in a `palettes` folder beside `settings.ini` (on macOS
+`~/Library/Application Support/Vampire Savior/palettes/`), a text file a character (`Lilith.txt`)
+holding only the sets that are not the game's. You can write or share them by hand: "Write the
+game's colours" (on the Display page) puts every character's own colours in `palettes/original` to
+start from, and [docs/FEATURES.md](docs/FEATURES.md) has the format.
+
+**PalMod.** Colours made with [PalMod](https://github.com/Preppy/PalMod), the community's palette
+editor, work too: edit a copy of your set's `vm3j.10b` with it (never the one in your ROM set) and
+put the copy in `palettes`. The characters' colours it changed are used, their effects' too
+(poisoned, burned and the like); anything else in that file is left as the game's, so it cannot
+change how the game plays. Text files go over it.
+
+"Custom colours" on the Display page switches all of it: on in Enhanced (it changes nothing until
+there are files), off in Pure.
 
 ## What you need
 
