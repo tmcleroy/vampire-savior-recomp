@@ -5,6 +5,9 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Straight to the title (on the Game page): at a start or a reset, everything before the title
+  (the memory test, the version and the warning, the notices, the introduction) is run unseen, and
+  the game shows the title a second or so later.
 - Hidden characters (on the Game page; off in every preset): choosing Gallon gives Dark Gallon,
   Bishamon gives Oboro Bishamon (the one-player game's last boss, whom no code chooses on this
   set), and the "?" box gives Shadow, without their codes; for player 1, player 2 or both, and
