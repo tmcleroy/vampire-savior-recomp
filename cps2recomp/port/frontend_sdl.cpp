@@ -316,6 +316,20 @@ int RunWindowed(Port &port) {
 
         // The picture as large as fits the window at its shape: 4:3 for the board's 384 columns, and as much
         // wider as a wider picture has more of them (16:9 for 512)
+        // (a window, not full screen or maximized, takes the shape of the widest picture again when that
+        // changes: widescreen switched on or off in the menu)
+        if (TheGame().widestPicture) {
+            static int shownColumns = columns;
+            const int now = std::clamp(TheGame().widestPicture(), +Video::kWidth, +Video::kMaxWidth);
+            if (now != shownColumns) {
+                shownColumns = now;
+                if (!(SDL_GetWindowFlags(window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED))) {
+                    int windowWidth = 0, windowHeight = 0;
+                    SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+                    SDL_SetWindowSize(window, windowHeight * 4 / 3 * now / Video::kWidth, windowHeight);
+                }
+            }
+        }
         int width = 0, height = 0;
         presenter.Size(width, height);
         const float shape = 4.0f / 3.0f * static_cast<float>(port.ShownWidth()) / Video::kWidth;
