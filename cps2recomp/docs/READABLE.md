@@ -53,7 +53,9 @@ one by itself, leave the outer ones out: `CPS2RECOMP_SKIP_REWRITES=HitTest,AllHi
 `--no-rewrites` runs the game's own code everywhere.
 
 `make check-rewrites` runs the game's `check_rewrites.sh`: every movie, with the outer rewrites
-left out layer by layer, so that every rewrite is checked on its own calls.
+left out layer by layer, so that every rewrite is checked on its own calls. The runs are each other's
+business only at the end: `tools/at-once.sh` (sourced) runs them a few at a time and prints what each
+wrote in order (`at_once run ...`, then `at_once_wait`).
 
 `make check` (translated code against the interpreter run the same way) runs with the rewrites in
 both, so it covers the hooks' and rewrites' calls being made at the same places either way.
