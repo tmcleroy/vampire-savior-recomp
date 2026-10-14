@@ -19,6 +19,10 @@ board does not have. Each mode has a page there with a Start row and its choices
   notices, the introduction, the title, two fights and the rankings. Start or a coin ends it.
 - **Stage viewer**: the stage chosen with nobody on it and no panel. The stage's own pieces move
   as in a fight. Left and right scroll it, or it scrolls by itself from end to end and back.
+- **Model viewer**: one character by itself, on a stage or on plain white or black, with no panel. It
+  stands as in a fight, and player 1's controls move it; or it goes through one of its animations over
+  and over (a character has three lists of them; they have numbers, not names, and the readout says
+  which is showing and how many the list has). Drawn from a quarter of its size to 25 times.
 
 - **Survival**: choose a character, then one opponent after another, each beaten by one
   knock-down. Your health is what the last fight left you, and a little back. Over the first time
@@ -43,6 +47,11 @@ board does not have. Each mode has a page there with a Start row and its choices
 | Stage viewer: Stage | `viewer_stage` | The stage the viewer shows: any of the twelve, or Infinite: every stage in turn, each scrolled from end to end and then out of the picture as the next comes in, its tune fading into the next one's. Changing it while viewing goes to the new one. |
 | Stage viewer: Scrolling | `viewer_scroll` | How the viewer moves across the stage. Choices: With the stick, Slow (a pixel every four frames), Medium, Fast (a pixel a frame). |
 | Stage viewer: Music | `viewer_music` | The tune that plays in the viewer. Choices: The stage's own, any stage's, Character select. |
+| Model viewer: Character | `model_character` | Who is shown. Changing it while viewing goes to the new one. |
+| Model viewer: Background | `model_background` | Any of the twelve stages, White or Black. |
+| Model viewer: Size | `model_size` | Choices: 1x, 1.5x, 2x, 3x, 4x, 6x, 8x, 12x, 16x, 25x, 0.25x, 0.5x, 0.75x. |
+| Model viewer: Animation | `model_animation` | Standing (you control it), or List A, B or C of the character's animations. |
+| Model viewer: Number | `model_number` | Which animation of the list (0-255; a list has fewer, and the count goes round). |
 
 ## Game
 

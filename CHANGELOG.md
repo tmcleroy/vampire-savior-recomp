@@ -5,6 +5,10 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Model viewer, on the menu's "Alternative modes" page: one character by itself on a stage or on
+  plain white or black, drawn from a quarter of its size to 25 times, standing (player 1's controls
+  move it) or going through any of its animations (three lists a character; they have numbers, not
+  names).
 - Widescreen (a switch on the launcher's first page, under "Full screen", and on the in-game
   menu's Display page; off unless switched on, in every preset, because it changes how the game
   plays): fights are shown and played in 16:9, with more of the stage on each side. The players
