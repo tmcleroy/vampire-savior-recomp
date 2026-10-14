@@ -20,9 +20,11 @@ This project is not affiliated with, endorsed by, or sponsored by Capcom. *Vampi
 
 ## What it is
 
-The game's 68000 program runs on a small machine written for this project (the board's video,
-QSound chip, sound CPU and registers), not in an emulator, and the program itself is translated
-ahead of time into C++ ([how it works](docs/PORT.md)).
+The game's 68000 program is translated ahead of time into C++ and compiled into the port, and the
+parts that features touch (the camera, the stages, hit tests, the fight's rules: 123 routines so
+far) are rewritten by hand as readable C++. What the program expects of the board (its video, the
+QSound chip, the sound CPU and its registers) is code written for this project, not an emulator
+([how it works](docs/PORT.md)).
 
 - Plays with a keyboard, a gamepad or an arcade stick; every key and button can be changed, for
   each player, in the launcher.
