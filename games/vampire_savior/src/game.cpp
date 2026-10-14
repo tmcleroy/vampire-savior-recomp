@@ -3,6 +3,7 @@
 //
 // Vampire Savior: what the game's own sources add to the port (see PROGRESS.md).
 #include "game.h"
+#include "modes.h"
 
 namespace cps2recomp {
 
@@ -30,6 +31,7 @@ void RegisterModel(); // model.cpp
 void ModelBeforeFrame(Machine &machine);
 void ModelFrame(Machine &machine);
 void ModelState(Archive &ar);
+bool ModelViewer();
 void RegisterMachines(); // machines.cpp
 void RegisterBattle();   // battle.cpp
 void BattleBeforeFrame(Machine &machine);
@@ -72,6 +74,8 @@ void RegisterGame() {
         ModelFrame(machine);
         CheatsFrame(machine);
     };
+    // (run-ahead: not in the modes, whose workings a save state does not wholly hold)
+    TheGame().noRunAhead = [] { return AttractMode() || StageViewer() || BattleMode() || ModelViewer(); };
     TheGame().state = [](Archive &ar) {
         TrainingState(ar);
         ModesState(ar);

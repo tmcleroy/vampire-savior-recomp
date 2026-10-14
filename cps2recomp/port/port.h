@@ -105,6 +105,7 @@ struct Port {
     bool Init(std::string &error);
     // One frame: input (window, movie or made up), the machine, the per-frame outputs
     void RunFrame();
+    void RunAhead();
     void SoundTest();
     uint64_t soundTestState = 0;
     uint16_t soundTestSong = 0;

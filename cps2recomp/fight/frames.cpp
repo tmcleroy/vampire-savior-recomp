@@ -226,6 +226,9 @@ void MoveLog::Write(int player, const Frames::Advantage *advantage) {
 }
 
 void MoveLog::Step(int player, const Frames &frames, StartFn start) {
+    if (RunningAhead()) {
+        return; // (frames that will be taken back: logged when they happen)
+    }
     Pending &p = m_pending[player];
     const Doing now = frames.Now(player);
     const bool inMove = now == Doing::Startup || now == Doing::Active || now == Doing::Recovery;

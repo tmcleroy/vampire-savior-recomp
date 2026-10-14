@@ -33,8 +33,19 @@ void Give(Machine &machine, const Made &made) {
     machine.audio.insert(machine.audio.end(), made.sound.begin(), made.sound.end());
 }
 
+namespace {
+    bool g_spareRan = false;
+}
+bool SpareRan() {
+    return g_spareRan;
+}
+void ClearSpareRan() {
+    g_spareRan = false;
+}
+
 void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made,
               const std::function<void(Machine &)> &after) {
+    g_spareRan = true;
     // What a save state does not hold is kept by hand: the picture, the controls, the video's switches
     const uint16_t held[2] = {machine.players[0], machine.players[1]};
     const auto hide = machine.video.hideObject;
