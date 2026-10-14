@@ -401,7 +401,7 @@ void ModelFrame(Machine &machine) {
 // (Nothing of the viewer is kept in a save state, so that the states made before there was one still load:
 // a state loaded while viewing ends the viewer, and what is loaded is the fight it holds.)
 void ModelState(Archive &ar) {
-    if (!ar.Saving()) {
+    if (!ar.Saving() && !RunningAhead()) { // (not when run-ahead puts the frame back: runtime/game.h)
         End();
     }
 }

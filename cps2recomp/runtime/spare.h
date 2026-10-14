@@ -51,6 +51,10 @@ void SetSpareKeeping(const SpareKeeping &keeping);
 // picture and sound; `after`, if given, is called after the frame with the spare still loaded.
 void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made = nullptr,
               const std::function<void(Machine &)> &after = nullptr);
+// Whether a spare has run since this was last cleared (the port clears it before each frame): a frame with a
+// spare in it is not run ahead (a game's sources keep more around a spare than its save state holds)
+bool SpareRan();
+void ClearSpareRan();
 // The spare's machine becomes the port's (and the spare is cleared)
 void Promote(Machine &machine, Spare &spare);
 

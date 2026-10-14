@@ -833,7 +833,7 @@ void BattleState(Archive &ar) {
         ar.Pod(spare->ready);
         ar.Pod(spare->frames);
     }
-    if (!ar.Saving()) {
+    if (!ar.Saving() && !RunningAhead()) { // (not when run-ahead puts the frame back: runtime/game.h)
         g_fast = false;
         g_backSound.Start();
         g_backNextSound.Start();

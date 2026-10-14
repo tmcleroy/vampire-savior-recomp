@@ -423,7 +423,7 @@ void ModesState(Archive &ar) {
     ar.Mark(0x4D4F4445);
     ar.Pod(g);
     ar.Vec(g_other);
-    if (!ar.Saving()) {
+    if (!ar.Saving() && !RunningAhead()) { // (not when run-ahead puts the frame back: runtime/game.h)
         Fast(false);
         g_otherSound.assign(kSoundAhead * 2, 0);
         g_carry.clear();

@@ -13,6 +13,7 @@
 #include "../runtime/board.h"
 #include "png_write.h"
 #include "present.h"
+#include "../runtime/spare.h"
 #include "port.h"
 #include "../recomp-common/text.h"
 
@@ -59,7 +60,7 @@ bool Movie::Save(const std::string &path) const {
 }
 
 namespace {
-    constexpr uint32_t kStateVersion = 4;
+    constexpr uint32_t kStateVersion = 5; // (5: the 68000's wait kept)
 
     bool ReadFile(const std::string &path, std::vector<uint8_t> &data) {
         FILE *f = fopen(path.c_str(), "rb");
@@ -109,6 +110,12 @@ bool Port::Init(std::string &error) {
     SetRam(machine->ram.data());
     SetEeprom(&machine->eeprom);
     RegisterGame();
+    // (every game's, from the port: run_ahead, RunAhead)
+    TheGame().features.push_back({"run_ahead", "Game", "Run-ahead",
+                                  "Shows the game a frame or two further on than it is, so that what you press is seen sooner than "
+                                  "on the board (input lag taken away). The game runs as it does without it; it takes two or three "
+                                  "times the processor. Off by itself in the game's own modes beyond fights and training.",
+                                  0, {"Off", "1 frame", "2 frames"}});
     LoadFeatures(opt.settingsPath, opt.features);
     // The 68000 and the Z80 are run the same way; each falls back to its interpreter if the build has no
     // translated code for it
@@ -564,7 +571,55 @@ void Port::SoundTest() {
     shared[0x00F] = 0;
 }
 
+// Run-ahead: after the frame, the frames after it are run with the controls as they are and the picture (and
+// the readout) of the last is the one shown; then the machine and the game's sources are put back as they were
+// after the frame, and its sound is the frame's own. So the game goes on exactly as without it, and the picture
+// shows what a press does a frame or two sooner. Not done for a frame a spare machine ran in (runtime/spare.h).
+void Port::RunAhead() {
+    const int ahead = FeatureValue("run_ahead");
+    // (nor while stopped, stepped a frame at a time or slowed: there the frame shown is the frame)
+    if (ahead <= 0 || FastForward() || SpareRan() || paused || menu.SlowBy() > 1 || SlowMotion() > 1 ||
+        (TheGame().noRunAhead && TheGame().noRunAhead())) {
+        return;
+    }
+    static std::vector<uint8_t> kept;
+    kept.clear();
+    {
+        Archive ar(kept, true);
+        machine->Serialize(ar);
+        if (TheGame().state) {
+            TheGame().state(ar);
+        }
+    }
+    const size_t sound = machine->audio.size();
+    const uint16_t held[2] = {machine->players[0], machine->players[1]};
+    SetRunningAhead(true);
+    for (int n = 0; n < ahead; n++) {
+        machine->players[0] = held[0];
+        machine->players[1] = held[1];
+        if (TheGame().beforeFrame) {
+            TheGame().beforeFrame(*machine);
+        }
+        machine->RunFrame();
+        if (TheGame().frame) {
+            TheGame().frame(*machine);
+        }
+    }
+    {
+        Archive ar(kept, false);
+        machine->Serialize(ar);
+        if (TheGame().state) {
+            TheGame().state(ar);
+        }
+    }
+    SetRunningAhead(false);
+    machine->audio.resize(sound);
+    machine->players[0] = held[0];
+    machine->players[1] = held[1];
+}
+
 void Port::RunFrame() {
+    ClearSpareRan();
     if (!opt.moviePlay.empty()) {
         auto it = playMovie.changes.find(frame);
         if (it != playMovie.changes.end()) {
@@ -632,6 +687,7 @@ void Port::RunFrame() {
     }
     machine->serviceButton = service;
     machine->testSwitch = test || (frame >= opt.testFrom && frame < opt.testTo);
+    const uint16_t pressed[2] = {machine->players[0], machine->players[1]}; // (for run-ahead's frames)
 
     std::string path, error;
     if (AtFrame(opt.stateLoad, frame, path) && !LoadState(path, error)) {
@@ -692,6 +748,9 @@ void Port::RunFrame() {
     if (hashFile) {
         fprintf(hashFile, "%llu %08x\n", static_cast<unsigned long long>(frame), StateHash());
     }
+    machine->players[0] = pressed[0];
+    machine->players[1] = pressed[1];
+    RunAhead();
     if (opt.shotEvery && frame % opt.shotEvery == 0) {
         char shot[512];
         snprintf(shot, sizeof(shot), "%s%06llu.png", opt.shotPrefix.c_str(), static_cast<unsigned long long>(frame));
