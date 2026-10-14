@@ -134,6 +134,7 @@ namespace {
 }
 
 void RegisterDummy(const DummyOptions &options) {
+    const size_t first = TheGame().features.size();
     g_options = options;
     Game &game = TheGame();
     game.features.push_back({"dummy_stand", "Dummy", "Stands", "Player 2 stands still, whatever its controls do.", kFeatureExclusive});
@@ -178,6 +179,10 @@ void RegisterDummy(const DummyOptions &options) {
         }
         names.push_back("At random");
         game.features.push_back({"dummy_getup", "Dummy", "Gets up", options.getUpWords, 0, names});
+    }
+    // (all of them training aids: the dummy is player 2 only in a training session)
+    for (size_t n = first; n < TheGame().features.size(); n++) {
+        TheGame().features[n].flags |= kFeatureTraining;
     }
 }
 
