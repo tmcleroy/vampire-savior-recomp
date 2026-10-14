@@ -61,6 +61,7 @@ board does not have. Each mode has a page there with a Start row and its choices
 | Feature | Name in `settings.ini` | What it does |
 | --- | --- | --- |
 | Free play | `free_play` | Start works without a coin. |
+| Hidden characters | `hidden_characters` | Choosing Gallon gives Dark Gallon and choosing Bishamon gives Oboro Bishamon (the last boss, whom no code chooses on this set); a punch chooses their first colours, a kick their second. The "?" box gives Shadow, who becomes each opponent beaten in a one-player game. For player 1, player 2 or both; the alternative modes' fighters too. Off in every preset. Choices: Off, Player 1, Player 2, Both. |
 
 ## Display
 

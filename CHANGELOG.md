@@ -5,6 +5,11 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Hidden characters (on the Game page; off in every preset): choosing Gallon gives Dark Gallon,
+  Bishamon gives Oboro Bishamon (the one-player game's last boss, whom no code chooses on this
+  set), and the "?" box gives Shadow, without their codes; for player 1, player 2 or both, and
+  the alternative modes' fighters too. The board's codes work as before, in a rewrite of the
+  routines that read them.
 - Model viewer: an animation is one choice, named by its list and number (A34), where there were
   two rows; its name is shown for two seconds when it changes (it was never shown: another mode's
   readout cleared it every frame).

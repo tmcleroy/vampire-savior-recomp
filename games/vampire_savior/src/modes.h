@@ -26,6 +26,9 @@ struct MatchWanted {
     int colours[2] = {-1, -1}; // which of a character's sets of colours (-1: as chosen)
 };
 MatchWanted &Wanted();
+// The character a mode's fighter on side n (0, 1) is given for `character`: its hidden form when the "Hidden
+// characters" feature asks for that side (choosing.cpp), or itself
+int HiddenForm(int n, int character);
 
 // Where the machine that is running is to have its camera (the picture's left edge and bottom, in the
 // stage), whatever the players do: -1 leaves that to the game.

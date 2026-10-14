@@ -426,6 +426,40 @@ Facts found for these:
 - Objects' colour sets in a fight: 0-6 the panel and sparks, 10 and 16-17 the players, 22-31 the
   stage's pieces; shadows are tiles `F8F7`-`F90A` in set 22.
 
+## Hidden characters (2026-10-14)
+
+`src/choosing.cpp`. What the board hides, read from its code (the character choice is `020974` on; a
+player's record there: `+03` the character under the cursor, `0B` the "?" box; `+381` which player):
+- Dark Gallon is character `0x12` (Gallon's number with bit 4). Gallon chosen while Start is held
+  (bit 15 of `+394`), with two or three punches pressed together (his first colours) or kicks
+  (his second): `020B9C`. He has only those two sets of colours, and in a one-player game Gallon is
+  his rival as he is Gallon's.
+- Oboro Bishamon is `0x18`, the eighth and last opponent of every one-player route (the table at
+  `00B268`, eight bytes a route, sixty-four a character, read through a register so from the plain
+  ROM; a route of `0x800` on for Shadow). He is reached when the game has gone well enough
+  (`00A738`); no code on this set chooses him. The tables have rows for every character number from
+  `0x10` to `0x1F`, `0x18`'s being Bishamon's, and he plays as Bishamon does when a person controls
+  him (scripted: walking, the three-hit chain, the sweep, a charge special; his entrance is about 150
+  frames longer than Bishamon's).
+- Shadow is a way to play, not a character: Start pressed exactly five times on the "?" box (`+42`
+  counts, `+43` is set at five and cleared at six), then a button. The player is the character the
+  box was showing, or the one Start was pressed on three times before (`+44`, `+45`), with `+3BC`
+  set (copied to `+3E3`, the character to `+3BD`); after each match a person playing Shadow wins, they
+  become the opponent just beaten, in its colours (`009BB2`). In two-player games nothing shows it.
+- `BF(A5)` stops all of the codes when set; nothing in this set sets it.
+- Tables read with `(pc,d0)` come from the deciphered view (`program.bin`); read through an address
+  register (`lea ...(pc),a0` then `(a0,d0)`) they come from the plain ROM (`program.bin.data`).
+
+The "Hidden characters" feature (Game page; off in every preset; Off, Player 1, Player 2, Both) is
+lines in rewrites of the two routines that read the codes, `ChooseColours` (`020B38`: the button that
+chose gives the colours, two alike are told apart, Start held gives Dark Gallon) and `CountShadowCode`
+(`020C98`): choosing Gallon gives Dark Gallon, Bishamon Oboro (a punch his first colours, a kick his
+second), and the "?" box Shadow. The modes' fighters get the hidden forms at the stage hook, where a
+mode's characters go in. Checked: the board's codes for Dark Gallon and Shadow work as before (both
+rewrites beside the game's code, none differ); with the feature, each of the three for player 1, both
+players in training, and the endless battle's fighters (Dark Gallon against Oboro), in pictures. Not
+played by hand; Shadow's change of character through a one-player game not run.
+
 ## Release readiness (audit of 2026-10-12)
 
 - A release's game program holds the translated code, as Muscle March's does (the owner's decision,

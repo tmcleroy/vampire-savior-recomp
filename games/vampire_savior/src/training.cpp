@@ -155,17 +155,20 @@ namespace {
     // The game is choosing the stage for a match (vsav.h, kChooseStage). In a training session with a stage
     // asked for, that one is used and the game's routine is left out.
     bool ChooseStage(M68K &c) {
-        // The characters a mode wants, in place of the ones chosen (two alike: the second in its other colours)
+        // The characters a mode wants, in place of the ones chosen (two alike: the second in its other colours),
+        // in their hidden forms if asked for (which have two sets of colours)
         const MatchWanted &wanted = Wanted();
         for (int n = 0; n < 2; n++) {
             if (wanted.characters[n] >= 0) {
-                SetRam8(Player(n) + kCharacter, static_cast<uint8_t>(wanted.characters[n]));
-                SetRam8(Player(n) + kCharacterAgain, static_cast<uint8_t>(wanted.characters[n]));
+                const int character = HiddenForm(n, wanted.characters[n]);
+                SetRam8(Player(n) + kCharacter, static_cast<uint8_t>(character));
+                SetRam8(Player(n) + kCharacterAgain, static_cast<uint8_t>(character));
             }
         }
         for (int n = 0; n < 2; n++) {
             if (wanted.colours[n] >= 0) {
-                SetRam8(Player(n) + kColours, static_cast<uint8_t>(wanted.colours[n]));
+                const bool hidden = wanted.characters[n] >= 0 && HiddenForm(n, wanted.characters[n]) != wanted.characters[n];
+                SetRam8(Player(n) + kColours, static_cast<uint8_t>(hidden ? wanted.colours[n] & 1 : wanted.colours[n]));
             }
         }
         if (wanted.characters[0] >= 0 && Ram8(Player(0) + kCharacter) == Ram8(Player(1) + kCharacter) &&
