@@ -38,6 +38,8 @@ void RegisterBattle();   // battle.cpp
 void BattleBeforeFrame(Machine &machine);
 void BattleFrame(Machine &machine);
 void BattleState(Archive &ar);
+void RegisterTitle(); // title.cpp
+void TitleFrame(Machine &machine);
 void RegisterWidescreen(); // widescreen.cpp
 void WidescreenBeforeFrame(Machine &machine);
 void RegisterPalettes(); // palettes.cpp
@@ -64,6 +66,7 @@ void RegisterGame() {
     RegisterPieces();
     RegisterFrames();
     RegisterWidescreen();
+    RegisterTitle();
     // The training aids work only in a training session (the dummy's are the toolkit's: fight::RegisterDummy)
     TrainingAids({"damage_readout", "frame_data", "frame_log", "frame_meter", "health_refill", "hit_boxes", "input_display"});
     TheGame().inTraining = [] { return FeatureOn("training_mode"); };
@@ -85,6 +88,7 @@ void RegisterGame() {
         ModesFrame(machine);
         BattleFrame(machine);
         ModelFrame(machine);
+        TitleFrame(machine);
         CheatsFrame(machine);
     };
     // (run-ahead: not in the modes, whose workings a save state does not wholly hold)

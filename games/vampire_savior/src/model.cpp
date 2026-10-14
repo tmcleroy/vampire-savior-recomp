@@ -156,7 +156,7 @@ namespace {
 
     // The menu's "Reset options": every choice of the viewer's page back to what it is when nothing is chosen
     constexpr const char *kChoices[] = {"model_character", "model_background", "model_size", "model_animation",
-                                        "model_speed",     "model_repeat"};
+                                        "model_speed",     "model_repeat",    "model_all"};
     void ResetChoices(Machine &) {
         for (const char *choice : kChoices) {
             SetFeatureValue(choice, 0);
@@ -212,6 +212,12 @@ namespace {
             choice = Step(machine, character, choice, 1);
             SetFeatureValue(AnimationChoice(), choice);
         }
+        // ("Play all" with nothing chosen: the first animation the character has)
+        const bool all = FeatureOn("model_all") && !ColourEditorAnimation(); // (the colour editor's own choice is one animation)
+        if (all && !choice) {
+            choice = Step(machine, character, 0, 1);
+            SetFeatureValue("model_animation", choice);
+        }
         const uint16_t stick = machine.players[0] & (kLeft | kRight);
         if (choice) {
             // Left and right go to the animation before and the one after: at a press, and while held,
@@ -255,10 +261,15 @@ namespace {
             }
             // (going back, to the start or to an earlier frame, is a repeat: after the wait chosen, if any.
             // The wait is counted once: when it is over the frame's time is up still, and this comes again.)
+            // With "Play all", where it would start again the next animation starts instead (the last frame
+            // stays for this frame; the next one sees the choice changed and starts it)
             const int wait = std::clamp(FeatureValue("model_repeat"), 0, 10) * kFramesASecond;
             if (next <= g.frame && wait && g.left == 0) {
                 g.held = wait;
                 g.left = -1;
+            } else if (next <= g.frame && all) {
+                SetFeatureValue("model_animation", Step(machine, character, choice, 1));
+                g.left = 0;
             } else {
                 g.frame = next;
                 g.left = machine.Read8(next);
@@ -459,7 +470,7 @@ void RegisterModel() {
                              }});
     game.commands.push_back({"model_reset", kModel, "Reset options",
                              "Puts every choice of this page back: the first character and stage, its own size, standing, full "
-                             "speed, repeating at once. (While viewing, the viewer goes to that character and stage.)",
+                             "speed, repeating at once, one animation only. (While viewing, the viewer goes to that character and stage.)",
                              ResetChoices});
     game.features.push_back({"model_character", kModel, "Character", "Who is shown. Changing it while viewing goes to the new one.", 0,
                              {std::begin(kCharacterNames), std::end(kCharacterNames)}});
@@ -486,6 +497,11 @@ void RegisterModel() {
                              "How long an animation's last frame is held before it starts again.", 0,
                              {"At once", "1 second", "2 seconds", "3 seconds", "4 seconds", "5 seconds", "6 seconds", "7 seconds",
                               "8 seconds", "9 seconds", "10 seconds"}});
+    game.features.push_back({"model_all", kModel, "Play all",
+                             "Goes through all of the character's animations, one after another: each is shown once (and its "
+                             "last frame held for \"Repeat after\") and then the next starts, round from the last to the first. "
+                             "Left and right still step through them.",
+                             0});
 }
 
 } // namespace cps2recomp

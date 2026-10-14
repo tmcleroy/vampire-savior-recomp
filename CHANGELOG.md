@@ -14,11 +14,16 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Colour editor, on the menu's "Alternative modes" page: the model viewer with a panel for
   changing a character's colours while you watch, 16 levels of red, green and blue, saved to the
   `palettes` folder as you go.
+- Straight to the title (on the Game page): at a start or a reset, everything before the title
+  (the memory test, the version and the warning, the notices, the introduction) is run unseen, and
+  the game shows the title a second or so later.
 - Hidden characters (on the Game page; off in every preset): choosing Gallon gives Dark Gallon,
   Bishamon gives Oboro Bishamon (the one-player game's last boss, whom no code chooses on this
   set), and the "?" box gives Shadow, without their codes; for player 1, player 2 or both, and
   the alternative modes' fighters too. The board's codes work as before, in a rewrite of the
   routines that read them.
+- Model viewer: Play all, a switch that goes through every one of the character's animations in
+  turn, each shown once (its last frame held for "Repeat after") before the next.
 - Model viewer: an animation is one choice, named by its list and number (A34), where there were
   two rows; its name is shown for two seconds when it changes (it was never shown: another mode's
   readout cleared it every frame).
