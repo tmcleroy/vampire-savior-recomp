@@ -22,7 +22,7 @@ board does not have. Each mode has a page there with a Start row and its choices
 - **Model viewer**: one character by itself, on a stage or on plain white or black, with no panel. It
   stands as in a fight, and player 1's controls move it; or it goes through one of its animations over
   and over (a character has three lists of them; they have numbers, not names, and the readout says
-  which is showing and how many the list has). Drawn from a quarter of its size to 25 times, at full
+  which is showing and how many the list has; left and right go to the one before and the one after). Drawn from a quarter of its size to 25 times, at full
   speed or in slow motion, an animation starting again at once or after up to ten seconds. "Reset
   options" puts the page's choices back.
 

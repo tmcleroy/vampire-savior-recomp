@@ -49,6 +49,7 @@ namespace {
     constexpr const char *kTableNames[3] = {"A", "B", "C"};
     constexpr int kMostAnimations = 256;
     constexpr int kFramesASecond = 60;
+    constexpr int kHeldFirst = 20, kHeldEvery = 8; // frames a direction is held before it repeats, and between repeats
     // The "Speed" choice: a frame of the game in this many pictures of the screen (as the menu's own speeds)
     constexpr int kSlowBy[] = {1, 2, 4, 8};
     constexpr uint32_t kFrameBytes = 0x18, kFramePicture = 0x04, kFrameJump = 0x18;
@@ -65,6 +66,7 @@ namespace {
         int32_t table = 0, number = 0;
         uint32_t first = 0, frame = 0;
         int32_t left = 0;
+        int32_t stick = 0, stickHeld = 0; // player 1's left or right a frame ago, and for how many frames
         int32_t held = 0; // frames its last frame is still held for before it starts again (the "Repeat after" choice)
         // Where the character stood in the picture a frame ago (the picture a frame shows is the game's of
         // the frame before)
@@ -162,11 +164,22 @@ namespace {
         const int table = std::clamp(FeatureValue("model_animation"), 0, 3), character = kCharacterNumbers[g.character];
         int number = 0;
         uint32_t first = 0;
+        const uint16_t stick = machine.players[0] & (kLeft | kRight);
         if (table) {
             const int count = Animations(machine, character, table - 1);
             number = count ? std::clamp(FeatureValue("model_number"), 0, kMostAnimations - 1) % count : 0;
+            // Left and right go to the animation before and the one after, round the list: at a press, and
+            // while held, after a third of a second, eight a second
+            if (count && (stick == kLeft || stick == kRight)) {
+                g.stickHeld = g.stick == stick ? g.stickHeld + 1 : 0;
+                if (g.stickHeld == 0 || (g.stickHeld >= kHeldFirst && (g.stickHeld - kHeldFirst) % kHeldEvery == 0)) {
+                    number = (number + (stick == kRight ? 1 : count - 1)) % count;
+                    SetFeatureValue("model_number", number);
+                }
+            }
             first = AnimationAt(machine, character, table - 1, number);
         }
+        g.stick = stick;
         if (!first) {
             if (g.table) {
                 // (back to standing: the game's own "nothing" action from its start sets the animation again)
@@ -370,7 +383,7 @@ void RegisterModel() {
     game.features.push_back({"model_animation", kModel, "Animation",
                              "What the character does: stands as in a fight, moved with player 1's controls, or goes through one "
                              "of its animations over and over (they are in three lists in the game: A, B and C; Number picks "
-                             "which of the list).",
+                             "which of the list, and so do left and right while one is showing).",
                              0, {"Standing (you control it)", "List A", "List B", "List C"}});
     game.features.push_back({"model_speed", kModel, "Speed",
                              "How fast the viewer runs: slow motion for looking at an animation frame by frame. (The menu's own "

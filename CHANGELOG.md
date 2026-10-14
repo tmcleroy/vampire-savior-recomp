@@ -6,7 +6,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 ## Unreleased
 
 - Model viewer: a Speed choice (full, 1/2, 1/4, 1/8), a wait of up to ten seconds before an animation
-  starts again, and "Reset options" for the page's choices.
+  starts again, "Reset options" for the page's choices, and left and right stepping through the
+  list's animations while one is showing.
 - Model viewer, on the menu's "Alternative modes" page: one character by itself on a stage or on
   plain white or black, drawn from a quarter of its size to 25 times, standing (player 1's controls
   move it) or going through any of its animations (three lists a character; they have numbers, not
