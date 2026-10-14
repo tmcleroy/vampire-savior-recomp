@@ -1,5 +1,5 @@
 # A copy of the cps2recomp toolkit, made by its tools/sync-toolkit.sh. Do not change it here.
-commit b66f460a025c609f428151cbb9d24f362821cb77
+commit 3d0dac3ec05306b21abdf7a5eb3e066b8ff56a23
 200d91d8ef6a4a344ce3eed2df71214be194dd745fd4c3d8409613a7f4835984  .gitignore
 50e69f9ad4e42c22586852634988c895ec4a51d089c0e1dd2e10f9af8fa6b633  CMakeLists.txt
 8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  LICENSE
