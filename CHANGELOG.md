@@ -5,6 +5,9 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Model viewer: an animation is one choice, named by its list and number (A34), where there were
+  two rows; its name is shown for two seconds when it changes (it was never shown: another mode's
+  readout cleared it every frame).
 - Model viewer: a Speed choice (full, 1/2, 1/4, 1/8), a wait of up to ten seconds before an animation
   starts again, "Reset options" for the page's choices, and left and right stepping through the
   list's animations while one is showing.

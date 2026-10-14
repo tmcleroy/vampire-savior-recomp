@@ -343,6 +343,10 @@ has yet used them in a window or listened.
   mode), "Repeat after" (an animation's last frame held 0 to 10 seconds before it goes back: traced, the
   holds are 120 frames at 2 seconds) and "Reset options" (run in mid view: the viewer went to the first
   character and stage). The slow motion has not been watched: with no window a run takes no time.
+  Then: one "Animation" choice of 769 (standing, A0-A255, B0-B255, C0-C255; one the character has not
+  got goes on to the next it has), left and right stepping through them, and the name shown for 120
+  frames after a change. The readout is set after the frame now: set before it, training's and the
+  stage viewer's frames cleared it, so the first version's never showed. Not seen: no window.
 - **The menu** (2026-10-13): Training mode's Start, Start over and aids, and the dummy's page, are
   under Alternative modes too.
 
