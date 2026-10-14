@@ -21,8 +21,8 @@ board does not have. Each mode has a page there with a Start row and its choices
   as in a fight. Left and right scroll it, or it scrolls by itself from end to end and back.
 - **Model viewer**: one character by itself, on a stage or on plain white or black, with no panel. It
   stands as in a fight, and player 1's controls move it; or it goes through one of its animations over
-  and over (a character has three lists of them; they have numbers, not names, and the readout says
-  which is showing and how many the list has; left and right go to the one before and the one after). Drawn from a quarter of its size to 25 times, at full
+  and over (they are named by the game's three lists of them and a number: A34. Left and right go to the one
+  before and the one after, and the name is shown for two seconds when it changes). Drawn from a quarter of its size to 25 times, at full
   speed or in slow motion, an animation starting again at once or after up to ten seconds. "Reset
   options" puts the page's choices back.
 
@@ -52,8 +52,7 @@ board does not have. Each mode has a page there with a Start row and its choices
 | Model viewer: Character | `model_character` | Who is shown. Changing it while viewing goes to the new one. |
 | Model viewer: Background | `model_background` | Any of the twelve stages, White or Black. |
 | Model viewer: Size | `model_size` | Choices: 1x, 1.5x, 2x, 3x, 4x, 6x, 8x, 12x, 16x, 25x, 0.25x, 0.5x, 0.75x. |
-| Model viewer: Animation | `model_animation` | Standing (you control it), or List A, B or C of the character's animations. |
-| Model viewer: Number | `model_number` | Which animation of the list (0-255; a list has fewer, and the count goes round). |
+| Model viewer: Animation | `model_animation` | Standing (you control it), or one of the character's animations, named by the game's list and a number: A0 to A255, B0 to B255, C0 to C255 (a character has fewer; the ones it has not got are passed over). |
 | Model viewer: Speed | `model_speed` | Full, 1/2, 1/4 or 1/8: slow motion for the viewer (the menu's own speed slows it further). |
 | Model viewer: Repeat after | `model_repeat` | How long an animation's last frame is held before it starts again: at once, or 1 to 10 seconds. |
 

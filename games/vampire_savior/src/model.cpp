@@ -49,6 +49,7 @@ namespace {
     constexpr const char *kTableNames[3] = {"A", "B", "C"};
     constexpr int kMostAnimations = 256;
     constexpr int kFramesASecond = 60;
+    constexpr int kNamedFor = 120; // frames an animation's name is shown for after it changes
     constexpr int kHeldFirst = 20, kHeldEvery = 8; // frames a direction is held before it repeats, and between repeats
     // The "Speed" choice: a frame of the game in this many pictures of the screen (as the menu's own speeds)
     constexpr int kSlowBy[] = {1, 2, 4, 8};
@@ -66,6 +67,7 @@ namespace {
         int32_t table = 0, number = 0;
         uint32_t first = 0, frame = 0;
         int32_t left = 0;
+        int32_t named = 0; // frames the animation's name is still shown for
         int32_t stick = 0, stickHeld = 0; // player 1's left or right a frame ago, and for how many frames
         int32_t held = 0; // frames its last frame is still held for before it starts again (the "Repeat after" choice)
         // Where the character stood in the picture a frame ago (the picture a frame shows is the game's of
@@ -145,7 +147,7 @@ namespace {
 
     // The menu's "Reset options": every choice of the viewer's page back to what it is when nothing is chosen
     constexpr const char *kChoices[] = {"model_character", "model_background", "model_size", "model_animation",
-                                        "model_number",    "model_speed",      "model_repeat"};
+                                        "model_speed",     "model_repeat"};
     void ResetChoices(Machine &) {
         for (const char *choice : kChoices) {
             SetFeatureValue(choice, 0);
@@ -160,26 +162,58 @@ namespace {
     }
 
     // The animation chosen in the menu, shown: a frame of it put in player 1's record
+    // The "Animation" choice is standing, then every animation there could be: 256 of each of the three
+    // lists, named by the list's letter and the number (A34). A character has fewer; the ones it has not
+    // got are passed over.
+    constexpr int kChoicesAList = kMostAnimations, kAnimationChoices = 1 + 3 * kChoicesAList;
+    int Count(Machine &machine, int character, int list) {
+        static int counts[kCharacters][3];
+        static bool counted[kCharacters];
+        if (!counted[character]) {
+            counted[character] = true;
+            for (int n = 0; n < 3; n++) {
+                counts[character][n] = Animations(machine, character, n);
+            }
+        }
+        return counts[character][list];
+    }
+    bool Has(Machine &machine, int character, int choice) {
+        return choice >= 1 && choice < kAnimationChoices && (choice - 1) % kChoicesAList < Count(machine, character, (choice - 1) / kChoicesAList);
+    }
+    // The animation after `choice` (or before it) that the character has, going round from the last to the first
+    int Step(Machine &machine, int character, int choice, int by) {
+        for (int n = 0; n < kAnimationChoices; n++) {
+            choice = 1 + (choice - 1 + by + (kAnimationChoices - 1)) % (kAnimationChoices - 1);
+            if (Has(machine, character, choice)) {
+                return choice;
+            }
+        }
+        return 0;
+    }
+
     void ShowAnimation(Machine &machine) {
-        const int table = std::clamp(FeatureValue("model_animation"), 0, 3), character = kCharacterNumbers[g.character];
-        int number = 0;
-        uint32_t first = 0;
+        const int character = kCharacterNumbers[g.character];
+        int choice = std::clamp(FeatureValue("model_animation"), 0, kAnimationChoices - 1);
+        // (one the character has not got: the next it has)
+        if (choice && !Has(machine, character, choice)) {
+            choice = Step(machine, character, choice, 1);
+            SetFeatureValue("model_animation", choice);
+        }
         const uint16_t stick = machine.players[0] & (kLeft | kRight);
-        if (table) {
-            const int count = Animations(machine, character, table - 1);
-            number = count ? std::clamp(FeatureValue("model_number"), 0, kMostAnimations - 1) % count : 0;
-            // Left and right go to the animation before and the one after, round the list: at a press, and
-            // while held, after a third of a second, eight a second
-            if (count && (stick == kLeft || stick == kRight)) {
+        if (choice) {
+            // Left and right go to the animation before and the one after: at a press, and while held,
+            // after a third of a second, eight a second
+            if (stick == kLeft || stick == kRight) {
                 g.stickHeld = g.stick == stick ? g.stickHeld + 1 : 0;
                 if (g.stickHeld == 0 || (g.stickHeld >= kHeldFirst && (g.stickHeld - kHeldFirst) % kHeldEvery == 0)) {
-                    number = (number + (stick == kRight ? 1 : count - 1)) % count;
-                    SetFeatureValue("model_number", number);
+                    choice = Step(machine, character, choice, stick == kRight ? 1 : -1);
+                    SetFeatureValue("model_animation", choice);
                 }
             }
-            first = AnimationAt(machine, character, table - 1, number);
         }
         g.stick = stick;
+        const int table = choice ? (choice - 1) / kChoicesAList + 1 : 0, number = choice ? (choice - 1) % kChoicesAList : 0;
+        const uint32_t first = choice ? AnimationAt(machine, character, table - 1, number) : 0;
         if (!first) {
             if (g.table) {
                 // (back to standing: the game's own "nothing" action from its start sets the animation again)
@@ -187,7 +221,7 @@ namespace {
                 SetRam8(Player(0) + kTimer, 1);
             }
             g.table = 0;
-            SetHud({});
+            g.named = 0;
             return;
         }
         if (table != g.table || number != g.number || first != g.first) {
@@ -196,6 +230,7 @@ namespace {
             g.first = g.frame = first;
             g.left = machine.Read8(first);
             g.held = 0;
+            g.named = kNamedFor;
         } else if (g.held > 0) {
             g.held--; // (between repeats: the last frame stays)
         } else if (--g.left <= 0) {
@@ -220,9 +255,19 @@ namespace {
         SetRam32(Player(0) + kTimer, Read32(machine, g.frame));
         SetRam8(Player(0) + kTimer, 0x7F);
         machine.players[0] = 0; // (the controls would start moves of the game's own)
-        char text[64];
-        snprintf(text, sizeof(text), "Animation %s %d of %d", kTableNames[table - 1], number, Animations(machine, character, table - 1));
-        SetHud({{0.5f, 0.04f, 0, text}});
+    }
+
+    // The animation's name over the picture for a while after it changes (set after the frame, when the
+    // other modes' own readouts have been cleared)
+    void NameAnimation() {
+        if (g.table && g.named > 0) {
+            g.named--;
+            char text[32];
+            snprintf(text, sizeof(text), "%s%d", kTableNames[g.table - 1], g.number);
+            SetHud({{0.5f, 0.04f, 0, text}});
+        } else {
+            SetHud({});
+        }
     }
 
     // The frame's picture made: the stage (or a plain colour), and the character over it at the size wanted
@@ -278,13 +323,16 @@ namespace {
         }
     }
 
-    // (the 256 numbers of the "Number" choice, as text)
-    const std::vector<const char *> &Numbers() {
+    // (the names of the "Animation" choice)
+    const std::vector<const char *> &AnimationNames() {
         static std::vector<std::string> text;
         static std::vector<const char *> names;
         if (names.empty()) {
-            for (int n = 0; n < kMostAnimations; n++) {
-                text.push_back(std::to_string(n));
+            text.push_back("Standing (you control it)");
+            for (const char *list : kTableNames) {
+                for (int n = 0; n < kChoicesAList; n++) {
+                    text.push_back(list + std::to_string(n));
+                }
             }
             for (const std::string &one : text) {
                 names.push_back(one.c_str());
@@ -345,6 +393,7 @@ void ModelFrame(Machine &machine) {
     }
     machine.video.hideObject = NotTheStage;
     Compose(machine);
+    NameAnimation();
     g.anchorX = static_cast<int16_t>(Ram16(Player(0) + kX)) - static_cast<int16_t>(Ram16(kCameraX)) + WideStage();
     g.anchorY = 239 - (static_cast<int16_t>(Ram16(Player(0) + kY)) - static_cast<int16_t>(Ram16(kCameraY)));
 }
@@ -382,9 +431,10 @@ void RegisterModel() {
                              {"1x", "1.5x", "2x", "3x", "4x", "6x", "8x", "12x", "16x", "25x", "0.25x", "0.5x", "0.75x"}});
     game.features.push_back({"model_animation", kModel, "Animation",
                              "What the character does: stands as in a fight, moved with player 1's controls, or goes through one "
-                             "of its animations over and over (they are in three lists in the game: A, B and C; Number picks "
-                             "which of the list, and so do left and right while one is showing).",
-                             0, {"Standing (you control it)", "List A", "List B", "List C"}});
+                             "of its animations over and over. They are named by the game's three lists of them and a number "
+                             "(A34); the ones a character has not got are passed over. While one is showing, left and right go "
+                             "to the one before and the one after, and its name is shown.",
+                             0, AnimationNames()});
     game.features.push_back({"model_speed", kModel, "Speed",
                              "How fast the viewer runs: slow motion for looking at an animation frame by frame. (The menu's own "
                              "speed, and the - and = keys, slow it further.)",
@@ -393,8 +443,6 @@ void RegisterModel() {
                              "How long an animation's last frame is held before it starts again.", 0,
                              {"At once", "1 second", "2 seconds", "3 seconds", "4 seconds", "5 seconds", "6 seconds", "7 seconds",
                               "8 seconds", "9 seconds", "10 seconds"}});
-    game.features.push_back({"model_number", kModel, "Number",
-                             "Which animation of the list chosen above (a list has fewer than 256: the count goes round).", 0, Numbers()});
 }
 
 } // namespace cps2recomp
