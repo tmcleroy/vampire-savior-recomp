@@ -5,8 +5,10 @@
 // damage hits and combos do, a display of what the players press, health that comes back, and a second
 // player that stands, crouches, jumps, guards, or does again what was recorded. Hits are counted where the
 // game takes their damage off (cheats.cpp has the hook); the dummy is worked by changing what the game is
-// told player 2 presses; the rest looks at the game's memory after every frame.
+// told player 2 presses; the rest looks at the game's memory after every frame. The counting and the dummy's rules are
+// the toolkit's fight module (fight.h), shared with the other CPS-2 fighting games; this file tells it the game.
 #include "boxes.h"
+#include "fight.h"
 #include "frames.h"
 #include "machine.h"
 #include "modes.h"
@@ -28,58 +30,21 @@ namespace {
     using namespace vsav;
 
     constexpr int kRefillAfter = 90; // frames without a hit after which health comes back
-    constexpr int kShownFor = 240;   // frames a readout stays up after its last hit
-    constexpr size_t kRecordingMost = 20 * 60; // frames of a recording
-    constexpr int kReplayPause = 60; // frames between one replay and the next
-    constexpr int kInputLines = 7;   // lines of the input display
 
     constexpr uint16_t kSticks = kLeft | kRight | kUp | kDown;
     constexpr uint16_t kButtons = kPunch1 | kPunch2 | kPunch3 | kKick1 | kKick2 | kKick3;
-    // What has happened to one player
-    struct Taken {
-        uint16_t last = 0;     // the last hit's damage
-        uint16_t combo = 0;    // the damage of the combo: the hits that landed without the player getting free
-        uint16_t comboBack = 0; //   and how much of that comes back by itself
-        uint16_t hits = 0;
-        uint16_t best = 0;     // the most a combo has done this round
-        int32_t since = 1 << 20; // frames since the last hit
-    };
-    // One line of the input display: what was held, and for how many frames
-    struct Held {
-        uint16_t buttons = 0;
-        uint16_t frames = 0;
-    };
-    struct State {
-        Taken taken[2];
-        bool fighting = false;
-        Held held[2][kInputLines]; // [0] the newest
-        // The dummy
-        bool recording = false, replaying = false;
-        uint32_t replayAt = 0;
-        int32_t replayPause = 0;
-        int32_t recordSlot = 0, replaySlot = 0;
-        bool reversal = false;        // a recording is being played once, as an answer
-        Doing dummyWas = Doing::Free; // what the dummy was doing the frame before
-        int32_t stunFrames = 0;       // frames it has been reeling (or held) for
-        bool inRange = false, guardThis = false; // an attack is in range, and the dummy has chosen to guard it
-        uint32_t random = 0x2545F491;
-    } g;
+    fight::InputHistory g_inputs;
+    fight::Combos g_combos;
+    fight::Dummy g_dummy;
+    bool g_fighting = false;
     // Starts the aids afresh (a round starting, or started over), but for what the dummy was told to do
     void Afresh(bool fighting) {
-        State fresh;
-        fresh.fighting = fighting;
-        fresh.recording = g.recording;
-        fresh.replaying = g.replaying;
-        fresh.recordSlot = g.recordSlot;
-        fresh.replaySlot = g.replaySlot;
-        fresh.random = g.random;
-        g = fresh;
+        g_fighting = fighting;
+        g_inputs.Clear();
+        g_combos.Clear();
+        g_dummy.Afresh();
         FramesReset();
     }
-    constexpr int kSlots = 3;
-    std::vector<uint16_t> g_recordings[kSlots]; // what player 2 held, frame by frame, in each slot
-    constexpr int kGuardAfterHit = 90; // frames after a hit in which "after the first hit" guards
-    constexpr int kDownAfter = 34;     // frames of reeling after which the dummy is taken to be knocked down
     // Getting to a training session from switching on: coins, then both Start buttons, until both players
     // are choosing their characters (the game runs unseen meanwhile)
     bool g_boot = false;
@@ -106,16 +71,6 @@ namespace {
     bool DummyOnRight() {
         return Ram16(Player(1) + kX) >= Ram16(Player(0) + kX);
     }
-    // A recording keeps the stick as it would be with the dummy standing on the right, so that it works from
-    // either side: this turns left and right about when the dummy stands on the left (both ways the same)
-    uint16_t Turned(uint16_t held) {
-        const uint16_t sides = held & (kLeft | kRight);
-        if (!DummyOnRight() && (sides == kLeft || sides == kRight)) {
-            held ^= kLeft | kRight;
-        }
-        return held;
-    }
-
     // --- a training session ---
 
     // The menu's "Training mode": the board switched off and on, and the way to the character choice worked
@@ -257,182 +212,19 @@ namespace {
         Dummy(machine);
     }
 
-    // --- the dummy: before a frame, what the game is told player 2 presses ---
-
-    uint32_t Random() {
-        g.random ^= g.random << 13;
-        g.random ^= g.random >> 17;
-        g.random ^= g.random << 5;
-        return g.random;
-    }
-
-    std::vector<uint16_t> &Recording() {
-        return g_recordings[std::clamp(FeatureValue("dummy_slot"), 0, kSlots - 1)];
-    }
-
-    // A recording is played from its start: the one of the slot chosen, or (any == true) of any slot with
-    // something in it. False if there is nothing to play.
-    bool StartReplay(bool any) {
-        g.replaySlot = std::clamp(FeatureValue("dummy_slot"), 0, kSlots - 1);
-        if (any) {
-            int filled[kSlots], count = 0;
-            for (int n = 0; n < kSlots; n++) {
-                if (!g_recordings[n].empty()) {
-                    filled[count++] = n;
-                }
-            }
-            if (count) {
-                g.replaySlot = filled[Random() % static_cast<uint32_t>(count)];
-            }
-        }
-        g.replayAt = 0;
-        return !g_recordings[g.replaySlot].empty();
-    }
-
-    // The stick turned to mean "away from player 1" (kLeft given) or "towards" (kRight), for where the dummy is
-    uint16_t Away() {
-        return DummyOnRight() ? kRight : kLeft;
-    }
-    uint16_t Towards() {
-        return DummyOnRight() ? kLeft : kRight;
-    }
+    // --- the dummy: before a frame, what the game is told player 2 presses (fight.h) ---
 
     void Dummy(Machine &machine) {
-        const bool record = FeatureOn("dummy_record");
-        const bool replayAny = FeatureOn("dummy_replay_any"), replay = FeatureOn("dummy_replay") || replayAny;
-        if (record && !g.recording) {
-            Recording().clear(); // (switched on: a new recording)
+        fight::DummyView view;
+        view.fighting = Fighting();
+        view.doing = FramesDoing(1);
+        view.onRight = DummyOnRight();
+        view.sinceHit = g_combos.Since(1);
+        if (view.fighting && FeatureValue("dummy_guard")) {
+            view.attackInRange = AttackInRange(machine.cpu, Player(1));
+            view.guardStanding = view.attackInRange && GuardStanding(machine.cpu, Player(1));
         }
-        if (!record && g.recording) {
-            // (switched off: without the standing about before the first press and after the last, which
-            // is only the time it took to work the menu)
-            std::vector<uint16_t> &made = g_recordings[g.recordSlot];
-            while (!made.empty() && made.back() == 0) {
-                made.pop_back();
-            }
-            size_t lead = 0;
-            while (lead < made.size() && made[lead] == 0) {
-                lead++;
-            }
-            made.erase(made.begin(), made.begin() + static_cast<std::ptrdiff_t>(lead));
-        }
-        if (replay && !g.replaying) {
-            StartReplay(replayAny);
-            g.replayPause = 0;
-        }
-        g.recording = record;
-        g.replaying = replay;
-        if (record) {
-            g.recordSlot = std::clamp(FeatureValue("dummy_slot"), 0, kSlots - 1);
-        }
-        if (!Fighting()) {
-            return;
-        }
-        uint16_t &one = machine.players[0], &two = machine.players[1];
-        const uint16_t keep = two & (kStart | kCoin);
-        if (record) {
-            // Player 1's controls work player 2, and are kept
-            if (Recording().size() < kRecordingMost) {
-                Recording().push_back(Turned(one & (kSticks | kButtons)));
-            }
-            two = static_cast<uint16_t>(keep | (one & (kSticks | kButtons)));
-            one &= kStart | kCoin;
-            return;
-        }
-
-        // What the dummy has just come out of
-        const Doing doing = FramesDoing(1);
-        const bool reeling = doing == Doing::HitStun || doing == Doing::GuardStun || doing == Doing::Held;
-        g.stunFrames = reeling ? g.stunFrames + 1 : 0;
-        const int reversal = FeatureValue("dummy_reversal"); // 1 after guarding, 2 after being hit, 3 either
-        if (doing == Doing::Free && g.dummyWas != Doing::Free && !g.reversal) {
-            const bool guarded = g.dummyWas == Doing::GuardStun;
-            const bool hit = g.dummyWas == Doing::HitStun || g.dummyWas == Doing::Held;
-            if (((guarded && (reversal & 1)) || (hit && (reversal & 2))) && StartReplay(replayAny)) {
-                g.reversal = true;
-            }
-        }
-        g.dummyWas = doing;
-
-        // What it does left alone
-        uint16_t held = two & (kSticks | kButtons); // (nothing chosen: player 2's own controls)
-        bool busy = false;                          // doing something of a recording's
-        if (g.reversal) {
-            const std::vector<uint16_t> &recording = g_recordings[g.replaySlot];
-            held = Turned(recording[g.replayAt]);
-            busy = true;
-            if (++g.replayAt >= recording.size()) {
-                g.reversal = false;
-                g.replayAt = 0;
-                g.replayPause = kReplayPause;
-            }
-        } else if (replay) {
-            const std::vector<uint16_t> &recording = g_recordings[g.replaySlot];
-            held = 0;
-            if (recording.empty()) {
-                StartReplay(replayAny);
-            } else if (g.replayPause > 0) {
-                g.replayPause--;
-            } else {
-                held = Turned(recording[g.replayAt]);
-                busy = true;
-                if (++g.replayAt >= recording.size()) {
-                    StartReplay(replayAny);
-                    g.replayPause = kReplayPause;
-                }
-            }
-        } else if (FeatureOn("dummy_crouch")) {
-            held = kDown;
-        } else if (FeatureOn("dummy_jump")) {
-            held = kUp;
-        } else if (FeatureOn("dummy_stand")) {
-            held = 0;
-        }
-
-        // Guarding: when the game's own test says something is near enough to guard (an attack of player
-        // 1's, or anything it has thrown): away from player 1, standing or crouching as the attack needs.
-        // (Holding away all the time would walk it into the corner.)
-        const int guard = FeatureValue("dummy_guard"); // 1 always, 2 after the first hit, 3 at random
-        const bool inRange = guard && !busy && AttackInRange(machine.cpu, Player(1));
-        if (inRange && !g.inRange) {
-            g.guardThis = guard == 1 || (guard == 2 && g.taken[1].since < kGuardAfterHit) || (guard == 3 && (Random() & 0x100));
-        }
-        g.inRange = inRange;
-        if (inRange && (g.guardThis || doing == Doing::GuardStun)) {
-            held = static_cast<uint16_t>(Away() | (GuardStanding(machine.cpu, Player(1)) ? 0 : kDown));
-        }
-
-        // While guarding a hit
-        if (doing == Doing::GuardStun) {
-            const int phase = g.stunFrames;
-            switch (FeatureValue("dummy_guard_action")) {
-            case 1: { // pushes the attacker away: buttons pressed one after another, guarding still
-                static constexpr uint16_t kMash[] = {kPunch1, 0, kPunch2, 0, kPunch3, 0, kKick1, 0, kKick2, 0, kKick3, 0};
-                held |= kMash[phase % 12];
-                break;
-            }
-            case 2:
-            case 3: { // a guard cancel: towards, down, down and towards with a button, again and again
-                const uint16_t button = FeatureValue("dummy_guard_action") == 2 ? kPunch2 : kKick2;
-                static constexpr int kEach = 2;
-                const int at = (phase / kEach) % 4;
-                held = at == 0 ? Towards() : at == 1 ? kDown : at == 2 ? static_cast<uint16_t>(kDown | Towards() | button) : 0;
-                break;
-            }
-            default: break;
-            }
-        }
-        // Thrown: the throw's own command softens it ("tech hit")
-        if (doing == Doing::Held && FeatureOn("dummy_tech")) {
-            held = static_cast<uint16_t>(Away() | ((g.stunFrames & 1) ? (kPunch2 | kPunch3) : 0));
-        }
-        // Knocked down: the stick held with a button tapped rolls it along the floor before it gets up
-        if (doing == Doing::HitStun && g.stunFrames > kDownAfter) {
-            if (const int getUp = FeatureValue("dummy_getup")) {
-                held = static_cast<uint16_t>((getUp == 1 ? Towards() : Away()) | ((g.stunFrames & 2) ? kPunch1 : 0));
-            }
-        }
-        two = static_cast<uint16_t>(keep | held);
+        g_dummy.BeforeFrame(machine.players[0], machine.players[1], view);
     }
 
     // --- after a frame ---
@@ -446,38 +238,10 @@ namespace {
         return held;
     }
 
-    // What is held, as fighting game players write it: the stick as a number on a keypad (5 in the middle,
-    // 6 right, 2 down, ...), then the buttons
-    std::string Notation(uint16_t held) {
-        int column = 1, row = 1;
-        if (held & kLeft) {
-            column = 0;
-        } else if (held & kRight) {
-            column = 2;
-        }
-        if (held & kDown) {
-            row = 0;
-        } else if (held & kUp) {
-            row = 2;
-        }
-        std::string text(1, static_cast<char>('1' + row * 3 + column));
-        static const struct {
-            uint16_t bit;
-            const char *name;
-        } kNames[] = {{kPunch1, "LP"}, {kPunch2, "MP"}, {kPunch3, "HP"}, {kKick1, "LK"}, {kKick2, "MK"}, {kKick3, "HK"}};
-        for (const auto &button : kNames) {
-            if (held & button.bit) {
-                text += ' ';
-                text += button.name;
-            }
-        }
-        return text;
-    }
-
     void Frame(Machine &machine) {
         if (StageViewer() || BattleMode()) {
             // (nothing of training's is shown, or kept)
-            g.fighting = false;
+            g_fighting = false;
             g_roundFought = false;
             return;
         }
@@ -492,7 +256,7 @@ namespace {
         const bool readout = FeatureOn("damage_readout"), refill = FeatureOn("health_refill");
         const bool inputs = FeatureOn("input_display");
         const bool fighting = Fighting();
-        if (!fighting || !g.fighting) {
+        if (!fighting || !g_fighting) {
             // (a round starting: start afresh)
             Afresh(fighting);
             SetHud({});
@@ -500,58 +264,24 @@ namespace {
             g_nextBoxes.clear();
             return;
         }
+        g_combos.Frame();
         std::vector<HudLine> lines;
         for (int n = 0; n < 2; n++) {
-            Taken &t = g.taken[n];
-            if (t.since < (1 << 20)) {
-                t.since++;
-            }
             const uint16_t health = Ram16(Player(n) + kHealth);
-            if (refill && t.since > kRefillAfter && health < kHealthFull) {
+            if (refill && g_combos.Since(n) > kRefillAfter && health < kHealthFull) {
                 SetRam16(Player(n) + kHealth, kHealthFull);
                 SetRam16(Player(n) + kHealthCeiling, kHealthFull);
             }
-            const float x = n == 0 ? 0.03f : 0.97f;
-            const int align = n == 0 ? -1 : 1;
-            if (readout && t.hits && t.since < kShownFor) {
-                // The damage a player took is shown on that player's side, under the health bar
-                char text[64];
-                if (t.hits > 1) {
-                    snprintf(text, sizeof(text), "%u hits  %u", t.hits, t.combo);
-                } else {
-                    snprintf(text, sizeof(text), "%u", t.last);
-                }
-                lines.push_back({x, 0.17f, align, text});
-                // (how much of it is lost for good, and how much is the white part of the bar that comes back;
-                // and the round's best)
-                snprintf(text, sizeof(text), "%u for good, %u back   best %u", t.combo - t.comboBack, t.comboBack, t.best);
-                lines.push_back({x, 0.23f, align, text});
+            if (readout) {
+                // The damage a player took is shown on that player's side, under the health bar (how much of it is
+                // lost for good, how much is the white part of the bar that comes back, the round's best)
+                g_combos.Hud(n, lines, 0.17f, true, {}, true);
             }
-            // What the player holds, as the game read it off the panel this frame (input.cpp: the dummy's
-            // too), newest on top, with how long
-            const uint16_t held = PanelHeld(n);
-            Held *history = g.held[n];
-            if (held == history[0].buttons && history[0].frames) {
-                if (history[0].frames < 999) {
-                    history[0].frames++;
-                }
-            } else {
-                for (int i = kInputLines - 1; i > 0; i--) {
-                    history[i] = history[i - 1];
-                }
-                history[0] = {held, 1};
-            }
+            // What the player holds, as the game read it off the panel this frame (input.cpp: the dummy's too),
+            // newest on top, with how long
+            g_inputs.Push(n, PanelHeld(n), false);
             if (inputs) {
-                for (int i = 0; i < kInputLines && history[i].frames; i++) {
-                    char text[48];
-                    const std::string what = Notation(history[i].buttons);
-                    if (n == 0) {
-                        snprintf(text, sizeof(text), "%3u  %s", history[i].frames, what.c_str());
-                    } else {
-                        snprintf(text, sizeof(text), "%s  %3u", what.c_str(), history[i].frames);
-                    }
-                    lines.push_back({x, 0.30f + 0.062f * static_cast<float>(i), align, text});
-                }
+                g_inputs.Hud(n, lines, 0.30f);
             }
         }
         std::vector<HudBox> boxes;
@@ -567,53 +297,25 @@ namespace {
             g_nextBoxes.clear();
             const int cameraX = static_cast<int16_t>(Ram16(kCameraX)), cameraY = static_cast<int16_t>(Ram16(kCameraY));
             for (const PlacedBox &box : AllBoxes(machine)) {
-                HudBox shown;
-                shown.x = box.x - box.halfWidth - cameraX;
-                shown.y = kPictureFloor - (box.y - cameraY) - box.halfHeight;
-                shown.width = box.halfWidth * 2;
-                shown.height = box.halfHeight * 2;
-                switch (box.kind) {
-                case BoxKind::Attack: shown.r = 255, shown.g = box.thrown ? 140 : 40, shown.b = 40; break;
-                case BoxKind::Push: shown.r = 60, shown.g = 220, shown.b = 90; break;
-                default: shown.r = 70, shown.g = 130, shown.b = 255; break;
-                }
-                g_nextBoxes.push_back(shown);
+                const fight::BoxKind kind = box.kind == BoxKind::Attack ? fight::BoxKind::Attack :
+                                            box.kind == BoxKind::Push   ? fight::BoxKind::Push :
+                                                                          fight::BoxKind::Hurt;
+                g_nextBoxes.push_back(fight::ToPicture({kind, box.x, box.y, box.halfWidth, box.halfHeight, box.thrown}, cameraX, cameraY, kPictureFloor));
             }
         } else {
             g_nextBoxes.clear();
         }
         SetBoxes(std::move(boxes));
-        if (g.recording || g.replaying) {
-            char text[48];
-            const std::vector<uint16_t> &recording = g_recordings[g.recording ? g.recordSlot : g.replaySlot];
-            if (g.recording) {
-                snprintf(text, sizeof(text), "REC %d  %.1f s", g.recordSlot + 1, recording.size() / 60.0);
-            } else if (recording.empty()) {
-                snprintf(text, sizeof(text), "nothing recorded");
-            } else {
-                snprintf(text, sizeof(text), "PLAY %d  %.1f / %.1f s", g.replaySlot + 1, g.replayAt / 60.0, recording.size() / 60.0);
-            }
-            lines.push_back({0.5f, 0.17f, 0, text});
-        }
+        g_dummy.Hud(lines, 0.17f);
         SetHud(std::move(lines));
     }
 } // namespace
 
 // A hit's damage is being taken off a player's health (from the hook in cheats.cpp)
 void TrainingHit(int player, unsigned forGood, unsigned besides) {
-    Taken &t = g.taken[player];
     // A combo goes on while the player has not got free since the last hit
     const Doing doing = FramesDoing(player);
-    if (!(t.hits && (doing == Doing::HitStun || doing == Doing::Held))) {
-        t.combo = t.comboBack = 0;
-        t.hits = 0;
-    }
-    t.last = static_cast<uint16_t>(forGood + besides);
-    t.combo = static_cast<uint16_t>(t.combo + forGood + besides);
-    t.comboBack = static_cast<uint16_t>(t.comboBack + besides);
-    t.hits++;
-    t.best = std::max(t.best, t.combo);
-    t.since = 0;
+    g_combos.Hit(player, forGood + besides, besides, doing == Doing::HitStun || doing == Doing::Held);
 }
 
 // A hit has landed on a player, or been guarded (fight.cpp, HitLands)
@@ -632,10 +334,10 @@ void TrainingFrame(Machine &machine) {
 
 void TrainingState(Archive &ar) {
     ar.Mark(0x5452414E);
-    ar.Pod(g);
-    for (auto &recording : g_recordings) {
-        ar.Vec(recording);
-    }
+    ar.Pod(g_fighting);
+    ar.Pod(g_combos);
+    ar.Pod(g_inputs);
+    g_dummy.Serialize(ar);
     ar.Vec(g_roundStart);
     ar.Pod(g_roundFought);
     FramesState(ar);
@@ -695,40 +397,48 @@ void RegisterTraining() {
                              "After a move: the step it can first hit on (startup), how many it can hit for (active) and how many "
                              "follow before the player can act (recovery). After a hit or a guarded one: who can act first, by how "
                              "many steps (+: the attacker)."});
+    game.features.push_back({"frame_log", "Training mode", "Frame data log",
+                             "Writes every move's frame data to frame_data.csv, beside the settings file: the character, what was "
+                             "held as it began, startup, active, recovery and the advantage after a hit or a guarded one."});
     game.features.push_back({"frame_meter", "Training mode", "Frame meter",
                              "A row of cells for each player, one for every step of the game: green before a move can hit, red "
                              "while it can, blue after; yellow reeling from a hit, light blue from a guarded one; grey in the air."});
     game.features.push_back({"health_refill", "Training mode", "Health refills",
                              "A player's health comes back when they have not been hit for a moment."});
-    game.features.push_back({"dummy_stand", "Dummy", "Stands", "Player 2 stands still, whatever its controls do.", kFeatureExclusive});
-    game.features.push_back({"dummy_crouch", "Dummy", "Crouches", "Player 2 crouches.", kFeatureExclusive});
-    game.features.push_back({"dummy_jump", "Dummy", "Jumps", "Player 2 jumps on the spot, again and again.", kFeatureExclusive});
-    game.features.push_back({"dummy_record", "Dummy", "Record",
-                             "Player 1's controls work player 2, and what they do is recorded in the slot chosen (20 seconds at "
-                             "most). Switch to Replay when done.",
-                             kFeatureExclusive});
-    game.features.push_back({"dummy_replay", "Dummy", "Replay", "Player 2 does what was recorded in the slot chosen, over and over.",
-                             kFeatureExclusive});
-    game.features.push_back({"dummy_replay_any", "Dummy", "Replay any slot",
-                             "Player 2 does what was recorded, over and over, each time from a slot picked at random.", kFeatureExclusive});
-    game.features.push_back({"dummy_slot", "Dummy", "Recording slot", "Which of three recordings Record makes and Replay plays.", 0,
-                             {"1", "2", "3"}});
-    game.features.push_back({"dummy_guard", "Dummy", "Guards",
-                             "Player 2 guards player 1's attacks, standing or crouching as each needs: always; only for a moment "
-                             "after being hit (to see whether a combo really is one); or one attack in two, at random.",
-                             0, {"Off", "Always", "After a hit", "At random"}});
-    game.features.push_back({"dummy_guard_action", "Dummy", "While guarding",
-                             "What player 2 does while guarding a hit: presses buttons to push the attacker away, or does a guard "
-                             "cancel (towards, down, down and towards with a punch or a kick: most characters have one or the other).",
-                             0, {"Nothing", "Pushes away", "Guard cancel, punch", "Guard cancel, kick"}});
-    game.features.push_back({"dummy_reversal", "Dummy", "Answers with the recording",
-                             "Player 2 plays the recording once as soon as it can act after guarding, after being hit (or knocked "
-                             "down, or thrown), or both.",
-                             0, {"Off", "After guarding", "After being hit", "After either"}});
-    game.features.push_back({"dummy_tech", "Dummy", "Softens throws", "Player 2 does a throw's own command while being thrown (a \"tech hit\")."});
-    game.features.push_back({"dummy_getup", "Dummy", "Gets up",
-                             "Where player 2 gets up after being knocked down: where it fell, or rolled towards player 1 or away.", 0,
-                             {"Where it fell", "Towards", "Away"}});
+    fight::DummyOptions dummy;
+    // While guarding: buttons pressed one after another, guarding still (pushing the attacker away); or a guard
+    // cancel: towards, down, down and towards with a punch or a kick, again and again
+    dummy.guardActions.push_back({"Pushes away", [](int frame, uint16_t, uint16_t) -> uint16_t {
+                                      static constexpr uint16_t kMash[] = {kPunch1, 0, kPunch2, 0, kPunch3, 0, kKick1, 0, kKick2, 0, kKick3, 0};
+                                      return kMash[frame % 12];
+                                  },
+                                  true});
+    dummy.guardActions.push_back({"Guard cancel, punch", [](int frame, uint16_t towards, uint16_t) -> uint16_t {
+                                      const int at = (frame / 2) % 4;
+                                      return at == 0 ? towards : at == 1 ? kDown : at == 2 ? static_cast<uint16_t>(kDown | towards | kPunch2) : 0;
+                                  }});
+    dummy.guardActions.push_back({"Guard cancel, kick", [](int frame, uint16_t towards, uint16_t) -> uint16_t {
+                                      const int at = (frame / 2) % 4;
+                                      return at == 0 ? towards : at == 1 ? kDown : at == 2 ? static_cast<uint16_t>(kDown | towards | kKick2) : 0;
+                                  }});
+    dummy.guardActionsWords = "What player 2 does while guarding a hit: presses buttons to push the attacker away, or does a guard "
+                              "cancel (towards, down, down and towards with a punch or a kick: most characters have one or the other).";
+    // Thrown: the throw's own command softens it ("tech hit")
+    dummy.heldAction = [](int frame, uint16_t, uint16_t away) -> uint16_t {
+        return static_cast<uint16_t>(away | ((frame & 1) ? (kPunch2 | kPunch3) : 0));
+    };
+    dummy.heldActionTitle = "Softens throws";
+    dummy.heldActionWords = "Player 2 does a throw's own command while being thrown (a \"tech hit\").";
+    // Knocked down (reeling for more than 34 frames): the stick held with a button tapped rolls it along the floor
+    dummy.getUp.push_back({"Towards", [](int frame, uint16_t towards, uint16_t) -> uint16_t {
+                               return static_cast<uint16_t>(towards | ((frame & 2) ? kPunch1 : 0));
+                           }});
+    dummy.getUp.push_back({"Away", [](int frame, uint16_t, uint16_t away) -> uint16_t {
+                               return static_cast<uint16_t>(away | ((frame & 2) ? kPunch1 : 0));
+                           }});
+    dummy.getUpWords = "Where player 2 gets up after being knocked down: where it fell, or rolled towards player 1 or away.";
+    dummy.downAfter = 34;
+    fight::RegisterDummy(dummy);
 }
 
 } // namespace cps2recomp

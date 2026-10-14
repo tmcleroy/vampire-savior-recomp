@@ -168,6 +168,9 @@ constexpr int32_t kRoundPaused = 0x8A;
 constexpr uint32_t kCharacter = 0x382, kCharacterAgain = 0x3E0, kColours = 0x3AE; // bytes
 constexpr uint32_t kPlays = 0x380, kComputer = 0x3B4;                              // bytes
 constexpr int kCharacters = 16; // numbers 0-15, of which 11 is nobody
+inline constexpr const char *kCharacterNames[kCharacters] = {"Bulleta", "Demitri", "Gallon", "Victor", "Zabel", "Morrigan",
+                                                            "Anakaris", "Felicia", "Bishamon", "Aulbath", "Sasquatch", nullptr,
+                                                            "Q-Bee", "Lei-Lei", "Lilith", "Jedah"};
 // How fast a player is moving, and how that changes each frame (longs: 65536 a pixel)
 constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;
 // The camera's record: where it wants the picture's left edge and bottom (words), the ends it stops at
