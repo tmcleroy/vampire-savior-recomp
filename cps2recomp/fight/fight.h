@@ -291,6 +291,9 @@ private:
         int32_t stunFrames = 0;
         bool inRange = false, guardThis = false;
         uint32_t random = 0x2545F491;
+        // (what "at random" chose: the action while this guarding lasts, the escape from this throw, the way up)
+        int32_t guardPick = 0, getUpPick = 0;
+        bool techPick = false, down = false;
     } m_g;
     std::vector<uint16_t> m_recordings[kSlots];
     uint32_t Random();
