@@ -180,6 +180,12 @@ constexpr int kDarkGallon = 0x12; // the hidden character, chosen at Gallon with
 // palette RAM (02AD3C: the first palette at A0; 02ADC8 a palette of the set by number).
 constexpr uint32_t kColourSets = 0x38C198, kColourSetSize = 0x80, kColourSet = 0x3A4;
 constexpr int kColourSetsEach = 10, kPalettesInSet = 4, kColoursInPalette = 16;
+// More of a character's colours: a long a character (by its number, 0-31) at kEffectColours points to
+// kEffectPalettes palettes of 16 colours for what is done to it (poisoned, a shock, burned, the mummy's curse
+// and so on), each by the set: 02AD20 copies palette D0 of the character's (kColours added to the effect's
+// first: 02ABC0).
+constexpr uint32_t kEffectColours = 0x38C218;
+constexpr int kEffectPalettes = 66;
 // How fast a player is moving, and how that changes each frame (longs: 65536 a pixel)
 constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;
 // The camera's record: where it wants the picture's left edge and bottom (words), the ends it stops at

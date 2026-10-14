@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Tommy McLeroy
 //
-// Vampire Savior: the players' own colours for the characters. A file for a character in the folder
-// "palettes" beside settings.ini gives new colours for any of its sets (vsav.h, kColourSets); they are
-// written over the game's in the ROM image, where the game reads them each time it colours a player, so the
+// Vampire Savior: the players' own colours for the characters. In the folder "palettes" beside settings.ini,
+// a copy of the set's vm3j.10b changed with PalMod gives its colours for the characters (their sets and their
+// effects' palettes), and a text file for a character new colours for any of its sets (vsav.h, kColourSets),
+// over the PalMod file's. They are written over the game's in the ROM image, where the game reads them each time it colours a player, so the
 // game's code is the same with them as without. A command writes the game's own colours out as files to
 // start from.
 #include "vsav.h"
@@ -12,6 +13,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -42,11 +44,21 @@ namespace {
     // The sets by what chooses them (vsav.h, kColours)
     constexpr const char *kSetNames[kColourSetsEach] = {"LP", "MP", "HP", "LK", "MK", "HK", "PP", "KK", "AUTO1", "AUTO2"};
 
-    // The game's own colours, kept to put back: a copy of the ROM from the first character's sets to the end
-    // of the last's
+    // Where the characters' colours are in the ROM (their sets and their effects' palettes), and the game's
+    // own, kept to put back: a copy of the ROM from the first of those places to the end of the last
+    struct Range {
+        uint32_t from, to;
+    };
+    std::vector<Range> g_ranges;
     std::vector<uint8_t> g_original;
     uint32_t g_originalFrom = 0;
     bool g_applied = false, g_wasOn = false;
+
+    // A ROM file as PalMod (the players' palette editor) changes it: the last of the set's program files, which
+    // has all of the characters' colours, its words with their bytes swapped (RomSet::program has them as the
+    // 68000 does)
+    constexpr const char *kRomFile = "vm3j.10b";
+    constexpr uint32_t kRomFileAt = 0x380000, kRomFileSize = 0x80000;
 
     uint32_t Long(uint32_t address) {
         const uint8_t *p = Program(address);
@@ -56,6 +68,15 @@ namespace {
         return Long(kColourSets + 4u * static_cast<uint32_t>(number));
     }
     constexpr uint32_t kSetsSize = kColourSetSize * kColourSetsEach;
+    constexpr uint32_t kEffectsSize = kEffectPalettes * kColoursInPalette * 2;
+    bool InRanges(uint32_t address) {
+        for (const Range &range : g_ranges) {
+            if (address >= range.from && address < range.to) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // A colour as the board has it (4 bits each) and as a file has it (8)
     std::string ColourText(uint16_t colour) {
@@ -182,16 +203,67 @@ namespace {
         return changed;
     }
 
-    // The game's colours back, then the files' over them if the feature is on
+    // Takes the colours a PalMod-changed copy of kRomFile in the folder has that the game's has not, where the
+    // characters' colours are (and nothing else: the file holds the game's rules too); how many
+    int LoadRomFile(const std::string &folder) {
+        const std::string path = folder + "/" + kRomFile;
+        std::ifstream in(path, std::ios::binary);
+        if (!in) {
+            return 0;
+        }
+        std::vector<uint8_t> file((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        auto at = [&](uint32_t address) { return file[(address - kRomFileAt) ^ 1]; };
+        // (the tables of where the colours are must be the game's: it is this set's file)
+        bool same = file.size() == kRomFileSize;
+        for (uint32_t a = kColourSets; same && a < kEffectColours + 32 * 4; a++) {
+            same = at(a) == *Program(a);
+        }
+        if (!same) {
+            fprintf(stderr, "%s: not this set's %s (the Japanese set's, 970519), changed or not; left alone\n",
+                    path.c_str(), kRomFile);
+            return 0;
+        }
+        int colours = 0, elsewhere = 0;
+        uint32_t firstElsewhere = 0;
+        for (uint32_t a = kRomFileAt; a < kRomFileAt + kRomFileSize; a += 2) {
+            uint8_t *p = Program(a);
+            if (at(a) == p[0] && at(a + 1) == p[1]) {
+                continue;
+            }
+            if (InRanges(a)) {
+                p[0] = at(a);
+                p[1] = at(a + 1);
+                colours++;
+            } else if (!elsewhere++) {
+                firstElsewhere = a;
+            }
+        }
+        if (elsewhere) {
+            fprintf(stderr,
+                    "%s: %d word%s changed outside the characters' colours (the first at %06X) left as the game's\n",
+                    path.c_str(), elsewhere, elsewhere == 1 ? "" : "s", firstElsewhere);
+        }
+        return colours;
+    }
+
+    // The game's colours back, then the files' over them if the feature is on: kRomFile's, then the text files'
     void Apply() {
         if (g_original.empty()) {
-            uint32_t from = UINT32_MAX, to = 0;
-            for (const Character &who : kList) {
-                from = std::min(from, SetsOf(who.number));
-                to = std::max(to, SetsOf(who.number) + kSetsSize);
+            auto add = [](uint32_t from, uint32_t size) { g_ranges.push_back({from, from + size}); };
+            for (int n = 0; n < 20; n++) {
+                add(SetsOf(n), kSetsSize);
             }
-            if (to > ProgramSize()) {
+            for (int n = 0; n < 32; n++) {
+                add(Long(kEffectColours + 4u * static_cast<uint32_t>(n)), kEffectsSize);
+            }
+            uint32_t from = UINT32_MAX, to = 0;
+            for (const Range &range : g_ranges) {
+                from = std::min(from, range.from);
+                to = std::max(to, range.to);
+            }
+            if (from < kRomFileAt || to > kRomFileAt + kRomFileSize || to > ProgramSize()) {
                 fprintf(stderr, "custom colours: the ROM is not as expected; left alone\n");
+                g_ranges.clear();
                 g_applied = true;
                 return;
             }
@@ -204,6 +276,11 @@ namespace {
         const std::string folder = FolderPath();
         if (!g_wasOn || folder.empty()) {
             return;
+        }
+        const int colours = LoadRomFile(folder);
+        if (colours) {
+            fprintf(stderr, "custom colours: %d colour%s from %s/%s\n", colours, colours == 1 ? "" : "s", folder.c_str(),
+                    kRomFile);
         }
         int files = 0, sets = 0;
         for (const Character &who : kList) {
@@ -266,8 +343,9 @@ void PalettesBeforeFrame(Machine &) {
 void RegisterPalettes() {
     TheGame().features.push_back({kFeature, "Display", "Custom colours",
                                   "Characters in the colours of the files in the \"palettes\" folder in the game's data "
-                                  "folder, one a character (Morrigan.txt), for any of their sets. With no files the game's "
-                                  "own colours. They are taken when a player is coloured: at the next round.",
+                                  "folder: a vm3j.10b changed with PalMod, and text files, one a character (Morrigan.txt), "
+                                  "which go before it. With no files the game's own colours. They are taken when a player is "
+                                  "coloured: at the next round.",
                                   kFeatureEnhanced});
     TheGame().commands.push_back({"colours_reload", "Display", "Load colour files again",
                                   "Reads the palettes folder again, for files changed while the game runs. They are taken "

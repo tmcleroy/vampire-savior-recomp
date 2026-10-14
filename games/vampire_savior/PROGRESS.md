@@ -502,8 +502,22 @@ its code is the same) and puts the game's back when it is switched off. Checked:
 every character, and Morrigan's LP body palette with its channels turned seen in the model viewer
 (on and off). Not checked: the effect palettes (lines 2-4) and the `39A900` entries in a fight; a
 change taken in the middle of a round (it waits for the next copy); nobody has made colours by hand.
-Next: read the colours of a PalMod-edited ROM file, so the community's existing colour sets can be
-used without being typed out.
+- `38C218`: a long for each character number 0-31 pointing at 66 palettes for what is done to it
+  (0x840 bytes; `02AD20` copies palette D0 of the player's character's; `02ABC0` adds `+3AE` to an
+  effect's first, so effects are in tens by the set). They follow each other from `391BA0` to
+  `39A7E0`; the shared effects table `39A900` comes after.
+
+PalMod's own definitions (Preppy/PalMod, `VSAV_A_DEF.h`; facts only, its licence is not stated) know
+this set's `vm3j.10b` (CRC `434518e9`) and name these palettes: a set's four are the character, then
+for Bulleta "Critters", "Weapons", "Explosions"; the effects block holds Poisoned, Zapped, Burned,
+Pharaoh's Curse, Midnight Bliss. The program files have each word's bytes swapped against
+`RomSet::program` (checked over the whole of `vm3j.10b`).
+
+A copy of `vm3j.10b` in `palettes` is compared with the game's: words changed inside the two
+tables' places are taken, the rest are counted and left (the file holds the game's rules too), and a
+file whose tables of places differ is refused. Checked with a made copy (Morrigan's LP body, one
+effect palette, a word at `3AC0E0`); never with a file PalMod itself wrote. Not taken yet: the
+portraits (character select, win screen; `3AC0E0` and around, `008216`) and `39A900`.
 
 ## Approximate, or left to the interpreters
 
