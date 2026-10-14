@@ -182,4 +182,77 @@ void Frames::Hud(bool numbers, bool meter, std::vector<HudLine> &lines, std::vec
     }
 }
 
+// --- the move log ---
+
+namespace {
+    constexpr uint32_t kAdvantageWait = 60; // steps after a move ends that its advantage may still come in
+}
+
+MoveLog::~MoveLog() {
+    if (m_file) {
+        std::fclose(m_file);
+    }
+}
+
+void MoveLog::Write(int player, const Frames::Advantage *advantage) {
+    Pending &p = m_pending[player];
+    if (!m_file && !m_tried) {
+        m_tried = true;
+        const std::string &settings = SettingsPath();
+        const size_t slash = settings.find_last_of('/');
+        const std::string path = (slash == std::string::npos ? std::string(".") : settings.substr(0, slash)) + "/frame_data.csv";
+        m_file = std::fopen(path.c_str(), "a+");
+        if (!m_file) {
+            std::fprintf(stderr, "frame data log: cannot write %s\n", path.c_str());
+        } else {
+            std::fseek(m_file, 0, SEEK_END);
+            if (std::ftell(m_file) == 0) {
+                std::fprintf(m_file, "character,input,air,move,startup,active,recovery,advantage,on\n");
+            }
+            std::fprintf(stderr, "frame data log: %s\n", path.c_str());
+        }
+    }
+    if (m_file && p.move.startup) {
+        std::fprintf(m_file, "%s,%s,%s,%06X,%u,%u,%u,", p.start.character.c_str(), p.start.input.empty() ? "-" : p.start.input.c_str(),
+                     p.start.air ? "yes" : "no", p.start.id & 0xFFFFFF, p.move.startup, p.move.active, p.move.recovery);
+        if (advantage) {
+            std::fprintf(m_file, "%+d,%s\n", static_cast<int>(advantage->steps), advantage->guarded ? "guard" : "hit");
+        } else {
+            std::fprintf(m_file, ",\n");
+        }
+        std::fflush(m_file);
+    }
+    p = Pending();
+}
+
+void MoveLog::Step(int player, const Frames &frames, StartFn start) {
+    Pending &p = m_pending[player];
+    const Doing now = frames.Now(player);
+    const bool inMove = now == Doing::Startup || now == Doing::Active || now == Doing::Recovery;
+    if (inMove && !p.open) {
+        if (p.finished) {
+            Write(player, nullptr);
+        }
+        p.open = true;
+        p.start = start(player);
+    }
+    const Frames::Move move = frames.LastMove(player);
+    if (p.open && move.at && move.at == frames.StepCount()) {
+        p.open = false;
+        p.finished = true;
+        p.move = move;
+        p.waited = 0;
+    }
+    const Frames::Advantage advantage = frames.LastAdvantage();
+    if (advantage.at != m_advantageAt) {
+        m_advantageAt = advantage.at;
+        if (advantage.player >= 0 && m_pending[advantage.player].finished) {
+            Write(advantage.player, &advantage);
+        }
+    }
+    if (p.finished && ++p.waited > kAdvantageWait) {
+        Write(player, nullptr);
+    }
+}
+
 } // namespace cps2recomp::fight

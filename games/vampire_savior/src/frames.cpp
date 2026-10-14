@@ -4,7 +4,8 @@
 // Vampire Savior: frame data. Each player is looked at once for every step of the game (not every picture: at the
 // faster speed settings the game takes more than one step in some pictures), where its routine dispatches, and
 // what it is doing is told to the toolkit's frame counting (fight.h): startup, active and recovery of each move,
-// the advantage after a hit or a guarded one, and a meter of the last sixty steps.
+// the advantage after a hit or a guarded one, and a meter of the last sixty steps; and, asked, every move's
+// numbers written to frame_data.csv beside settings.ini (fight::MoveLog).
 #include "frames.h"
 
 #include "state.h"
@@ -18,6 +19,24 @@ namespace {
     using namespace vsav;
 
     fight::Frames g_frames;
+    fight::MoveLog g_log;
+
+    // A move's start for the log: who, what was held (as the input display shows it), in the air, and which move
+    // (its first animation frame)
+    fight::MoveLog::Start MoveStart(int n) {
+        const uint32_t player = Player(n);
+        const uint8_t who = Ram8(player + kCharacter);
+        const uint16_t word = Ram16(0xFF8000 + static_cast<uint32_t>(kControls[n]));
+        uint16_t held = word & 0x0F;
+        held |= static_cast<uint16_t>(((word >> 8) & 0x07) << 4);  // punches
+        held |= static_cast<uint16_t>(((word >> 12) & 0x07) << 7); // kicks
+        fight::MoveLog::Start start;
+        start.character = who < kCharacters && kCharacterNames[who] ? kCharacterNames[who] : "?";
+        start.input = fight::Notation(held);
+        start.air = Ram8(player + kAction) == kActionJump || Ram16(player + kY) != kGround;
+        start.id = Ram32(player + kFrame);
+        return start;
+    }
 
     bool AttackOut(M68K &c, uint32_t player) {
         const uint32_t frame = Mem32(c, player + kFrame);
@@ -43,6 +62,9 @@ namespace {
         view.jumping = Ram8(player + kAction) == kActionJump;
         view.attackOut = AttackOut(c, player);
         g_frames.Step(n, view);
+        if (FeatureOn("frame_log")) {
+            g_log.Step(n, g_frames, MoveStart);
+        }
         return false;
     }
 } // namespace

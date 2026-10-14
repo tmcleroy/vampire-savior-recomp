@@ -397,6 +397,9 @@ void RegisterTraining() {
                              "After a move: the step it can first hit on (startup), how many it can hit for (active) and how many "
                              "follow before the player can act (recovery). After a hit or a guarded one: who can act first, by how "
                              "many steps (+: the attacker)."});
+    game.features.push_back({"frame_log", "Training mode", "Frame data log",
+                             "Writes every move's frame data to frame_data.csv, beside the settings file: the character, what was "
+                             "held as it began, startup, active, recovery and the advantage after a hit or a guarded one."});
     game.features.push_back({"frame_meter", "Training mode", "Frame meter",
                              "A row of cells for each player, one for every step of the game: green before a move can hit, red "
                              "while it can, blue after; yellow reeling from a hit, light blue from a guarded one; grey in the air."});

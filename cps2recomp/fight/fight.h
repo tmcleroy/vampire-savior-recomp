@@ -11,6 +11,7 @@
 #include "game.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,37 @@ private:
     } m_g;
     Doing Classify(int player, const StepView &view);
     void BothStepped();
+};
+
+// Every move's numbers as lines of a CSV file (frame_data.csv beside settings.ini): the character, what was held
+// as the move began, in the air or not, which move it was (the game's own number for it: its first animation
+// frame, say), startup, active, recovery, and the advantage after it when one comes within a second. Opened on the
+// first line; nothing is written while not asked to `Step`.
+class MoveLog {
+public:
+    // A move's start, as the game's sources tell it (asked only on the step a move begins)
+    struct Start {
+        std::string character, input;
+        bool air = false;
+        uint32_t id = 0;
+    };
+    using StartFn = Start (*)(int player);
+    // Each player once a step, after Frames::Step
+    void Step(int player, const Frames &frames, StartFn start);
+    ~MoveLog();
+
+private:
+    struct Pending {
+        bool open = false, finished = false;
+        Start start;
+        Frames::Move move;
+        uint32_t waited = 0;
+    };
+    void Write(int player, const Frames::Advantage *advantage);
+    Pending m_pending[2];
+    uint32_t m_advantageAt = 0;
+    std::FILE *m_file = nullptr;
+    bool m_tried = false;
 };
 
 // --- what the players hold ---
