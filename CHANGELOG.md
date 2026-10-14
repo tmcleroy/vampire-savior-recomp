@@ -5,6 +5,8 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+## 0.1.0-beta.5 - 2026-10-14
+
 - Custom colours (Display page; on in Enhanced): the characters in colours of your own, from files
   in the `palettes` folder beside `settings.ini`. A text file a character (`Morrigan.txt`) changes
   any of its ten sets, and a copy of the set's `vm3j.10b` edited with PalMod gives every
@@ -13,7 +15,9 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
   character's own in `palettes/original` to start from.
 - Colour editor, on the menu's "Alternative modes" page: the model viewer with a panel for
   changing a character's colours while you watch, 16 levels of red, green and blue, saved to the
-  `palettes` folder as you go.
+  `palettes` folder as you go. Any of the ten sets and its effects' lines; copy, paste and the
+  game's colour back; Random colours for the whole set; the character standing in its idle or
+  going through any of its animations.
 - Straight to the title (on the Game page): at a start or a reset, everything before the title
   (the memory test, the version and the warning, the notices, the introduction) is run unseen, and
   the game shows the title a second or so later.
