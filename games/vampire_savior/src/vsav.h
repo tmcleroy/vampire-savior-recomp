@@ -187,6 +187,12 @@ constexpr int kColourSetsEach = 10, kPalettesInSet = 4, kColoursInPalette = 16;
 // first: 02ABC0).
 constexpr uint32_t kEffectColours = 0x38C218;
 constexpr int kColourNumbers = 32; // entries of the two tables (kEffectColours follows kColourSets' last)
+// Where a player's colours go: the palettes the board shows are taken from a buffer in the video RAM (its
+// place a long at kPaletteBuffer: 90C000), 16 words a palette; the player's first is its byte kPaletteSlot.
+// The game puts the set's four palettes from there on, but for the characters whose bit is set in
+// kFirstLineOnly (by number; 02ADB2), whose other three go elsewhere when their effects need them.
+constexpr uint32_t kPaletteBuffer = 0xFF80D0, kPaletteSlot = 0x18B;
+constexpr uint32_t kFirstLineOnly = 0xEF92EF96;
 constexpr int kEffectPalettes = 66;
 // How fast a player is moving, and how that changes each frame (longs: 65536 a pixel)
 constexpr uint32_t kSpeedX = 0x40, kSpeedY = 0x44, kPullX = 0x48, kPullY = 0x4C;

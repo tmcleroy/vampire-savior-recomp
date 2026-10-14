@@ -5,6 +5,15 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Custom colours (Display page; on in Enhanced): the characters in colours of your own, from files
+  in the `palettes` folder beside `settings.ini`. A text file a character (`Morrigan.txt`) changes
+  any of its ten sets, and a copy of the set's `vm3j.10b` edited with PalMod gives every
+  character's colours it changed (their effects' too: poisoned, burned and the like); anything
+  else such a file changes is left as the game's. "Write the game's colours" puts every
+  character's own in `palettes/original` to start from.
+- Colour editor, on the menu's "Alternative modes" page: the model viewer with a panel for
+  changing a character's colours while you watch, 16 levels of red, green and blue, saved to the
+  `palettes` folder as you go.
 - Hidden characters (on the Game page; off in every preset): choosing Gallon gives Dark Gallon,
   Bishamon gives Oboro Bishamon (the one-player game's last boss, whom no code chooses on this
   set), and the "?" box gives Shadow, without their codes; for player 1, player 2 or both, and

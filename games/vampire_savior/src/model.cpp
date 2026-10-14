@@ -29,6 +29,13 @@
 
 namespace cps2recomp {
 
+// The colour editor (colour_editor.cpp) works in the viewer: the controls are its, and it has the right of
+// the picture, so the character is drawn further left
+void ColourEditorBeforeFrame(Machine &machine);
+void ColourEditorFrame(Machine &machine);
+int ColourEditorShift();
+void EndColourEditor();
+
 namespace {
     using namespace vsav;
 
@@ -301,7 +308,7 @@ namespace {
         const int size = kSizes[std::clamp(FeatureValue("model_size"), 0, static_cast<int>(std::size(kSizes)) - 1)];
         const bool large = size > 8;
         const int fromX = g.anchorX, fromY = g.anchorY - (large ? 56 : 0);
-        const int toX = large ? width / 2 : g.anchorX, toY = large ? height / 2 : g.anchorY;
+        const int toX = (large ? width / 2 : g.anchorX) - ColourEditorShift(), toY = large ? height / 2 : g.anchorY;
         auto back = [size](int to, int about, int from) { // (rounded down, for places left of or above `about` too)
             const int quarters = (to - about) * 4 + 2;
             return from + (quarters >= 0 ? quarters / size : -((-quarters + size - 1) / size));
@@ -342,6 +349,17 @@ namespace {
     }
 } // namespace
 
+void StartModelViewer(Machine &machine) {
+    StartModel(machine);
+}
+// The character being shown, by its number in the game; and the number of a choice of "Character" (-1: none)
+int ModelCharacter() {
+    return kCharacterNumbers[g.character];
+}
+int ModelCharacterNumber(int choice) {
+    return choice >= 0 && choice < static_cast<int>(std::size(kCharacterNumbers)) ? kCharacterNumbers[choice] : -1;
+}
+
 bool ModelViewer() {
     return g.on;
 }
@@ -368,6 +386,7 @@ void ModelBeforeFrame(Machine &machine) {
     }
     machine.players[1] = 0;
     PutAway();
+    ColourEditorBeforeFrame(machine); // (takes player 1's controls, when it is on)
     SetSlowMotion(kSlowBy[std::clamp(FeatureValue("model_speed"), 0, static_cast<int>(std::size(kSlowBy)) - 1)]);
     SetRam8(kClock, kClockFull);
     ShowAnimation(machine);
@@ -394,6 +413,7 @@ void ModelFrame(Machine &machine) {
     machine.video.hideObject = NotTheStage;
     Compose(machine);
     NameAnimation();
+    ColourEditorFrame(machine);
     g.anchorX = static_cast<int16_t>(Ram16(Player(0) + kX)) - static_cast<int16_t>(Ram16(kCameraX)) + WideStage();
     g.anchorY = 239 - (static_cast<int16_t>(Ram16(Player(0) + kY)) - static_cast<int16_t>(Ram16(kCameraY)));
 }
@@ -413,7 +433,10 @@ void RegisterModel() {
                           "of its animations."});
     game.commands.push_back({"model_start", kModel, "Start",
                              "Shows the character chosen below by itself. Player 1's controls move it while it stands. Reset ends it.",
-                             StartModel});
+                             [](Machine &machine) {
+                                 EndColourEditor();
+                                 StartModel(machine);
+                             }});
     game.commands.push_back({"model_reset", kModel, "Reset options",
                              "Puts every choice of this page back: the first character and stage, its own size, standing, full "
                              "speed, repeating at once. (While viewing, the viewer goes to that character and stage.)",

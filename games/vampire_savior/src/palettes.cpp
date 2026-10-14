@@ -7,6 +7,7 @@
 // over the PalMod file's. They are written over the game's in the ROM image, where the game reads them each time it colours a player, so the
 // game's code is the same with them as without. A command writes the game's own colours out as files to
 // start from.
+#include "palettes.h"
 #include "vsav.h"
 
 #include <cctype>
@@ -249,31 +250,41 @@ namespace {
     }
 
     // The game's colours back, then the files' over them if the feature is on: kRomFile's, then the text files'
+    // The places of the colours found and the game's own kept (once); false if the ROM is not as expected
+    bool Prepare() {
+        if (!g_original.empty()) {
+            return true;
+        }
+        if (!g_ranges.empty()) {
+            return false; // (found wrong once: said then)
+        }
+        auto add = [](uint32_t from, uint32_t size) { g_ranges.push_back({from, from + size}); };
+        for (int n = 0; n < kColourNumbers; n++) {
+            add(SetsOf(n), kSetsSize);
+        }
+        for (int n = 0; n < kColourNumbers; n++) {
+            add(Long(kEffectColours + 4u * static_cast<uint32_t>(n)), kEffectsSize);
+        }
+        uint32_t from = UINT32_MAX, to = 0;
+        for (const Range &range : g_ranges) {
+            from = std::min(from, range.from);
+            to = std::max(to, range.to);
+        }
+        if (from < kRomFileAt || to > kRomFileAt + kRomFileSize || to > ProgramSize()) {
+            fprintf(stderr, "custom colours: the ROM is not as expected; left alone\n");
+            return false;
+        }
+        g_originalFrom = from;
+        g_original.assign(Program(from), Program(to));
+        return true;
+    }
+
     void Apply() {
-        if (g_original.empty()) {
-            auto add = [](uint32_t from, uint32_t size) { g_ranges.push_back({from, from + size}); };
-            for (int n = 0; n < kColourNumbers; n++) {
-                add(SetsOf(n), kSetsSize);
-            }
-            for (int n = 0; n < kColourNumbers; n++) {
-                add(Long(kEffectColours + 4u * static_cast<uint32_t>(n)), kEffectsSize);
-            }
-            uint32_t from = UINT32_MAX, to = 0;
-            for (const Range &range : g_ranges) {
-                from = std::min(from, range.from);
-                to = std::max(to, range.to);
-            }
-            if (from < kRomFileAt || to > kRomFileAt + kRomFileSize || to > ProgramSize()) {
-                fprintf(stderr, "custom colours: the ROM is not as expected; left alone\n");
-                g_ranges.clear();
-                g_applied = true;
-                return;
-            }
-            g_originalFrom = from;
-            g_original.assign(Program(from), Program(to));
+        g_applied = true;
+        if (!Prepare()) {
+            return;
         }
         std::copy(g_original.begin(), g_original.end(), Program(g_originalFrom));
-        g_applied = true;
         g_wasOn = FeatureOn(kFeature);
         const std::string folder = FolderPath();
         if (!g_wasOn || folder.empty()) {
@@ -335,6 +346,98 @@ namespace {
         fprintf(stderr, "custom colours: the game's colours written to %s\n", out.c_str());
     }
 } // namespace
+
+const char *ColourName(int number) {
+    for (const Character &who : kList) {
+        if (who.number == number) {
+            return who.name;
+        }
+    }
+    return "";
+}
+
+uint32_t ColourSetAddress(int number, int set) {
+    return SetsOf(number) + static_cast<uint32_t>(set) * kColourSetSize;
+}
+
+namespace {
+    uint32_t ColourAddress(int number, int set, int line, int n) {
+        return ColourSetAddress(number, set) + static_cast<uint32_t>(line * kColoursInPalette + n) * 2;
+    }
+} // namespace
+
+uint16_t Colour(int number, int set, int line, int n) {
+    const uint8_t *p = Program(ColourAddress(number, set, line, n));
+    return static_cast<uint16_t>(((p[0] << 8) | p[1]) & 0x0FFF);
+}
+
+uint16_t GameColour(int number, int set, int line, int n) {
+    if (!Prepare()) {
+        return Colour(number, set, line, n);
+    }
+    const uint8_t *p = &g_original[ColourAddress(number, set, line, n) - g_originalFrom];
+    return static_cast<uint16_t>(((p[0] << 8) | p[1]) & 0x0FFF);
+}
+
+void SetColour(int number, int set, int line, int n, uint16_t colour) {
+    uint8_t *p = Program(ColourAddress(number, set, line, n));
+    p[0] = static_cast<uint8_t>((p[0] & 0xF0) | ((colour >> 8) & 0x0F)); // (the top four bits are the game's)
+    p[1] = static_cast<uint8_t>(colour);
+}
+
+bool SaveColours(int number) {
+    const Character *who = nullptr;
+    for (const Character &one : kList) {
+        if (one.number == number) {
+            who = &one;
+        }
+    }
+    const std::string folder = FolderPath();
+    if (!who || folder.empty()) {
+        return false;
+    }
+    // (into the file the character's colours were read from, if it is called by its name abroad)
+    std::string path = folder + "/" + who->name + ".txt";
+    if (who->abroad && !std::filesystem::exists(path) && std::filesystem::exists(folder + "/" + who->abroad + ".txt")) {
+        path = folder + "/" + who->abroad + ".txt";
+    }
+    std::ostringstream text;
+    bool any = false;
+    for (int set = 0; set < kColourSetsEach; set++) {
+        std::string lines;
+        bool changed = false;
+        for (int line = 0; line < kPalettesInSet; line++) {
+            bool same = true;
+            for (int n = 0; n < kColoursInPalette; n++) {
+                same = same && Colour(number, set, line, n) == GameColour(number, set, line, n);
+            }
+            if (same) {
+                lines += "-\n"; // (the game's: or the PalMod file's)
+                continue;
+            }
+            changed = true;
+            for (int n = 0; n < kColoursInPalette; n++) {
+                lines += (n ? " " : "") + ColourText(Colour(number, set, line, n));
+            }
+            lines += "\n";
+        }
+        if (changed) {
+            text << "\n[" << kSetNames[set] << "]\n" << lines;
+            any = true;
+        }
+    }
+    std::error_code error;
+    if (!any) {
+        std::filesystem::remove(path, error);
+        return true;
+    }
+    std::filesystem::create_directories(folder, error);
+    std::ofstream file(path);
+    file << "# " << who->name << ": colours made with the colour editor (the sets and lines that are not the game's;\n"
+         << "# a line that is - is the game's). The format is in palettes/original, \"Write the game's colours\".\n"
+         << text.str();
+    return static_cast<bool>(file);
+}
 
 void PalettesBeforeFrame(Machine &) {
     if (!g_applied || FeatureOn(kFeature) != g_wasOn) {
