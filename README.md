@@ -127,6 +127,12 @@ https://github.com/user-attachments/assets/bb498cab-aac9-4e74-94a5-6c4f0d958ff6
 | --- | --- |
 | ![The colour editor: Lilith with cyan hair and a blue outfit, the panel at the right](docs/screenshots/colour-editor.png) | ![Lilith in a fight in colours from the editor's Random colours](docs/screenshots/custom-colours-fight.png) |
 
+Morrigan in eighteen sets of colours made with the editor:
+
+| | |
+| --- | --- |
+| ![Morrigan in nine colour schemes made with the colour editor](docs/screenshots/morrigan-colours-1.png) | ![Morrigan in nine more colour schemes made with the colour editor](docs/screenshots/morrigan-colours-2.png) |
+
 **The colour editor** is on the in-game menu's "Alternative modes" page. It shows the character
 with a panel at the right, worked with player 1's controls: up and down choose a row, left and right
 change it.
