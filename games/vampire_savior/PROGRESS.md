@@ -482,6 +482,29 @@ played by hand; Shadow's change of character through a one-player game not run.
 - `make audit` (`tools/audit.sh`); `tools/audit.sh --public` lists what is left before the
   repository can be public. `docs/RELEASING.md` is the release process.
 
+## Custom colours (2026-10-14)
+
+`palettes.cpp`, feature `custom_colours`. A player asked for it after the release. Facts (vsav.h):
+- `38C198`: a long for each character number 0-19 (16-19: 0x12 is Dark Gallon, the others repeat
+  0, 1, 3) pointing at its colour sets. Each set is 0x80 bytes: four palettes of 16 words. There
+  are 10 sets for every character; they follow each other at 0x500, with a gap of 0x400 after
+  Sasquatch's that nothing is known to read.
+- Player `+3AE` picks the set (020B38: 0-5 the button; 6 two or more punches; 7 two or more
+  kicks; 020FC0: 8 + (set & 1) when auto guard was chosen; a mirror match gets the next set,
+  Dark Gallon's only 0-1). `01BEC0`, `01C164` and `01C670` keep where the set is at `+3A4`.
+  `02AD3C` copies a palette from A0 to the player's place in the palette RAM (`+18B` of the
+  buffer at `D0(A5)`), keeping the brightness that was there; `02ADC8` copies palette D1 of the
+  set; `02AD82` a palette of the effects table at `39A900` (some entries by `+3AE` too: 02A946).
+- Each palette's 16th colour is the see-through pen for objects (video.cpp), never shown.
+
+The feature writes the files' colours over the ROM image's (the game reads them with `movem`, so
+its code is the same) and puts the game's back when it is switched off. Checked: an export of
+every character, and Morrigan's LP body palette with its channels turned seen in the model viewer
+(on and off). Not checked: the effect palettes (lines 2-4) and the `39A900` entries in a fight; a
+change taken in the middle of a round (it waits for the next copy); nobody has made colours by hand.
+Next: read the colours of a PalMod-edited ROM file, so the community's existing colour sets can be
+used without being typed out.
+
 ## Approximate, or left to the interpreters
 
 - The Z80 sound driver is translated too (4,498 instructions, 62 routines; 142 million of its
