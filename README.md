@@ -79,8 +79,6 @@ another is started or the menu's Reset.
 
 ![The model viewer: Lilith's animations A60 to A90, one after another, on white](docs/screenshots/model-viewer.gif)
 
-![Endless battle in widescreen: Felicia and Morrigan in Vanity Paradise](docs/screenshots/endless-widescreen.png)
-
 ## Widescreen
 
 ![Widescreen: Morrigan and Lilith in Feast of the Damned, the whole hall in view](docs/screenshots/widescreen.png)
