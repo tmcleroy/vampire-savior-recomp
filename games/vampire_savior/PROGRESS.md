@@ -339,6 +339,10 @@ has yet used them in a window or listened.
   Checked with no window: pictures of five characters, a stage, white and black, four sizes, animations
   of two lists; an animation switched on and off in mid view (the character stands again); walking with
   the controls; a wide picture. The menu's page has not been looked at, and nobody has used it.
+  Added the same day: Speed (the toolkit's `SetSlowMotion`, the menu's own slow motion asked for by the
+  mode), "Repeat after" (an animation's last frame held 0 to 10 seconds before it goes back: traced, the
+  holds are 120 frames at 2 seconds) and "Reset options" (run in mid view: the viewer went to the first
+  character and stage). The slow motion has not been watched: with no window a run takes no time.
 - **The menu** (2026-10-13): Training mode's Start, Start over and aids, and the dummy's page, are
   under Alternative modes too.
 
