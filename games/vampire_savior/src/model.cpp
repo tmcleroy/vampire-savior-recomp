@@ -17,6 +17,7 @@
 // the frame a long names, or the end), and where its picture is. Showing one here is putting its frame in
 // the player's record each frame, with the time left kept high so that the game's own stepping never
 // comes round; the game goes on believing the player stands.
+#include "colours.h"
 #include "modes.h"
 #include "state.h"
 #include "widescreen.h"
@@ -28,15 +29,6 @@
 #include <vector>
 
 namespace cps2recomp {
-
-// The colour editor (colour_editor.cpp) works in the viewer: the controls are its, and it has the right of
-// the picture, so the character is drawn further left
-void ColourEditorBeforeFrame(Machine &machine);
-void ColourEditorFrame(Machine &machine);
-int ColourEditorShift();
-void EndColourEditor();
-// ... and its own "Animation" choice, used in place of the viewer's while it is on
-const char *ColourEditorAnimation(); // (nullptr: the editor is off)
 
 namespace {
     using namespace vsav;
@@ -201,7 +193,7 @@ namespace {
     }
 
     const char *AnimationChoice() {
-        return ColourEditorAnimation() ? ColourEditorAnimation() : "model_animation";
+        return colours::EditorAnimation() ? colours::EditorAnimation() : "model_animation";
     }
 
     void ShowAnimation(Machine &machine) {
@@ -213,7 +205,7 @@ namespace {
             SetFeatureValue(AnimationChoice(), choice);
         }
         // ("Play all" with nothing chosen: the first animation the character has)
-        const bool all = FeatureOn("model_all") && !ColourEditorAnimation(); // (the colour editor's own choice is one animation)
+        const bool all = FeatureOn("model_all") && !colours::EditorAnimation(); // (the colour editor's own choice is one animation)
         if (all && !choice) {
             choice = Step(machine, character, 0, 1);
             SetFeatureValue("model_animation", choice);
@@ -325,7 +317,7 @@ namespace {
         const int size = kSizes[std::clamp(FeatureValue("model_size"), 0, static_cast<int>(std::size(kSizes)) - 1)];
         const bool large = size > 8;
         const int fromX = g.anchorX, fromY = g.anchorY - (large ? 56 : 0);
-        const int toX = (large ? width / 2 : g.anchorX) - ColourEditorShift(), toY = large ? height / 2 : g.anchorY;
+        const int toX = (large ? width / 2 : g.anchorX) - colours::EditorShift(), toY = large ? height / 2 : g.anchorY;
         auto back = [size](int to, int about, int from) { // (rounded down, for places left of or above `about` too)
             const int quarters = (to - about) * 4 + 2;
             return from + (quarters >= 0 ? quarters / size : -((-quarters + size - 1) / size));
@@ -417,7 +409,7 @@ void ModelBeforeFrame(Machine &machine) {
     }
     machine.players[1] = 0;
     PutAway();
-    ColourEditorBeforeFrame(machine); // (takes player 1's controls, when it is on)
+    colours::EditorBeforeFrame(machine); // (takes player 1's controls, when it is on)
     SetSlowMotion(kSlowBy[std::clamp(FeatureValue("model_speed"), 0, static_cast<int>(std::size(kSlowBy)) - 1)]);
     SetRam8(kClock, kClockFull);
     ShowAnimation(machine);
@@ -444,7 +436,7 @@ void ModelFrame(Machine &machine) {
     machine.video.hideObject = NotTheStage;
     Compose(machine);
     NameAnimation();
-    ColourEditorFrame(machine);
+    colours::EditorFrame(machine);
     g.anchorX = static_cast<int16_t>(Ram16(Player(0) + kX)) - static_cast<int16_t>(Ram16(kCameraX)) + WideStage();
     g.anchorY = 239 - (static_cast<int16_t>(Ram16(Player(0) + kY)) - static_cast<int16_t>(Ram16(kCameraY)));
 }
@@ -465,7 +457,7 @@ void RegisterModel() {
     game.commands.push_back({"model_start", kModel, "Start",
                              "Shows the character chosen below by itself. Player 1's controls move it while it stands. Reset ends it.",
                              [](Machine &machine) {
-                                 EndColourEditor();
+                                 colours::EndEditor();
                                  StartModel(machine);
                              }});
     game.commands.push_back({"model_reset", kModel, "Reset options",

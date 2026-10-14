@@ -484,7 +484,8 @@ played by hand; Shadow's change of character through a one-player game not run.
 
 ## Custom colours (2026-10-14)
 
-`palettes.cpp`, feature `custom_colours`. A player asked for it after the release. Facts (vsav.h):
+Feature `custom_colours`. A player asked for it after the release. Since 2026-10-14 the code is the toolkit's
+(`fight/colours.h`, shared with SFA2) and `colours.cpp` here only describes where the colours are. Facts (vsav.h):
 - `38C198`: a long for each character number 0-19 (16-19: 0x12 is Dark Gallon, the others repeat
   0, 1, 3) pointing at its colour sets. Each set is 0x80 bytes: four palettes of 16 words. There
   are 10 sets for every character; they follow each other at 0x500, with a gap of 0x400 after
@@ -519,14 +520,14 @@ file whose tables of places differ is refused. Checked with a made copy (Morriga
 effect palette, a word at `3AC0E0`); never with a file PalMod itself wrote. Not taken yet: the
 portraits (character select, win screen; `3AC0E0` and around, `008216`) and `39A900`.
 
-Colour editor (`colour_editor.cpp`, 2026-10-14): the model viewer with a panel. Each frame it puts
+Colour editor (2026-10-14; now the toolkit's `fight/colour_editor.cpp`): the model viewer with a panel. Each frame it puts
 the player's set at `+3AE`/`+3A4` and writes the set's palettes into the palette buffer (`D0(A5)`,
 `90C000`) from the player's slot `+18B`, the brightness kept, so a change shows at once; only the
 first line for the characters whose bit is set in `EF92EF96` (02ADB2: their other lines go
 elsewhere when an effect needs them, so changes to those are seen only then, not in the viewer).
-Edits go into the ROM image through palettes.h and are saved to the character's file (only the sets
+Edits go into the ROM image (`colours::SetColour`) and are saved to the character's file (only the sets
 and lines that differ from the game's; a line that is `-` is the game's) 45 frames after the last
-change and when the editor ends (`ColourEditorCheck`, before every frame). Checked headless with
+change and when the editor ends (`colours::BeforeFrame`, before every frame). Checked headless with
 movies: the rows, the levels, copy and paste, the set changed (HP: Morrigan in red), the blink,
 the character changed, the save when training mode takes over. Not checked by hand: holding a
 direction (repeats), a gamepad, the effect lines in play.
