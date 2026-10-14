@@ -35,6 +35,8 @@ void ColourEditorBeforeFrame(Machine &machine);
 void ColourEditorFrame(Machine &machine);
 int ColourEditorShift();
 void EndColourEditor();
+// ... and its own "Animation" choice, used in place of the viewer's while it is on
+const char *ColourEditorAnimation(); // (nullptr: the editor is off)
 
 namespace {
     using namespace vsav;
@@ -198,13 +200,17 @@ namespace {
         return 0;
     }
 
+    const char *AnimationChoice() {
+        return ColourEditorAnimation() ? ColourEditorAnimation() : "model_animation";
+    }
+
     void ShowAnimation(Machine &machine) {
         const int character = kCharacterNumbers[g.character];
-        int choice = std::clamp(FeatureValue("model_animation"), 0, kAnimationChoices - 1);
+        int choice = std::clamp(FeatureValue(AnimationChoice()), 0, kAnimationChoices - 1);
         // (one the character has not got: the next it has)
         if (choice && !Has(machine, character, choice)) {
             choice = Step(machine, character, choice, 1);
-            SetFeatureValue("model_animation", choice);
+            SetFeatureValue(AnimationChoice(), choice);
         }
         const uint16_t stick = machine.players[0] & (kLeft | kRight);
         if (choice) {
@@ -214,7 +220,7 @@ namespace {
                 g.stickHeld = g.stick == stick ? g.stickHeld + 1 : 0;
                 if (g.stickHeld == 0 || (g.stickHeld >= kHeldFirst && (g.stickHeld - kHeldFirst) % kHeldEvery == 0)) {
                     choice = Step(machine, character, choice, stick == kRight ? 1 : -1);
-                    SetFeatureValue("model_animation", choice);
+                    SetFeatureValue(AnimationChoice(), choice);
                 }
             }
         }
@@ -358,6 +364,20 @@ int ModelCharacter() {
 }
 int ModelCharacterNumber(int choice) {
     return choice >= 0 && choice < static_cast<int>(std::size(kCharacterNumbers)) ? kCharacterNumbers[choice] : -1;
+}
+
+// The animation after `choice` (by 1) or before it (by -1) that the character being shown has, with standing
+// (0) before the first and after the last; and the choices' names
+int ModelAnimationStep(Machine &machine, int choice, int by) {
+    const int character = kCharacterNumbers[g.character];
+    const int next = Step(machine, character, choice, by);
+    if (!next || (choice && (by > 0 ? next <= choice : next >= choice))) {
+        return 0; // (gone round)
+    }
+    return next;
+}
+const std::vector<const char *> &ModelAnimationNames() {
+    return AnimationNames();
 }
 
 bool ModelViewer() {

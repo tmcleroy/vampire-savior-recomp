@@ -27,6 +27,8 @@ board does not have. Each mode has a page there with a Start row and its choices
   options" puts the page's choices back.
 - **Colour editor**: the model viewer's character with a panel at the right, worked with player 1's
   controls (up and down choose a row, left and right change it): the character, background and size,
+  what it does (its own Animation choice: standing in the game's idle unless changed, or any of its
+  animations, as in the viewer; the viewer's choice is left as it was),
   the set of colours (LP to HK, PP, KK, AUTO1, AUTO2), its line (the character's own colours or its
   effects'), the colour (one of 15; it blinks on the character when chosen), and its red, green and
   blue (the board's 16 levels each). Changes are seen at once. LP copies the colour, MP pastes it, HP

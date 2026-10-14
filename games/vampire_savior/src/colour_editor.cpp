@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <iterator>
 #include <string>
+#include <vector>
 
 namespace cps2recomp {
 
@@ -28,6 +29,8 @@ void StartModelViewer(Machine &machine); // model.cpp
 bool ModelViewer();
 int ModelCharacter();
 int ModelCharacterNumber(int choice);
+int ModelAnimationStep(Machine &machine, int choice, int by);
+const std::vector<const char *> &ModelAnimationNames();
 
 namespace {
     using namespace vsav;
@@ -36,8 +39,10 @@ namespace {
 
     constexpr const char *kPage = "Colour editor";
 
-    enum Row { kRowCharacter, kRowBackground, kRowSize, kRowSet, kRowLine, kRowColour, kRowRed, kRowGreen, kRowBlue, kRows };
-    constexpr const char *kRowNames[kRows] = {"Character", "Background", "Size", "Set", "Line", "Colour", "Red", "Green", "Blue"};
+    enum Row { kRowCharacter, kRowBackground, kRowSize, kRowAnimation, kRowSet, kRowLine, kRowColour, kRowRed, kRowGreen, kRowBlue, kRows };
+    constexpr const char *kRowNames[kRows] = {"Character", "Background", "Size", "Animation", "Set", "Line", "Colour", "Red", "Green", "Blue"};
+    // The editor's own "Animation" choice (the viewer's is left as it was): standing, the game's idle, unless chosen
+    constexpr const char *kAnimation = "colours_animation";
     constexpr const char *kSetNames[kColourSetsEach] = {"LP", "MP", "HP", "LK", "MK", "HK", "PP", "KK", "AUTO1", "AUTO2"};
     constexpr const char *kLineNames[kPalettesInSet] = {"Body", "Effect 1", "Effect 2", "Effect 3"};
     // The viewer's "Background" and "Size" choices, as short as the panel needs them (model.cpp has them in full)
@@ -122,7 +127,7 @@ namespace {
     }
 
     // Left or right on a row
-    void Step(int by) {
+    void Step(Machine &machine, int by) {
         switch (g.row) {
         case kRowCharacter:
             Save(); // (the viewer starts again with the next one: model.cpp)
@@ -130,6 +135,7 @@ namespace {
             break;
         case kRowBackground: StepChoice("model_background", static_cast<int>(std::size(kBackgrounds)), by); break;
         case kRowSize: StepChoice("model_size", static_cast<int>(std::size(kSizes)), by); break;
+        case kRowAnimation: SetFeatureValue(kAnimation, ModelAnimationStep(machine, FeatureValue(kAnimation), by)); break;
         case kRowSet: g.set = (g.set + by + kColourSetsEach) % kColourSetsEach; break;
         case kRowLine:
             g.line = (g.line + by + kPalettesInSet) % kPalettesInSet;
@@ -192,6 +198,12 @@ namespace {
             case kRowCharacter: snprintf(value, sizeof(value), "%s", ColourName(g.character)); break;
             case kRowBackground: snprintf(value, sizeof(value), "%s", kBackgrounds[std::clamp(FeatureValue("model_background"), 0, 13)]); break;
             case kRowSize: snprintf(value, sizeof(value), "%s", kSizes[std::clamp(FeatureValue("model_size"), 0, 12)]); break;
+            case kRowAnimation: {
+                const int choice = FeatureValue(kAnimation);
+                const auto &names = ModelAnimationNames();
+                snprintf(value, sizeof(value), "%s", choice <= 0 || choice >= static_cast<int>(names.size()) ? "Standing" : names[choice]);
+                break;
+            }
             case kRowSet: snprintf(value, sizeof(value), "%s", kSetNames[g.set]); break;
             case kRowLine: snprintf(value, sizeof(value), "%s", kLineNames[g.line]); break;
             case kRowColour: snprintf(value, sizeof(value), "%d", g.colour + 1); break;
@@ -283,6 +295,9 @@ namespace {
     }
 } // namespace
 
+const char *ColourEditorAnimation() {
+    return g.on ? kAnimation : nullptr;
+}
 int ColourEditorShift() {
     return g.on ? kShift : 0;
 }
@@ -325,7 +340,7 @@ void ColourEditorBeforeFrame(Machine &machine) {
         } else if (direction & kDown) {
             g.row = (g.row + 1) % kRows;
         } else {
-            Step(direction & kRight ? 1 : -1);
+            Step(machine, direction & kRight ? 1 : -1);
         }
     }
     if (pressed & kPunch1) {
@@ -362,6 +377,11 @@ void RegisterColourEditor() {
                              "back the game's. What is changed is saved in the palettes folder (switching on Custom colours, "
                              "which uses it in play). Reset ends it.",
                              Start});
+    game.features.push_back({kAnimation, kPage, "Animation",
+                             "What the character does while its colours are changed: stands as in a fight (the game's idle), "
+                             "or goes through one of its animations over and over (as the model viewer's Animation). The "
+                             "panel's Animation row changes it too.",
+                             0, ModelAnimationNames()});
     game.commands.push_back({"colours_reset_set", kPage, "Game's colours for this set",
                              "While editing: every colour of the set being edited back to the game's.", ResetSet});
     game.commands.push_back({"colours_reset_character", kPage, "Game's colours for this character",
