@@ -4,6 +4,8 @@ An unofficial native PC port of the arcade game *Vampire Savior: The Lord of Vam
 1997, CPS-2 board) for macOS, Linux (Steam Deck included) and Windows, made by static
 recompilation, with a full training mode.
 
+**[Get started: download it and play →](#playing)**
+
 > **Beta.** The game plays from start to ending and its code is checked instruction by
 > instruction, but it has been played on few machines and controllers yet. Expect rough edges, and
 > please [report what you find](#feedback-and-contributing).
