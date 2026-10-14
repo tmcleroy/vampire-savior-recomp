@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Tommy McLeroy
 //
-// Vampire Savior: what the modes share (modes.h): machines kept as save states and run beside the port's,
-// getting a machine to a round, the camera put where a mode wants it, and telling objects apart.
+// Vampire Savior: what the modes share (modes.h): getting a machine to a round, the camera put where a mode wants
+// it, and telling objects apart (the machines kept as save states and run beside the port's are the toolkit's:
+// runtime/spare.h).
 #include "modes.h"
 
 #include "state.h"
@@ -18,7 +19,6 @@ namespace {
 
     MatchWanted g_wanted;
     CameraWanted g_camera;
-    std::vector<uint8_t> g_mine; // the port's machine, while a spare runs in it
 } // namespace
 
 MatchWanted &Wanted() {
@@ -72,94 +72,22 @@ bool NotTheFighters(uint32_t tile, uint16_t attributes) {
     return ThePanel(tile, attributes) || ((attributes & 0x1F) >= 22 && !IsShadow(tile, attributes));
 }
 
-void Take(Machine &machine, size_t soundBefore, Made &made) {
-    const size_t pixels = static_cast<size_t>(machine.PictureWidth()) * Video::kHeight;
-    made.picture.assign(machine.Picture(), machine.Picture() + pixels);
-    soundBefore = std::min(soundBefore, machine.audio.size());
-    made.sound.assign(machine.audio.begin() + static_cast<std::ptrdiff_t>(soundBefore), machine.audio.end());
-    machine.audio.resize(soundBefore);
-}
-
-void Give(Machine &machine, const Made &made) {
-    memcpy(machine.Picture(), made.picture.data(), made.picture.size() * sizeof(uint32_t));
-    machine.audio.insert(machine.audio.end(), made.sound.begin(), made.sound.end());
-}
-
-void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made,
-              const std::function<void(Machine &)> &after) {
-    // What a save state does not hold is kept by hand: the picture, the controls, the video's switches, what
-    // is wanted
-    const uint16_t held[2] = {machine.players[0], machine.players[1]};
-    const auto hide = machine.video.hideObject;
-    const unsigned layers = machine.video.layerMask;
-    const bool mark = machine.video.markObjects;
-    const MatchWanted wanted = g_wanted;
-    const CameraWanted camera = g_camera;
-    const size_t sound = machine.audio.size();
-    const Video::Wide wide = machine.video.wide;
-    const size_t pixels = static_cast<size_t>(Video::kMaxWidth) * Video::kHeight; // (all of it, whatever its width)
-    static std::vector<uint32_t> picture;
-    picture.assign(machine.Picture(), machine.Picture() + pixels);
-
-    g_mine.clear();
-    {
-        Archive ar(g_mine, true);
-        machine.Serialize(ar);
-    }
-    if (spare.state.empty()) {
-        machine.Reset();
-        spare.ready = false;
-        spare.frames = 0;
-    } else {
-        Archive ar(spare.state, false);
-        machine.Serialize(ar);
-    }
-    machine.players[0] = machine.players[1] = 0;
-    machine.video.hideObject = nullptr;
-    machine.video.layerMask = 0xF;
-    machine.video.markObjects = false;
-    g_wanted = MatchWanted();
-    g_camera = CameraWanted();
-    WideForSpare(machine);
-    before(machine);
-    machine.RunFrame();
-    if (after) {
-        after(machine);
-    }
-    if (made) {
-        Take(machine, sound, *made);
-    }
-    machine.audio.resize(sound);
-    spare.state.clear();
-    {
-        Archive ar(spare.state, true);
-        machine.Serialize(ar);
-    }
-    {
-        Archive ar(g_mine, false);
-        machine.Serialize(ar);
-    }
-    memcpy(machine.Picture(), picture.data(), pixels * sizeof(uint32_t));
-    machine.players[0] = held[0];
-    machine.players[1] = held[1];
-    machine.video.hideObject = hide;
-    machine.video.layerMask = layers;
-    machine.video.markObjects = mark;
-    machine.video.wide = wide;
-    WideForPort(machine);
-    g_wanted = wanted;
-    g_camera = camera;
-}
-
-void Promote(Machine &machine, Spare &spare) {
-    if (!spare.state.empty()) {
-        Archive ar(spare.state, false);
-        machine.Serialize(ar);
-    }
-    spare.Clear();
-}
-
 void RegisterMachines() {
+    // Around a spare's frame (runtime/spare.h): what is wanted of the machine that is running kept and fresh for it,
+    // and its picture as wide as the port's (widescreen.h)
+    static MatchWanted wanted;
+    static CameraWanted camera;
+    SetSpareKeeping({[](Machine &) { wanted = g_wanted; camera = g_camera; },
+                     [](Machine &machine) {
+                         g_wanted = MatchWanted();
+                         g_camera = CameraWanted();
+                         WideForSpare(machine);
+                     },
+                     [](Machine &machine) {
+                         WideForPort(machine);
+                         g_wanted = wanted;
+                         g_camera = camera;
+                     }});
 }
 
 } // namespace cps2recomp

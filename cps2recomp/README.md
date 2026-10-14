@@ -15,7 +15,8 @@ part of this repository or of a game's.
 | `port/` | The frontend (SDL3), putting the picture on the screen (`present.*`: SDL's GPU API, so Metal, Vulkan or Direct3D 12, with SDL's renderer where there is no device; shaders in `shaders/`, compiled into `shaders.inc` by `tools/gen_shaders.py`), in-game menu adapter, HUD, control bindings |
 | `recomp-common/` | A copy of [recomp-common](https://github.com/tmcleroy/recomp-common) (the in-game menu, the settings rules, the launcher), made by `tools/sync-common.sh`; never changed here |
 | `launcher/` | What this toolkit tells the launcher the recomp ports share (`recomp-common/launcher`; SDL3 + Dear ImGui): `src/description.cpp` has the words for a ROM set, the check of the player's, the game's arguments and the buttons that can be chosen |
-| `docs/` | `VERIFYING.md`, `READABLE.md`, `FEATURES.md` |
+| `fight/` | What a fighting game's training mode has in common: frame data and its meter, the input display, the combo readout, the dummy, boxes on the picture (`docs/FIGHT.md`) |
+| `docs/` | `VERIFYING.md`, `READABLE.md`, `FEATURES.md`, `FIGHT.md` |
 
 ## How a game uses it
 

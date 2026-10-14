@@ -8,6 +8,7 @@
 #pragma once
 
 #include "machine.h"
+#include "spare.h"
 #include "vsav.h"
 
 #include <cstdint>
@@ -53,36 +54,9 @@ bool NotTheStage(uint32_t tile, uint16_t attributes); // everything but the stag
 bool ThePanel(uint32_t tile, uint16_t attributes);    // the panel only
 bool NotTheFighters(uint32_t tile, uint16_t attributes); // the panel and the stage's pieces
 
-// A frame's picture and sound, taken out of the machine to be put together with another's
-struct Made {
-    std::vector<uint32_t> picture;
-    std::vector<int16_t> sound;
-};
-// The frame the machine has just run: its picture, and the sound made since `soundBefore` samples (which is
-// taken out of the machine's)
-void Take(Machine &machine, size_t soundBefore, Made &made);
-// ... and what is to be seen and heard for the frame put in
-void Give(Machine &machine, const Made &made);
-
-// A machine kept as a save state
-struct Spare {
-    std::vector<uint8_t> state; // (empty: not yet switched on)
-    bool ready = false;         // its round is on
-    int32_t frames = 0;         // frames run on the way there
-    void Clear() {
-        state.clear();
-        ready = false;
-        frames = 0;
-    }
-};
-// Runs the spare for a frame in the port's machine, which is left as it was. `before` is called with the
-// spare loaded, before its frame: it sets the controls, Wanted(), CameraAt(), the video's switches, and may
-// change the game's memory. `made`, if given, gets the frame's picture and sound. `after`, if given, is
-// called after the frame with the spare still loaded (to read its memory, or change it).
-void RunSpare(Machine &machine, Spare &spare, const std::function<void(Machine &)> &before, Made *made = nullptr,
-              const std::function<void(Machine &)> &after = nullptr);
-// The spare's machine becomes the port's (and the spare is cleared)
-void Promote(Machine &machine, Spare &spare);
+// Machines kept as save states and run beside the port's are the toolkit's (runtime/spare.h: Spare, RunSpare,
+// Promote, Take, Give, Made); what is wanted (above), the camera's place and the wide picture are kept around a
+// spare's frame by machines.cpp.
 
 // Modes by the files that have them: whether one is on, and ending it
 bool AttractMode();  // modes.cpp
