@@ -100,6 +100,17 @@ namespace {
     }
 } // namespace
 
+// Every game's features that come from the port itself (after the game's own: RegisterGame), for the game and
+// for the list the launcher asks for (--list-features)
+void RegisterPortFeatures() {
+    // (run_ahead: Port::RunAhead)
+    TheGame().features.push_back({"run_ahead", "Game", "Run-ahead",
+                                  "Shows the game a frame or two further on than it is, so that what you press is seen sooner than "
+                                  "on the board (input lag taken away). The game runs as it does without it; it takes two or three "
+                                  "times the processor. Off by itself in the game's own modes beyond fights and training.",
+                                  0, {"Off", "1 frame", "2 frames"}});
+}
+
 bool Port::Init(std::string &error) {
     const RomList list = ParseRomList(GAME_PROGRAM, GAME_GRAPHICS, GAME_SOUND_PROGRAM, GAME_SAMPLES, GAME_KEY, GAME_ROM_SET, GAME_ROM_PARENT);
     if (!LoadRomSet(opt.romPath, list, roms, error)) {
@@ -110,12 +121,7 @@ bool Port::Init(std::string &error) {
     SetRam(machine->ram.data());
     SetEeprom(&machine->eeprom);
     RegisterGame();
-    // (every game's, from the port: run_ahead, RunAhead)
-    TheGame().features.push_back({"run_ahead", "Game", "Run-ahead",
-                                  "Shows the game a frame or two further on than it is, so that what you press is seen sooner than "
-                                  "on the board (input lag taken away). The game runs as it does without it; it takes two or three "
-                                  "times the processor. Off by itself in the game's own modes beyond fights and training.",
-                                  0, {"Off", "1 frame", "2 frames"}});
+    RegisterPortFeatures();
     LoadFeatures(opt.settingsPath, opt.features);
     // The 68000 and the Z80 are run the same way; each falls back to its interpreter if the build has no
     // translated code for it
@@ -929,6 +935,7 @@ bool ParseArgs(int argc, char **argv, port::Options &o) {
             // For the launcher: one optional feature per line (recomp-common/settings.h; the ones that last a
             // session, switched in the game's menu only, are not in it)
             RegisterGame();
+            port::RegisterPortFeatures();
             std::vector<recomp::FeatureInfo> list = FeatureList();
             // (nor are the ones whose switch is on the launcher's first page: game.h, kFeatureFirstPage)
             list.erase(std::remove_if(list.begin(), list.end(), [](const recomp::FeatureInfo &f) { return f.flags & kFeatureFirstPage; }), list.end());
