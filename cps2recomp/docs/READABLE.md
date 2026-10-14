@@ -74,6 +74,7 @@ both, so it covers the hooks' and rewrites' calls being made at the same places 
 | Routine | Address | File |
 | --- | --- | --- |
 | ReadControls: the control panel, once a frame | 001576 | `input.cpp` |
+| ChooseColours, CountShadowCode: the character choice's buttons, and the hidden characters' codes | 020B38, 020C98 | `choosing.cpp` |
 | RoundFighting: a frame of a round: knock-outs, the clock, the round's end | 0097DC | `fight.cpp` |
 | AllHitTests, PlayersAgainstPlayers, ThrownAgainstPlayers: a frame's hit tests | 017F0C, 017F22, 0193B8 | `collision.cpp` |
 | HitTest, AttackAgainst: does this attack hit that object, and where | 017FF4, 018054 | `collision.cpp` |

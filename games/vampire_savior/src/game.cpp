@@ -11,6 +11,7 @@ void CheatsFrame(Machine &machine);
 void RegisterCollision(); // collision.cpp
 void RegisterFight();     // fight.cpp
 void RegisterInput();     // input.cpp
+void RegisterChoosing();  // choosing.cpp
 void RegisterCamera();    // camera.cpp
 void RegisterPlanes();    // planes.cpp
 void RegisterRows();      // rows.cpp
@@ -48,6 +49,7 @@ void RegisterGame() {
     RegisterCollision();
     RegisterFight();
     RegisterInput();
+    RegisterChoosing();
     RegisterCamera();
     RegisterPlanes();
     RegisterRows();
