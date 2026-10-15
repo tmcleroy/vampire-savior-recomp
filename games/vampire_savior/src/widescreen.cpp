@@ -7,6 +7,12 @@
 // its edges come to the stage's ends (camera.cpp), and what the game only keeps while it is in the picture
 // is kept while it is in this one (picture.cpp). With the feature off none of that is there and the game is the board's.
 //
+// With "Invisible walls" (widescreen_walls) as well, the fight is shown in the wide picture but played as on the
+// board: the second half of this file is left out (WidePlay is false, the margin 0), so the players are stopped
+// where the board's picture ends, the camera goes as far as the board's, and what the game keeps or draws is what
+// it does on the board. Only the picture is wider; near a stage's end the view is kept inside the stage, so the
+// board's picture is then to one side of the wide one.
+//
 // A stage is three scroll screens and some objects, each moving at its own rate as the camera does, about the
 // stage's middle. The board's picture is the 384 columns from the camera's place; the stage's own plane (the
 // one the players stand in) is drawn for the camera's whole range and no further: 768 columns. So the wide
@@ -190,12 +196,16 @@ void WidescreenBeforeFrame(Machine &machine) {
     const int camera = static_cast<int16_t>(Ram16(kCameraX)), shown = g_cameraBefore;
     g_cameraBefore = camera;
     g_side = g_shift = 0;
-    g_play = FeatureOn("widescreen");
+    // (with invisible walls the picture is wide and the game is played as on the board)
+    const bool shownWide = FeatureOn("widescreen");
+    g_play = shownWide && !FeatureOn("widescreen_walls");
     // (the modes that put their picture together from more than one machine's keep the board's)
-    if (g_play && OnStage(camera) && OnStage(shown) && !CurtainDrawn(machine)) {
+    if (shownWide && OnStage(camera) && OnStage(shown) && !CurtainDrawn(machine)) {
         g_side = kSide;
         // (the view's left edge is 64 left of the camera, and no further left than the camera's own end:
-        // nearer the end than that, the stage is drawn to the side by what is missing)
+        // nearer the end than that, the stage is drawn to the side by what is missing. Played in the wide
+        // picture the camera never goes there; with invisible walls it does, and the board's picture is
+        // then to one side of the wide one)
         g_shift = shown - std::clamp<int>(shown, CameraLeftEnd() + kSide, CameraRightEnd() - kSide);
     }
     Video::Wide &wide = machine.video.wide;
@@ -234,6 +244,12 @@ void RegisterWidescreen() {
                                   "go to the wide picture's edges, so they can stand further apart than on the board. Off "
                                   "unless switched on here, in every preset: it changes how the game plays.",
                                   kFeatureFirstPage}); // (its switch is on the launcher's first page: game.cfg)
+    TheGame().features.push_back({"widescreen_walls", "Display", "Invisible walls",
+                                  "With widescreen: fights are still shown in 16:9, but played exactly as on the board. The "
+                                  "players are stopped where the board's picture ends, by walls that are not seen, and the "
+                                  "camera goes as far as the board's; near a stage's end the view stays on the stage, so the "
+                                  "play area is then to one side of the picture. Nothing without widescreen.",
+                                  0}); // (on the Display page, beside the picture's other options)
 }
 
 } // namespace cps2recomp

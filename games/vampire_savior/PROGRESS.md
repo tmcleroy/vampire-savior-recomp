@@ -303,6 +303,21 @@ with the camera at rest and moving, before it is called done. Ways of checking t
 the same controls with the feature off and on, compared where the cameras agree; both corners of every
 stage in training beside the board's corners.
 
+## Invisible walls (2026-10-15)
+
+`widescreen_walls`, on the Display page (the launcher's Features and the in-game menu, beside
+Scaling and Picture shape) (a request): the 16:9 picture with the game played as on the board. It leaves
+`WidePlay()` false and `WideMargin()` 0, so every rule in the rewrites is the board's (the players' edges, the
+camera's ends, the picture tests, the pieces, `WideLag`); only `Video::wide` is set, and near a stage's end the view
+is kept on the stage as before (the camera now goes there, so the board's picture is then to one side).
+- `make check-widescreen` plays the ladder with widescreen and the walls on and with neither, and compares work RAM,
+  video and object memory and the registers every 4,000 frames (9 places): all the same. (The frame hash takes the
+  picture in, so `--hash-log` cannot compare them.)
+- `movies/corners.txt`: a training session walked to the left end (frame 2500) and the right (3500). On all twelve
+  stages the wide picture's 128 columns beyond the board's are painted at both ends (no black runs).
+- Not hand-played; not looked at in a window. A piece that the board draws only once it is in its own picture
+  comes in at the play area's edge, not the picture's.
+
 ## Modes (2026-10-12)
 
 "Alternative modes", the first row of the menu (`src/modes.cpp`): training (moved there), attract
