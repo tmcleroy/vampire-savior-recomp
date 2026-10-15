@@ -8,12 +8,15 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - Display options (the Display page, in the launcher and the in-game menu): Scaling (Sharp, as
   before; Whole pixels; Smooth), Picture shape (4:3, as before; Square pixels; Fill) and Window size
   (3x, as before; 2x to 6x). Nothing changes until you choose (toolkit cps2recomp#19).
+
+## 0.1.0-beta.6 - 2026-10-15
+
 - Colour editor: "Save set" keeps the set being edited in the character's library
   (`palettes/library/<Character>/`, one file a set, named `Lilith 1`, `Lilith 2`...) and "Load"
   puts a saved one into any set: left and right try each on the character, LP loads it, MK twice
   deletes it, and moving off the row without loading puts the colours back.
-- Colour editor: Random colours (LK or the Random row) needs a second press, and HK puts back the
-  colours from before them. Choosing a Line shows the animation that uses it most (Bulleta, Victor,
+- Colour editor: Random colours (the Random row: LK, left or right) needs a second press, and HK
+  puts back the colours from before them. Choosing a Line shows the animation that uses it most (Bulleta, Victor,
   Morrigan, Anakaris, Q-Bee). "Load colour files again" and "Write the game's colours" are on the
   colour editor's menu page. The README gives the palettes folder for Windows and Linux too.
 - Model viewer: no second shadow on the floor (the hidden second player's came round into the

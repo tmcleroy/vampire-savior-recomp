@@ -33,7 +33,7 @@ board does not have. Each mode has a page there with a Start row and its choices
   effects'; choosing one shows the animation that uses it most, for the characters whose four lines
   are always on show, found by running each animation on a copy of the machine in the first seconds), the colour (one of 15; it blinks on the character when chosen), and its red, green and
   blue (the board's 16 levels each). Changes are seen at once. LP copies the colour, MP pastes it, HP
-  puts back the game's, LK or the panel's Random colours row, pressed twice, gives every colour of the set a random one (a row of
+  puts back the game's, the panel's Random colours row, pressed twice (LK, left or right), gives every colour of the set a random one (a row of
   the page too), and HK puts back the colours from before it, until the next change; the page has rows to put back the game's colours for the whole set or the
   whole character. What is changed is saved to the character's file in the `palettes` folder (only
   the sets and lines that are not the game's) a moment after the last change and when the editor
