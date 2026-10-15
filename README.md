@@ -166,7 +166,7 @@ character (`Lilith.txt`) holding only the sets that are not the game's. The fold
 
 | System | Folder |
 | --- | --- |
-| Windows | `%APPDATA%\Vampire Savior\palettes` (`C:\Users\<you>\AppData\Roaming\Vampire Savior\palettes`; paste the first into Explorer's address bar) |
+| Windows | `%APPDATA%\Vampire Savior\palettes` (paste it into Explorer's address bar; it is the `AppData\Roaming` folder in your user folder) |
 | macOS | `~/Library/Application Support/Vampire Savior/palettes` |
 | Linux, SteamOS | `~/.local/share/Vampire Savior/palettes` |
 
