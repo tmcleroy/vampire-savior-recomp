@@ -5,6 +5,9 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- In-game menu: Right on a row that leads to a page goes into that page. The launcher's Features
+  page has a search box (Ctrl+F or Cmd+F; Esc empties it, a second Esc leaves it; with a gamepad, A
+  goes in and B leaves with what was typed kept). (toolkit cps2recomp f3d0d8a, recomp-common 0f10506)
 - Board settings (the launcher's and the menu's Board page): the test menu's operator settings
   (difficulty, attack power, timer speed, game speed, damage gauges, event, automatic, continue, demo
   sound, self-censorship), each as the board is set unless chosen; the board's settings memory is not
