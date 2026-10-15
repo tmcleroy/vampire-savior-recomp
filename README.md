@@ -41,6 +41,8 @@ QSound chip, the sound CPU and its registers) is code written for this project, 
   each player, in the launcher.
 - An in-game menu (Esc or `F1`; on a gamepad, the left stick's click or Start and Select together)
   with the training mode and the other modes, save states, speed, the cheats and every feature.
+- The picture your way (Display page): sharp, whole pixels or smooth; 4:3, square pixels or the
+  whole screen; and the window's size.
 - **Pure** plays exactly as the board does. **Enhanced** (the default) adds free play and your own
   [character colours](#custom-colours). Every other feature is a switch of its own.
 - Your ROM set is only ever read. Settings, save states and the board's settings memory go in your

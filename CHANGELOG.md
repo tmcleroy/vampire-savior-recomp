@@ -5,6 +5,10 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Display options (the Display page, in the launcher and the in-game menu): Scaling (Sharp, as
+  before; Whole pixels; Smooth), Picture shape (4:3, as before; Square pixels; Fill) and Window size
+  (3x, as before; 2x to 6x). Nothing changes until you choose (toolkit cps2recomp#19).
+
 ## 0.1.0-beta.6 - 2026-10-15
 
 - Colour editor: "Save set" keeps the set being edited in the character's library

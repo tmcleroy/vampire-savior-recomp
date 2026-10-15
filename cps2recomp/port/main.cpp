@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -116,6 +117,30 @@ void RegisterPortFeatures() {
                                   "on the board (input lag taken away). The game runs as it does without it; it takes two or three "
                                   "times the processor. Off by itself in the game's own modes beyond fights and training.",
                                   0, {"Off", "1 frame", "2 frames"}});
+    // (display_*: how the picture is fitted to the window, present.h; the first of each is how it always was)
+    TheGame().features.push_back({"display_scaling", "Display", "Scaling",
+                                  "Sharp: as large as fits, each pixel a crisp block. Whole pixels: every pixel the same whole "
+                                  "number of the screen's pixels tall (a border round it). Smooth: softened all over.",
+                                  0, {"Sharp", "Whole pixels", "Smooth"}});
+    TheGame().features.push_back({"display_shape", "Display", "Picture shape",
+                                  "4:3: as the arcade's monitor showed it. Square pixels: each pixel as wide as it is tall, "
+                                  "a little wider than 4:3. Fill: the whole window or screen, stretched to it.",
+                                  0, {"4:3", "Square pixels", "Fill"}});
+    TheGame().features.push_back({"window_size", "Display", "Window size",
+                                  "How large the window opens, in times the board's 224 lines (it can be made any size by "
+                                  "dragging its edges; full screen is on the launcher's first page and F11).",
+                                  0, {"3x", "2x", "4x", "5x", "6x"}});
+}
+
+Scaling DisplayScaling() {
+    return static_cast<Scaling>(std::clamp(FeatureValue("display_scaling"), 0, 2));
+}
+Shape DisplayShape() {
+    return static_cast<Shape>(std::clamp(FeatureValue("display_shape"), 0, 2));
+}
+int WindowSize() {
+    static const int kTimes[] = {3, 2, 4, 5, 6};
+    return kTimes[std::clamp(FeatureValue("window_size"), 0, 4)];
 }
 
 bool Port::Init(std::string &error) {
@@ -833,7 +858,7 @@ void Usage() {
             "                         check (both, every write to the chip compared)\n"
             "  --sound-test SEED[:N]  every N frames (30) a command to the sound side: each song in turn, placed\n"
             "                         some made-up way, and the other commands (with --sound check)\n"
-            "  --scale N              window size, times 384x224\n"
+            "  --scale N              window size, times 224 lines (else the Display page's)\n"
             "  --fullscreen  --mute  --unthrottled\n"
             "  --headless             no window, no sound, as fast as it goes\n"
             "  --frames N             stop after N frames\n"
@@ -842,7 +867,9 @@ void Usage() {
             "  --hash-picture         ... of the picture only (to compare runs whose timing is not the same)\n"
             "  --hash-game            ... without the Z80 and its own memory (to compare --sound driver and z80)\n"
 "  --renderer sdl|gpu     how the picture gets to the window: SDL's GPU API unless said (or not there)\n"
-            "  --present-test F.png   (headless) the run's last picture drawn 896x672 by the GPU path, no window\n"
+            "  --present-test F.png   (headless) the run's last picture drawn by the GPU path, no window, as the\n"
+            "                         Display page has it (896x672 at 4:3)\n"
+            "  --present-size WxH     ... in a window this big\n"
                         "  --cpu-speed N          the 68000 N times as fast as the board's: the game is never short of time\n"
             "  --movie FILE           replay an input movie\n"
             "  --record FILE          record an input movie\n"
@@ -912,6 +939,10 @@ bool ParseArgs(int argc, char **argv, port::Options &o) {
             o.renderer = next();
         } else if (a == "--present-test") {
             o.presentTest = next();
+        } else if (a == "--present-size") {
+            const std::string v = next();
+            o.presentWidth = atoi(v.c_str());
+            o.presentHeight = v.find('x') == std::string::npos ? 0 : atoi(v.c_str() + v.find('x') + 1);
         } else if (a == "--cpu-speed") {
             o.cpuSpeed = atoi(next());
         } else if (a == "--movie") {
@@ -1088,9 +1119,15 @@ int main(int argc, char **argv) {
             std::vector<uint32_t> shown, drawn;
             std::string error;
             p.Shown(shown);
-            const int across = p.ShownWidth(), outWidth = 896 * across / Video::kWidth;
-            if (SDL_Init(SDL_INIT_VIDEO) && port::Presenter::Render(shown.data(), across, Video::kHeight, outWidth, 672, drawn, error)) {
-                WritePng(p.opt.presentTest.c_str(), drawn.data(), outWidth, 672);
+            // (in a window --present-size big, or one the picture's shape at 3 times its lines)
+            const int across = p.ShownWidth();
+            const int outHeight = p.opt.presentHeight > 0 ? p.opt.presentHeight : 672;
+            const int outWidth = p.opt.presentWidth > 0 ? p.opt.presentWidth
+                                                        : static_cast<int>(std::lround(outHeight * port::PictureShape(across, Video::kHeight, port::DisplayShape(), 4.0f / 3.0f)));
+            const SDL_FRect where = port::FitPicture(outWidth, outHeight, across, Video::kHeight, port::DisplayShape(), port::DisplayScaling());
+            if (SDL_Init(SDL_INIT_VIDEO) &&
+                port::Presenter::Render(shown.data(), across, Video::kHeight, outWidth, outHeight, where, port::DisplayScaling(), drawn, error)) {
+                WritePng(p.opt.presentTest.c_str(), drawn.data(), outWidth, outHeight);
             } else {
                 fprintf(stderr, "--present-test: %s\n", error.empty() ? SDL_GetError() : error.c_str());
                 result = 1;

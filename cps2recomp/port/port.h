@@ -6,6 +6,7 @@
 
 #include "../machine/machine.h"
 #include "menu.h"
+#include "present.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -52,7 +53,8 @@ struct Options {
     int cpuSpeed = 1;         // --cpu-speed
     std::string renderer;     // --renderer sdl|gpu (gpu unless said)
     std::string presentTest;  // --present-test FILE.png: the last picture drawn by the GPU path with no window
-    int scale = 3;
+    int presentWidth = 0, presentHeight = 0; // --present-size WxH: the window it is drawn in
+    int scale = 0;            // --scale: the window this many times the board's lines (0: the Display page's)
 };
 
 // Recorded input: what the players hold, at the frames where it changes
@@ -116,5 +118,11 @@ struct Port {
 };
 
 int RunWindowed(Port &port);
+
+// The Display page's choices (the port's display_* and window_size features): how the picture is fitted to
+// the window, and how many times the board's lines the window opens
+Scaling DisplayScaling();
+Shape DisplayShape();
+int WindowSize();
 
 } // namespace port

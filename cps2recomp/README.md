@@ -36,7 +36,9 @@ ports.
   (`sound/`). Capcom's sound driver, version 2.01b, is also there as ordinary C++ (`sound/driver.cpp`),
   used in place of the Z80 for games that have that version.
 - **A native picture.** SDL's GPU API (Metal, Vulkan or Direct3D 12), with SDL's renderer where
-  there is no GPU device, and a wider picture (up to 16:9) for games whose sources ask for it.
+  there is no GPU device, and a wider picture (up to 16:9) for games whose sources ask for it. The
+  Display page lets players choose how it fits the window: sharp, whole pixels or smooth; 4:3, square
+  pixels or the whole screen; and the window's size.
 - **Readable rewrites, with proof.** A game's routines can be rewritten by hand as ordinary C++. A
   checker runs the original and the rewrite on every call and compares memory, registers, timing and,
   when asked, video RAM ([docs/READABLE.md](docs/READABLE.md)).
