@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Tommy McLeroy
 //
 // Vampire Savior: what the game's own sources add to the port (see PROGRESS.md).
+#include "colours.h"
 #include "game.h"
 #include "modes.h"
 
@@ -42,10 +43,7 @@ void RegisterTitle(); // title.cpp
 void TitleFrame(Machine &machine);
 void RegisterWidescreen(); // widescreen.cpp
 void WidescreenBeforeFrame(Machine &machine);
-void RegisterPalettes(); // palettes.cpp
-void RegisterColourEditor(); // colour_editor.cpp
-void ColourEditorCheck();
-void PalettesBeforeFrame(Machine &machine);
+void RegisterColours(); // colours.cpp (the toolkit's fight/colours.h)
 
 void RegisterGame() {
     RegisterModes();
@@ -70,11 +68,9 @@ void RegisterGame() {
     // The training aids work only in a training session (the dummy's are the toolkit's: fight::RegisterDummy)
     TrainingAids({"damage_readout", "frame_data", "frame_log", "frame_meter", "health_refill", "hit_boxes", "input_display"});
     TheGame().inTraining = [] { return FeatureOn("training_mode"); };
-    RegisterPalettes();
-    RegisterColourEditor();
+    RegisterColours();
     TheGame().beforeFrame = [](Machine &machine) {
-        ColourEditorCheck();
-        PalettesBeforeFrame(machine);
+        colours::BeforeFrame(machine);
         // (first: the modes below may run other machines' frames, which are never wide)
         WidescreenBeforeFrame(machine);
         TrainingBeforeFrame(machine);

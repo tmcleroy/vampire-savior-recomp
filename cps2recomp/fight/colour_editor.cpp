@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Copyright (C) 2026 Tommy McLeroy
+// Copyright (C) 2026 Tommy McLeroy. Part of cps2recomp.
 //
-// Vampire Savior: the colour editor, a mode of the menu's "Alternative modes" page. It is the model viewer
-// (model.cpp) with a panel at the right of the picture and player 1's controls given to the panel: a row for
-// the character, the background and the size (the viewer's own choices), for the set of colours (by the
-// buttons that choose it) and its line (the character's own colours, or its effects'), for the colour, and
-// for its red, green and blue, 16 levels each as the board has them.
+// The colour editor (colours.h), a mode of the menu's "Alternative modes" page. It is the game's model viewer
+// with a panel at the right of the picture and player 1's controls given to the panel: a row for the character,
+// the background and the size (the viewer's own choices), for the set of colours (by the buttons that choose it)
+// and its line (the character's own colours, or its effects'), for the colour, and for its red, green and blue,
+// 16 levels each as the board has them.
 //
-// A change is written where the game reads the character's colours (palettes.cpp, which keeps them in the
-// ROM image), and into the palettes the board is showing, so that it is seen at once; the colour chosen
-// blinks on the character for a moment. The character's colours that are not the game's are written to its
-// file in the palettes folder a little after the last change, and when the editor ends.
+// A change is written where the game reads the character's colours (colours.cpp, which keeps them in the ROM
+// image), and into the palettes the board is showing, so that it is seen at once; the colour chosen blinks on
+// the character for a moment. The character's colours that are not the game's are written to its file in the
+// palettes folder a little after the last change, and when the editor ends.
+#include "colours.h"
 #include "machine.h"
-#include "palettes.h"
-#include "vsav.h"
 
 #include "../recomp-common/text.h"
 
@@ -24,17 +23,9 @@
 #include <string>
 #include <vector>
 
-namespace cps2recomp {
-
-void StartModelViewer(Machine &machine); // model.cpp
-bool ModelViewer();
-int ModelCharacter();
-int ModelCharacterNumber(int choice);
-int ModelAnimationStep(Machine &machine, int choice, int by);
-const std::vector<const char *> &ModelAnimationNames();
+namespace cps2recomp::colours {
 
 namespace {
-    using namespace vsav;
     using recomp::text::Canvas;
     using recomp::text::Color;
 
@@ -44,22 +35,18 @@ namespace {
                kRowRandom, kRowSave, kRowLoad, kRows };
     constexpr const char *kRowNames[kRows] = {"Character", "Background", "Size", "Animation", "Set", "Line", "Colour",
                                               "Red", "Green", "Blue", "Random colours", "Save set", "Load"};
+    // The viewer's choices the editor has rows for
+    constexpr const char *kCharacterChoice = "model_character", *kBackgroundChoice = "model_background", *kSizeChoice = "model_size";
     // The editor's own "Animation" choice (the viewer's is left as it was): standing, the game's idle, unless chosen
     constexpr const char *kAnimation = "colours_animation";
     const std::vector<const char *> &AnimationNames() { // (the viewer's, with standing named shortly)
         static std::vector<const char *> names;
         if (names.empty()) {
-            names = ModelAnimationNames();
+            names = TheDescription().animationNames();
             names[0] = "Standing";
         }
         return names;
     }
-    constexpr const char *kSetNames[kColourSetsEach] = {"LP", "MP", "HP", "LK", "MK", "HK", "PP", "KK", "AUTO1", "AUTO2"};
-    constexpr const char *kLineNames[kPalettesInSet] = {"Body", "Effect 1", "Effect 2", "Effect 3"};
-    // The viewer's "Background" and "Size" choices, as short as the panel needs them (model.cpp has them in full)
-    constexpr const char *kBackgrounds[] = {"Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7",
-                                            "Stage 8", "Stage 9", "Stage 10", "Stage 11", "Stage 12", "White", "Black"};
-    constexpr const char *kSizes[] = {"1x", "1.5x", "2x", "3x", "4x", "6x", "8x", "12x", "16x", "25x", "0.25x", "0.5x", "0.75x"};
     constexpr int kSeen = kColoursInPalette - 1; // (the 16th colour of a palette is never seen)
 
     constexpr int kHeldFirst = 20, kHeldEvery = 8, kHeldEveryLevel = 4; // frames a direction is held before it repeats
@@ -67,6 +54,38 @@ namespace {
     constexpr int kSaveAfter = 45;                 // frames after the last change that the file is written
     constexpr int kSaidFor = 120;                  // frames a message is shown for
     constexpr int kPanelWidth = 140, kShift = 72;  // the panel's width, and how far left the character goes
+
+    int Sets() {
+        return static_cast<int>(TheDescription().setNames.size());
+    }
+    int Lines() {
+        return TheDescription().palettesInSet;
+    }
+    std::string LineName(int line) {
+        const auto &names = TheDescription().lineNames;
+        return line < static_cast<int>(names.size()) ? names[static_cast<size_t>(line)] : line ? "Effect " + std::to_string(line) : "Body";
+    }
+    // A choice of the menu's: how many it has and the name of one
+    const Feature *FindFeature(const char *name) {
+        for (const Feature &feature : TheGame().features) {
+            if (std::string(feature.name) == name) {
+                return &feature;
+            }
+        }
+        return nullptr;
+    }
+    int ChoiceCount(const char *name) {
+        const Feature *feature = FindFeature(name);
+        return feature ? std::max(static_cast<int>(feature->choices.size()), 1) : 1;
+    }
+    const char *ChoiceName(const char *name, const std::vector<const char *> &shortNames) {
+        const int value = std::clamp(FeatureValue(name), 0, ChoiceCount(name) - 1);
+        if (value < static_cast<int>(shortNames.size())) {
+            return shortNames[static_cast<size_t>(value)];
+        }
+        const Feature *feature = FindFeature(name);
+        return feature && value < static_cast<int>(feature->choices.size()) ? feature->choices[static_cast<size_t>(value)] : "";
+    }
 
     struct State {
         bool on = false;
@@ -79,27 +98,39 @@ namespace {
         int blink = 0;        // frames the colour chosen still blinks for
         int unsaved = -1;     // frames since the last change not yet written (-1: none)
         int copied = -1;      // a colour copied with LP (-1: none)
-        // The character's saved sets (palettes.h), and the one being tried on the Load row (0: none; n: the
+        // The character's saved sets (colours.h), and the one being tried on the Load row (0: none; n: the
         // n-th), with the set's colours as they were before it, to put back if it is not loaded
         std::vector<std::string> saved;
         int loading = 0;
         bool trying = false;
-        uint16_t kept[kPalettesInSet][kColoursInPalette] = {};
+        uint16_t kept[kMostPalettes][kColoursInPalette] = {};
         int deleteFor = 0;    // frames MK can still be pressed again to delete the saved set
         std::string said;     // a message, and frames it is still shown for
         int saidFor = 0;
     } g;
 
+    constexpr size_t kValueMost = 15, kLineMost = 21; // characters: beside a row's name, and a whole line
+    // Text cut to fit the panel (".." at its end when cut)
+    std::string Fit(std::string text, size_t most) {
+        return text.size() <= most ? text : text.substr(0, most - 2) + "..";
+    }
     void Say(std::string text) {
-        g.said = std::move(text);
+        g.said = Fit(std::move(text), kLineMost);
         g.saidFor = kSaidFor;
+    }
+    // A saved set's name as the panel shows it: without the character's own name at its start ("Ryu Classic" is
+    // "Classic" on Ryu's panel), to fit
+    std::string ShortName(const std::string &saved, size_t most) {
+        const std::string prefix = std::string(Name(g.character)) + " ";
+        const bool own = saved.size() > prefix.size() && saved.compare(0, prefix.size(), prefix) == 0;
+        return Fit(own ? saved.substr(prefix.size()) : saved, most);
     }
     void Save() {
         if (g.unsaved < 0 || g.character < 0) {
             return;
         }
         g.unsaved = -1;
-        Say(SaveColours(g.character) ? std::string("Saved ") + ColourName(g.character) : std::string("Not saved: no data folder"));
+        Say(SaveColours(g.character) ? std::string("Saved ") + Name(g.character) : std::string("Not saved: no folder"));
     }
     void PutBack();
     void End() {
@@ -140,7 +171,7 @@ namespace {
     }
     int Characters() {
         int count = 0;
-        while (ModelCharacterNumber(count) >= 0) {
+        while (TheDescription().characterNumber(count) >= 0) {
             count++;
         }
         return count;
@@ -152,7 +183,7 @@ namespace {
     // file keeps the set's own); stopping puts them back unless the saved one was loaded
     void PutBack() {
         if (g.trying) {
-            for (int line = 0; line < kPalettesInSet; line++) {
+            for (int line = 0; line < Lines(); line++) {
                 for (int n = 0; n < kColoursInPalette; n++) {
                     SetColour(g.character, g.set, line, n, g.kept[line][n]);
                 }
@@ -167,19 +198,19 @@ namespace {
         if (!choice) {
             return;
         }
-        for (int line = 0; line < kPalettesInSet; line++) {
+        for (int line = 0; line < Lines(); line++) {
             for (int n = 0; n < kColoursInPalette; n++) {
                 g.kept[line][n] = Colour(g.character, g.set, line, n);
             }
         }
-        uint16_t colours[kPalettesInSet][kColoursInPalette];
-        std::copy(&g.kept[0][0], &g.kept[0][0] + kPalettesInSet * kColoursInPalette, &colours[0][0]);
-        if (!ReadSavedSet(g.character, g.saved[choice - 1], colours)) {
+        uint16_t colours[kMostPalettes][kColoursInPalette];
+        std::copy(&g.kept[0][0], &g.kept[0][0] + kMostPalettes * kColoursInPalette, &colours[0][0]);
+        if (!ReadSavedSet(g.character, g.saved[static_cast<size_t>(choice - 1)], colours)) {
             Say("Cannot read it");
             return;
         }
         g.trying = true;
-        for (int line = 0; line < kPalettesInSet; line++) {
+        for (int line = 0; line < Lines(); line++) {
             for (int n = 0; n < kSeen; n++) {
                 SetColour(g.character, g.set, line, n, colours[line][n]);
             }
@@ -191,7 +222,7 @@ namespace {
         }
         g.trying = false; // (kept)
         g.unsaved = 0;
-        Say("Loaded " + g.saved[g.loading - 1]);
+        Say("Loaded " + ShortName(g.saved[static_cast<size_t>(g.loading - 1)], kLineMost - 7));
     }
     void Delete() {
         if (!g.loading) {
@@ -202,10 +233,10 @@ namespace {
             Say("MK again: delete");
             return;
         }
-        const std::string name = g.saved[g.loading - 1];
+        const std::string name = g.saved[static_cast<size_t>(g.loading - 1)];
         PutBack();
         g.deleteFor = 0;
-        Say(RemoveSavedSet(g.character, name) ? "Deleted " + name : std::string("Not deleted"));
+        Say(RemoveSavedSet(g.character, name) ? "Deleted " + ShortName(name, kLineMost - 8) : std::string("Not deleted"));
         g.saved = SavedSets(g.character);
     }
 
@@ -213,15 +244,15 @@ namespace {
     void Step(Machine &machine, int by) {
         switch (g.row) {
         case kRowCharacter:
-            Save(); // (the viewer starts again with the next one: model.cpp)
-            StepChoice("model_character", Characters(), by);
+            Save(); // (the viewer starts again with the next one)
+            StepChoice(kCharacterChoice, Characters(), by);
             break;
-        case kRowBackground: StepChoice("model_background", static_cast<int>(std::size(kBackgrounds)), by); break;
-        case kRowSize: StepChoice("model_size", static_cast<int>(std::size(kSizes)), by); break;
-        case kRowAnimation: SetFeatureValue(kAnimation, ModelAnimationStep(machine, FeatureValue(kAnimation), by)); break;
-        case kRowSet: g.set = (g.set + by + kColourSetsEach) % kColourSetsEach; break;
+        case kRowBackground: StepChoice(kBackgroundChoice, ChoiceCount(kBackgroundChoice), by); break;
+        case kRowSize: StepChoice(kSizeChoice, ChoiceCount(kSizeChoice), by); break;
+        case kRowAnimation: SetFeatureValue(kAnimation, TheDescription().animationStep(machine, FeatureValue(kAnimation), by)); break;
+        case kRowSet: g.set = (g.set + by + Sets()) % Sets(); break;
         case kRowLine:
-            g.line = (g.line + by + kPalettesInSet) % kPalettesInSet;
+            g.line = (g.line + by + Lines()) % Lines();
             g.blink = kBlinkFor;
             break;
         case kRowColour:
@@ -231,7 +262,7 @@ namespace {
         case kRowRandom: Randomise(machine); break;
         case kRowSave: {
             std::string name;
-            Say(SaveSet(g.character, g.set, name) ? "Saved as " + name : std::string("Not saved: no data folder"));
+            Say(SaveSet(g.character, g.set, name) ? "Saved as " + ShortName(name, kLineMost - 9) : std::string("Not saved: no folder"));
             break;
         }
         case kRowLoad:
@@ -252,12 +283,12 @@ namespace {
     // The player's set made the one being edited, and its palettes put where the board shows them from (the
     // colour chosen, while it blinks, turned over)
     void ShowColours(Machine &machine) {
-        SetRam8(Player(0) + kColours, static_cast<uint8_t>(g.set));
-        SetRam32(Player(0) + kColourSet, ColourSetAddress(g.character, g.set));
-        const uint32_t buffer = Ram32(kPaletteBuffer);
-        const uint32_t first = buffer + static_cast<uint32_t>(Ram8(Player(0) + kPaletteSlot)) * kColoursInPalette * 2;
-        const bool firstOnly = (kFirstLineOnly >> (g.character & 31)) & 1;
-        for (int line = 0; line < (firstOnly ? 1 : kPalettesInSet); line++) {
+        int lines = 0;
+        const uint32_t first = TheDescription().showSet(machine, g.character, g.set, lines);
+        if (!first) {
+            return;
+        }
+        for (int line = 0; line < std::min(lines, Lines()); line++) {
             for (int n = 0; n < kColoursInPalette; n++) {
                 uint16_t colour = Colour(g.character, g.set, line, n);
                 if (line == g.line && n == g.colour && g.blink > 0 && (g.blink / kBlinkEvery) % 2 == 1) {
@@ -291,23 +322,24 @@ namespace {
             text(x + 6, y, kRowNames[row], chosen ? white : dim, -1);
             char value[32] = "";
             switch (row) {
-            case kRowCharacter: snprintf(value, sizeof(value), "%s", ColourName(g.character)); break;
-            case kRowBackground: snprintf(value, sizeof(value), "%s", kBackgrounds[std::clamp(FeatureValue("model_background"), 0, 13)]); break;
-            case kRowSize: snprintf(value, sizeof(value), "%s", kSizes[std::clamp(FeatureValue("model_size"), 0, 12)]); break;
+            case kRowCharacter: snprintf(value, sizeof(value), "%s", Name(g.character)); break;
+            case kRowBackground: snprintf(value, sizeof(value), "%s", ChoiceName(kBackgroundChoice, TheDescription().backgrounds)); break;
+            case kRowSize: snprintf(value, sizeof(value), "%s", ChoiceName(kSizeChoice, {})); break;
             case kRowAnimation: {
                 const int choice = FeatureValue(kAnimation);
                 const auto &names = AnimationNames();
-                snprintf(value, sizeof(value), "%s", choice <= 0 || choice >= static_cast<int>(names.size()) ? "Standing" : names[choice]);
+                snprintf(value, sizeof(value), "%s", choice <= 0 || choice >= static_cast<int>(names.size()) ? "Standing" : names[static_cast<size_t>(choice)]);
                 break;
             }
-            case kRowSet: snprintf(value, sizeof(value), "%s", kSetNames[g.set]); break;
-            case kRowLine: snprintf(value, sizeof(value), "%s", kLineNames[g.line]); break;
+            case kRowSet: snprintf(value, sizeof(value), "%s", TheDescription().setNames[static_cast<size_t>(g.set)]); break;
+            case kRowLine: snprintf(value, sizeof(value), "%s", LineName(g.line).c_str()); break;
             case kRowColour: snprintf(value, sizeof(value), "%d", g.colour + 1); break;
             case kRowRandom:
             case kRowSave: snprintf(value, sizeof(value), "%s", chosen ? "< >" : ""); break;
             case kRowLoad:
                 snprintf(value, sizeof(value), "%s",
-                         g.loading ? g.saved[g.loading - 1].c_str() : !chosen ? "" : g.saved.empty() ? "none saved" : "< >");
+                         g.loading ? ShortName(g.saved[static_cast<size_t>(g.loading - 1)], kValueMost).c_str()
+                                   : !chosen ? "" : g.saved.empty() ? "none saved" : "< >");
                 break;
             default: {
                 // a bar of 16 levels, and the level
@@ -372,14 +404,14 @@ namespace {
             SetFeature("custom_colours", true);
         }
         g.on = true;
-        StartModelViewer(machine);
+        TheDescription().startViewer(machine);
     }
     void ResetSet(Machine &) {
         if (!g.on || g.character < 0) {
             return;
         }
         PutBack();
-        for (int line = 0; line < kPalettesInSet; line++) {
+        for (int line = 0; line < Lines(); line++) {
             for (int n = 0; n < kColoursInPalette; n++) {
                 SetColour(g.character, g.set, line, n, GameColour(g.character, g.set, line, n));
             }
@@ -395,7 +427,7 @@ namespace {
         PutBack();
         static std::mt19937 random(std::random_device{}());
         std::uniform_int_distribution<int> level(0, 0x0FFF);
-        for (int line = 0; line < kPalettesInSet; line++) {
+        for (int line = 0; line < Lines(); line++) {
             for (int n = 0; n < kSeen; n++) {
                 SetColour(g.character, g.set, line, n, static_cast<uint16_t>(level(random)));
             }
@@ -408,8 +440,8 @@ namespace {
             return;
         }
         PutBack();
-        for (int set = 0; set < kColourSetsEach; set++) {
-            for (int line = 0; line < kPalettesInSet; line++) {
+        for (int set = 0; set < Sets(); set++) {
+            for (int line = 0; line < Lines(); line++) {
                 for (int n = 0; n < kColoursInPalette; n++) {
                     SetColour(g.character, set, line, n, GameColour(g.character, set, line, n));
                 }
@@ -419,34 +451,34 @@ namespace {
     }
 } // namespace
 
-const char *ColourEditorAnimation() {
+const char *EditorAnimation() {
     return g.on ? kAnimation : nullptr;
 }
-int ColourEditorShift() {
+int EditorShift() {
     return g.on ? kShift : 0;
 }
-void EndColourEditor() {
+void EndEditor() {
     End();
 }
 
-// Before every frame: the editor ends with the viewer (the menu's Reset, another mode, a state loaded), and
-// keeps Custom colours on while it runs (switched off, the files' colours would be put back under it)
-void ColourEditorCheck() {
-    if (g.on && !ModelViewer()) {
+// Before every frame (BeforeFrame): the editor ends with the viewer (the menu's Reset, another mode, a state
+// loaded), and keeps Custom colours on while it runs (switched off, the files' colours would be put back under it)
+void EditorCheck() {
+    if (g.on && !TheDescription().viewerOn()) {
         End();
     } else if (g.on && !FeatureOn("custom_colours")) {
         SetFeature("custom_colours", true);
     }
 }
 
-// With the viewer's round on: player 1's controls are the panel's (and the character stands still)
-void ColourEditorBeforeFrame(Machine &machine) {
+void EditorBeforeFrame(Machine &machine) {
     if (!g.on) {
         return;
     }
-    if (ModelCharacter() != g.character) {
+    const int character = TheDescription().viewerCharacter();
+    if (character != g.character) {
         Save();
-        g.character = ModelCharacter();
+        g.character = character;
     }
     const uint16_t now = machine.players[0];
     machine.players[0] = 0;
@@ -501,14 +533,13 @@ void ColourEditorBeforeFrame(Machine &machine) {
     ShowColours(machine);
 }
 
-// After the frame, with the viewer's picture made: the panel over its right
-void ColourEditorFrame(Machine &machine) {
+void EditorFrame(Machine &machine) {
     if (g.on && g.character >= 0) {
         Draw(machine);
     }
 }
 
-void RegisterColourEditor() {
+void RegisterEditor() {
     Game &game = TheGame();
     game.pages.push_back({kPage, "Alternative modes",
                           "The characters' colours changed while you watch: any set, the character's own colours or its "
@@ -531,4 +562,4 @@ void RegisterColourEditor() {
                              "While editing: every set of the character being edited back to the game's colours.", ResetCharacter});
 }
 
-} // namespace cps2recomp
+} // namespace cps2recomp::colours

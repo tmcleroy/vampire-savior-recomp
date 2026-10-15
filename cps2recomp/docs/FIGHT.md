@@ -19,3 +19,27 @@ player's `settings.ini` reads the same across the ports.
 `runtime/spare.h` holds the machines a game's modes keep as save states and run beside the port's (a stage that
 scrolls into the next, the next fight made ready while the last one ends): `RunSpare`, `Promote`, `Take`, `Give`,
 and `SetSpareKeeping` for what a game keeps of its own around a spare's frame.
+
+## Custom colours and the colour editor
+
+`fight/colours.h` gives a game the players' own colours for its characters and an editor to make them, as
+Vampire Savior had them first. A game registers a `colours::Description` (in its `RegisterGame`) and calls
+`colours::BeforeFrame` before its viewer's own work each frame; its model viewer calls `EditorBeforeFrame`
+(after its round is on, before it shows its animation), `EditorFrame` (after its picture is made),
+`EditorShift` (the character drawn that far left) and `EditorAnimation` (the choice to use for "Animation"
+while the editor is on), and `EndEditor` when its own Start is chosen.
+
+| The game tells | What for |
+| --- | --- |
+| `characters` (number, name, the name abroad), `setNames`, `palettesInSet`, `lineNames` | The files' names and sections, the editor's rows |
+| `setAddress`, `ranges` | Where a set is in the ROM image (`Program`), and every place of the characters' colours (sets and effects) |
+| `romFile`, `romFileAt`, `romFileSize`, `same`, `romFileSwapped`, `romFileWhose` | The ROM file PalMod changes: only its words inside `ranges` are taken (the rest are counted and left), and the file is refused unless `same` is the game's |
+| `featureDescription`, `originalHelp` | The feature's words in the menu, and the remark at the head of each file "Write the game's colours" writes |
+| `showSet` | The editor's preview: player 1 made to use the set, and where its palettes are in the buffer the board shows from (each frame the set is written there, the brightness kept) |
+| `startViewer`, `viewerOn`, `viewerCharacter`, `characterNumber`, `animationStep`, `animationNames`, `backgrounds` | The model viewer the editor works in; it uses the viewer's `model_character`, `model_background` and `model_size` choices |
+
+The files, the same in every game: `palettes/<Character>.txt` (a `[SET]` section a set, up to a line a palette
+of 16 `#RRGGBB` or `#RGB` colours, `-` for the game's own; a `#` with no hex digit after it starts a remark),
+`palettes/original/` (the game's own, written by the command), `palettes/library/<Character>/<Name N>.txt` (one
+set a file). The editor saves a character's file 45 frames after the last change and when it ends, with only
+the sets and lines that are not the game's.

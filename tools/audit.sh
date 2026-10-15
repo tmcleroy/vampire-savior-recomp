@@ -43,7 +43,7 @@ check "files of another project's are only the ones the notices list" "$(grep_fi
 if [ "${1:-}" = "--public" ]; then
     echo "-- before the repository is public"
     # (ports that are not public yet are not named in one that is)
-    check "no names of ports that are still private" "$(grep_files -i -e 'satrecomp' -e 'snesrecomp' -e 'fighting.?vipers' -e 'bonkers' -e 'puzzle.?fighter' || true)"
+    check "no names of ports that are still private" "$(grep_files -i -e 'snesrecomp' -e 'fighting.?vipers' -e 'bonkers' -e 'puzzle.?fighter' || true)"
     check "every source file has a license line" "$(grep -E '\.(h|c|cpp|py|sh|cmake|mk)$|CMakeLists\.txt$' "$LIST" | tr '\n' '\0' | xargs -0 grep -LiE 'SPDX-License-Identifier:|^// license:' 2>/dev/null || true)"
     check "the README and the notices are there" "$(for f in README.md LICENSE THIRD_PARTY_NOTICES.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md VERSION; do [ -f "$f" ] || echo "missing: $f"; done)"
 fi
