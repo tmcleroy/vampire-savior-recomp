@@ -105,7 +105,7 @@ namespace {
         bool trying = false;
         uint16_t kept[kMostPalettes][kColoursInPalette] = {};
         int deleteFor = 0;    // frames MK can still be pressed again to delete the saved set
-        int randomFor = 0;    // frames LK (or the Random row) can still be pressed again for random colours
+        int randomFor = 0;    // frames the Random row can still be pressed again (LK, left or right) for random colours
         // The set as it was before the last random colours, for HK to put back (until another change)
         bool canUndo = false;
         int undoSet = 0;
@@ -185,7 +185,7 @@ namespace {
     }
 
     void Randomise(Machine &machine);
-    // Random colours by the panel (LK, or the Random row): only at a second press within a second and a half,
+    // Random colours by the panel (the Random row: LK, left or right): only at a second press within a second and a half,
     // so that one press by mistake does not lose the set
     void AskRandom(Machine &machine) {
         if (g.randomFor > 0) {
@@ -193,7 +193,7 @@ namespace {
             Randomise(machine);
         } else {
             g.randomFor = 90;
-            Say(g.row == kRowRandom ? "Again: random colours" : "LK again: random");
+            Say("Again: random colours");
         }
     }
     // HK: the set back as it was before the random colours
@@ -416,7 +416,8 @@ namespace {
         }
         y += 22;
         // What the controls do (on the Load row, its own), the last line giving way to a message
-        const char *const help[] = {"Arrows: choose/change", "LP copy  MP paste", g.canUndo ? "HK undo  LK random" : "HP game's  LK random"};
+        const char *const help[] = {"Arrows: choose/change", "LP copy  MP paste",
+                                    g.canUndo ? "HK undo random" : g.row == kRowRandom ? "LK twice: random" : "HP game's colour"};
         const char *const loadHelp[] = {"Left/Right: try one", "LP load it  MK delete", "Up/Down: put it back"};
         const char *const *lines = g.row == kRowLoad ? loadHelp : help;
         for (int n = 0; n < 2; n++) {
@@ -550,7 +551,8 @@ void EditorBeforeFrame(Machine &machine) {
         }
     }
     g.deleteFor = std::max(g.deleteFor - 1, 0);
-    g.randomFor = std::max(g.randomFor - 1, 0);
+    // (a first press counts only while the Random row stays chosen)
+    g.randomFor = g.row == kRowRandom ? std::max(g.randomFor - 1, 0) : 0;
     // The animation that shows the line chosen (the game may take a moment to find out: asked each frame)
     if (g.lineWanted >= 0) {
         const int animation = TheDescription().animationForLine ? TheDescription().animationForLine(machine, g.lineWanted) : -1;
@@ -574,7 +576,7 @@ void EditorBeforeFrame(Machine &machine) {
         Change(static_cast<uint16_t>(g.copied));
     } else if (pressed & kPunch3) {
         Change(GameColour(g.character, g.set, g.line, g.colour));
-    } else if (pressed & kKick1) {
+    } else if ((pressed & kKick1) && g.row == kRowRandom) {
         AskRandom(machine);
     } else if (pressed & kKick3) {
         Undo();
@@ -609,8 +611,8 @@ void RegisterEditor() {
     game.commands.push_back({"colours_reset_set", kPage, "Game's colours for this set",
                              "While editing: every colour of the set being edited back to the game's.", ResetSet});
     game.commands.push_back({"colours_random", kPage, "Random colours for this set",
-                             "While editing: every colour of the set being edited at random (the panel's Random row and "
-                             "LK too, pressed twice). HK puts back the colours from before, until the next change; "
+                             "While editing: every colour of the set being edited at random (the panel's Random row does it "
+                             "too, pressed twice: LK, left or right). HK puts back the colours from before, until the next change; "
                              "\"Game's colours for this set\" puts back the game's.",
                              Randomise});
     game.commands.push_back({"colours_reset_character", kPage, "Game's colours for this character",
