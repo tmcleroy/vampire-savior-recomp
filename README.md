@@ -45,6 +45,11 @@ QSound chip, the sound CPU and its registers) is code written for this project, 
   whole screen; and the window's size.
 - **Pure** plays exactly as the board does. **Enhanced** (the default) adds free play and your own
   [character colours](#custom-colours). Every other feature is a switch of its own.
+- The board's operator settings (difficulty, attack power, timer speed, game speed and the rest) on
+  the Board page (launcher's Features, in-game menu), each as the board is set unless you choose; or
+  the game's own test menu from the in-game menu.
+- A search box on the launcher's Features page (Ctrl+F or Cmd+F) finds any feature by a word in its
+  name, description or choices.
 - Your ROM set is only ever read. Settings, save states and the board's settings memory go in your
   own user folder.
 
