@@ -249,7 +249,7 @@ void RegisterWidescreen() {
                                   "players are stopped where the board's picture ends, by walls that are not seen, and the "
                                   "camera goes as far as the board's; near a stage's end the view stays on the stage, so the "
                                   "play area is then to one side of the picture. Nothing without widescreen.",
-                                  kFeatureFirstPage});
+                                  0}); // (on the Display page, beside the picture's other options)
 }
 
 } // namespace cps2recomp

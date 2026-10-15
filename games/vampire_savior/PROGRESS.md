@@ -305,8 +305,8 @@ stage in training beside the board's corners.
 
 ## Invisible walls (2026-10-15)
 
-`widescreen_walls`, a second switch under Widescreen on the launcher's first page (`game.cfg`'s `display`) and on
-the menu's Display page (a request): the 16:9 picture with the game played as on the board. It leaves
+`widescreen_walls`, on the Display page (the launcher's Features and the in-game menu, beside
+Scaling and Picture shape) (a request): the 16:9 picture with the game played as on the board. It leaves
 `WidePlay()` false and `WideMargin()` 0, so every rule in the rewrites is the board's (the players' edges, the
 camera's ends, the picture tests, the pieces, `WideLag`); only `Video::wide` is set, and near a stage's end the view
 is kept on the stage as before (the camera now goes there, so the board's picture is then to one side).
