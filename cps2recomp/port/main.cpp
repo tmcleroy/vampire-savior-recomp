@@ -268,6 +268,10 @@ void Port::MenuAct(Menu::Action action) {
         start2Frames = 6;
         menu.Close();
         return;
+    case Menu::Action::Test:
+        testFrames = 6;
+        menu.Close();
+        return;
     case Menu::Action::Reset:
         EndSessionFeatures();
         machine->Reset();
@@ -725,7 +729,10 @@ void Port::RunFrame() {
         machine->players[1] |= kStart;
     }
     machine->serviceButton = service;
-    machine->testSwitch = test || (frame >= opt.testFrom && frame < opt.testTo);
+    machine->testSwitch = test || testFrames > 0 || (frame >= opt.testFrom && frame < opt.testTo);
+    if (testFrames > 0) {
+        testFrames--;
+    }
     const uint16_t pressed[2] = {machine->players[0], machine->players[1]}; // (for run-ahead's frames)
 
     std::string path, error;
