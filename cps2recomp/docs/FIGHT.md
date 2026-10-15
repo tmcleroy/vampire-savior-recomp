@@ -37,6 +37,7 @@ while the editor is on), and `EndEditor` when its own Start is chosen.
 | `featureDescription`, `originalHelp` | The feature's words in the menu, and the remark at the head of each file "Write the game's colours" writes |
 | `showSet` | The editor's preview: player 1 made to use the set, and where its palettes are in the buffer the board shows from (each frame the set is written there, the brightness kept) |
 | `startViewer`, `viewerOn`, `viewerCharacter`, `characterNumber`, `animationStep`, `animationNames`, `backgrounds` | The model viewer the editor works in; it uses the viewer's `model_character`, `model_background` and `model_size` choices |
+| `animationForLine` (optional) | The animation that best shows a line of the set, for the Line row to go to (0 standing, -1 none, -2 not known yet: asked again the next frame). Vampire Savior finds them by showing every frame of every animation on a spare machine, a few a frame, and counting the objects in each of the player's palettes |
 
 The files, the same in every game: `palettes/<Character>.txt` (a `[SET]` section a set, up to a line a palette
 of 16 `#RRGGBB` or `#RGB` colours, `-` for the game's own; a `#` with no hex digit after it starts a remark),

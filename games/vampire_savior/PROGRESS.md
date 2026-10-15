@@ -538,6 +538,26 @@ LP loaded it; MK twice (within 1.5 s) deletes the file. Checked headless with a 
 each tried, back to none, one loaded, one tried and put back, one deleted; the files and the
 character's file agree.
 
+Tester feedback (2026-10-14, branch `tester-feedback`):
+- Model viewer's second shadow: the second player stands 768 to the right and object x counts in 1024,
+  so its shadow wrapped into the picture once player 1 stood right of about 256. `NoShadow` (machines.cpp)
+  moves the pieces of shadow nearer that player's column (player x - camera + 64) off the picture when the
+  board takes the list (`Video::objectsTaken`); the spares' frames run with it off. The ring out uses it
+  for the fallen fighter. Checked headless: walk right and back, normal and wide; a forced ring out and a
+  natural one.
+- "Stage in front": at 1x on a stage the picture is drawn a third time with everything but the panel and
+  player 2's sets; a pixel of the character that is not what that picture shows has something in front
+  of it, and takes it. Differs from before on Abaraya (kettle and steam) and Fetus of God (a bulb) only,
+  with Bulleta in the middle; other stages' front pieces are elsewhere.
+- Line row: which animation shows which line is found by running (the pictures' own data has the line in
+  some form not yet read: `+04` points to a header and 4-byte pieces with flag bytes 0x10-0x12, 0x02,
+  0x24 before tile numbers): every frame of every animation put in player 1's record on a spare copy of
+  the viewer's machine, eight a frame, counting objects in sets kPaletteSlot+0..3 of the list the game
+  made. About 300 animations, done a few seconds after the editor shows the character. Morrigan: line 1
+  A56, line 2 C2 (4 objects), line 3 A53. Not for the kFirstLineOnly characters.
+- Ring out drop: rise 48 lines and fade to black over 32 frames, then the next stage from 48 below and
+  from black over 32; sound crossfaded over the whole 64.
+
 ## Approximate, or left to the interpreters
 
 - The Z80 sound driver is translated too (4,498 instructions, 62 routines; 142 million of its

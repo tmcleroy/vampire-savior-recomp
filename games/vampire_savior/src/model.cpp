@@ -201,6 +201,112 @@ namespace {
         return 0;
     }
 
+    // Which animations show which of the character's palettes, for the colour editor's Line row: found by
+    // showing each frame of every animation on a copy of the viewer's machine (a spare: runtime/spare.h), a few
+    // frames each frame of the viewer's, and counting the objects the game puts in the list in each of the
+    // player's colour sets (its first, kPaletteSlot, is the set's first line). The pictures' own data says
+    // which line a piece is drawn in, but not in a form read yet. For each line, the animation with the
+    // frame that has the most objects in it.
+    constexpr int kScanFramesEach = 8;      // frames of the copy run in a frame of the viewer's
+    constexpr int kScanFramesMost = 48;     // frames of an animation looked at, at most
+    struct LineScan {
+        int character = -1;
+        Spare spare;
+        int choice = 0;                     // the animation being looked at (0: not begun)
+        uint32_t first = 0, frame = 0;
+        int frames = 0;
+        bool done = false;
+        int best[kPalettesInSet] = {};      // for each line, the animation found, and its objects in that line
+        int most[kPalettesInSet] = {};
+    } g_scan;
+
+    // (in the copy: the objects in each line of the player's, from the list the game has just made)
+    void CountLines(const Machine &machine, int counts[kPalettesInSet]) {
+        const uint8_t *list = machine.ObjectsToCome();
+        const int slot = Ram8(Player(0) + kPaletteSlot);
+        for (int n = 0; n < 0x1000; n += 4) {
+            const uint16_t y = static_cast<uint16_t>((list[n * 2 + 2] << 8) | list[n * 2 + 3]);
+            const uint16_t attributes = static_cast<uint16_t>((list[n * 2 + 6] << 8) | list[n * 2 + 7]);
+            if (y >= 0x8000 || attributes >= 0xFF00) {
+                break; // (the list's end)
+            }
+            const int line = (attributes & 0x1F) - slot;
+            if (line >= 0 && line < kPalettesInSet) {
+                counts[line]++;
+            }
+        }
+    }
+    // A frame of the scan (only while the editor is on, and not for the characters whose other lines are
+    // elsewhere: kFirstLineOnly)
+    void Scan(Machine &machine) {
+        const int character = kCharacterNumbers[g.character];
+        if (g_scan.character != character) {
+            g_scan = LineScan();
+            g_scan.character = character;
+            g_scan.done = (kFirstLineOnly >> (character & 31)) & 1;
+            if (!g_scan.done) {
+                Archive ar(g_scan.spare.state, true); // (the copy: the viewer's machine as it is)
+                machine.Serialize(ar);
+                g_scan.spare.ready = true;
+            }
+        }
+        if (g_scan.done) {
+            return;
+        }
+        RunSpare(machine, g_scan.spare, [](Machine &) { SetRam8(kClock, kClockFull); }, nullptr, [character](Machine &m) {
+            for (int n = 0; n < kScanFramesEach && !g_scan.done; n++) {
+                // (what the frame shown last made, counted; then the next frame, or the next animation)
+                if (g_scan.choice) {
+                    int counts[kPalettesInSet] = {};
+                    CountLines(m, counts);
+                    for (int line = 0; line < kPalettesInSet; line++) {
+                        if (counts[line] > g_scan.most[line]) {
+                            g_scan.most[line] = counts[line];
+                            g_scan.best[line] = g_scan.choice;
+                        }
+                    }
+                    const uint8_t follows = m.Read8(g_scan.frame + kFrameEnd);
+                    const uint32_t next = follows & 0x80 ? Read32(m, g_scan.frame + kFrameJump) : follows & 0x40 ? 0 : g_scan.frame + kFrameBytes;
+                    if (next > g_scan.frame && IsFrame(m, next) && ++g_scan.frames < kScanFramesMost) {
+                        g_scan.frame = next;
+                    } else {
+                        const int choice = Step(m, character, g_scan.choice, 1);
+                        if (choice <= g_scan.choice) { // (gone round: every animation looked at)
+                            g_scan.done = true;
+                            break;
+                        }
+                        g_scan.choice = choice;
+                        g_scan.first = g_scan.frame = AnimationAt(m, character, (choice - 1) / kChoicesAList, (choice - 1) % kChoicesAList);
+                        g_scan.frames = 0;
+                    }
+                } else {
+                    g_scan.choice = Step(m, character, 0, 1);
+                    g_scan.first = g_scan.frame = g_scan.choice ? AnimationAt(m, character, (g_scan.choice - 1) / kChoicesAList, (g_scan.choice - 1) % kChoicesAList) : 0;
+                    if (!g_scan.first) {
+                        g_scan.done = true;
+                        break;
+                    }
+                }
+                SetRam32(Player(0) + kFrame, g_scan.frame);
+                SetRam32(Player(0) + kTimer, Read32(m, g_scan.frame));
+                SetRam8(Player(0) + kTimer, 0x7F);
+                m.players[0] = m.players[1] = 0;
+                m.RunFrame();
+            }
+        });
+    }
+
+    // The colour editor's question (colours.h, Description::animationForLine)
+    int ForLine(int line) {
+        if (line <= 0) {
+            return 0; // (the body: standing shows all of it)
+        }
+        if (g_scan.character != kCharacterNumbers[g.character] || !g_scan.done) {
+            return -2;
+        }
+        return line < kPalettesInSet && g_scan.best[line] ? g_scan.best[line] : -1;
+    }
+
     const char *AnimationChoice() {
         return colours::EditorAnimation() ? colours::EditorAnimation() : "model_animation";
     }
@@ -402,6 +508,9 @@ int ModelAnimationStep(Machine &machine, int choice, int by) {
     }
     return next;
 }
+int ModelAnimationForLine(Machine &, int line) {
+    return ForLine(line);
+}
 const std::vector<const char *> &ModelAnimationNames() {
     return AnimationNames();
 }
@@ -439,6 +548,9 @@ void ModelBeforeFrame(Machine &machine) {
     }
     machine.players[1] = 0;
     PutAway();
+    if (colours::EditorAnimation()) {
+        Scan(machine);
+    }
     colours::EditorBeforeFrame(machine); // (takes player 1's controls, when it is on)
     SetSlowMotion(kSlowBy[std::clamp(FeatureValue("model_speed"), 0, static_cast<int>(std::size(kSlowBy)) - 1)]);
     SetRam8(kClock, kClockFull);

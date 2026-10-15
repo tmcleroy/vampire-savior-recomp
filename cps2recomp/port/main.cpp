@@ -15,7 +15,10 @@
 #include "present.h"
 #include "../runtime/spare.h"
 #include "port.h"
+#include "../recomp-common/settings.h"
 #include "../recomp-common/text.h"
+
+#include <SDL3/SDL_main.h> // (on Windows the game is a windowed program: its main is called from WinMain)
 
 #include <zlib.h>
 
@@ -23,7 +26,11 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <set>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace cps2recomp;
 
@@ -979,16 +986,68 @@ bool ParseArgs(int argc, char **argv, port::Options &o) {
     return true;
 }
 
+// The game's program opened by itself, with nothing to say what to play (a double click on it rather than on
+// the launcher): the launcher beside it is started instead, straight into the game if the player has chosen
+// their ROM set in it before (its --play), or at its first page to choose one. True: it was started.
+bool StartLauncher() {
+    const char *base = SDL_GetBasePath();
+    if (!base) {
+        return false;
+    }
+#ifdef _WIN32
+    const std::string launcher = std::string(base) + GAME_ID "-launcher.exe";
+#else
+    const std::string launcher = std::string(base) + GAME_ID "-launcher";
+#endif
+    std::error_code missing;
+    if (!std::filesystem::exists(launcher, missing)) {
+        return false;
+    }
+    bool setUp = false;
+    if (char *folder = SDL_GetPrefPath("", GAME_NAME)) { // (the launcher's own folder and file)
+        recomp::Ini prefs(std::filesystem::path(folder) / "launcher.ini");
+        SDL_free(folder);
+        prefs.load();
+        setUp = !prefs.get("game", "rom").empty();
+    }
+    const char *args[] = {launcher.c_str(), setUp ? "--play" : nullptr, nullptr};
+    SDL_Process *process = SDL_CreateProcess(args, false);
+    if (!process) {
+        return false;
+    }
+    SDL_DestroyProcess(process); // (only SDL's record of it: the launcher goes on)
+    return true;
+}
+
+// A start that went wrong: said on the standard error, and, with a window wanted, in a message box too (a
+// windowed program started by a double click has nowhere else to say it)
+void SayFailed(const port::Options &opt, const std::string &error) {
+    fprintf(stderr, "%s: %s\n", GAME_NAME, error.c_str());
+    if (!opt.headless) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, GAME_NAME, error.c_str(), nullptr);
+    }
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    // (a windowed program has no console: started from one, its output goes there, unless it was sent elsewhere)
+    if (!GetStdHandle(STD_ERROR_HANDLE) && AttachConsole(ATTACH_PARENT_PROCESS)) {
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+    }
+#endif
+    if (argc == 1 && StartLauncher()) {
+        return 0;
+    }
     port::Port p;
     if (!ParseArgs(argc, argv, p.opt)) {
         return 2;
     }
     std::string error;
     if (!p.Init(error)) {
-        fprintf(stderr, "%s: %s\n", GAME_NAME, error.c_str());
+        SayFailed(p.opt, argc == 1 ? error + "\n\nStart the game with its launcher (" GAME_ID "-launcher), which passes it your ROM set." : error);
         return 1;
     }
     if (!p.opt.dumpProgram.empty()) {

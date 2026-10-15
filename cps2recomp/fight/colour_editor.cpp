@@ -105,6 +105,12 @@ namespace {
         bool trying = false;
         uint16_t kept[kMostPalettes][kColoursInPalette] = {};
         int deleteFor = 0;    // frames MK can still be pressed again to delete the saved set
+        int randomFor = 0;    // frames LK (or the Random row) can still be pressed again for random colours
+        // The set as it was before the last random colours, for HK to put back (until another change)
+        bool canUndo = false;
+        int undoSet = 0;
+        uint16_t undo[kMostPalettes][kColoursInPalette] = {};
+        int lineWanted = -1;  // a line chosen whose animation is still to be asked for (Description::animationForLine)
         std::string said;     // a message, and frames it is still shown for
         int saidFor = 0;
     } g;
@@ -163,6 +169,7 @@ namespace {
         }
         SetColour(g.character, g.set, g.line, g.colour, colour);
         g.unsaved = 0;
+        g.canUndo = false;
     }
 
     // A choice of the viewer's stepped by one, round from the last to the first
@@ -178,6 +185,32 @@ namespace {
     }
 
     void Randomise(Machine &machine);
+    // Random colours by the panel (LK, or the Random row): only at a second press within a second and a half,
+    // so that one press by mistake does not lose the set
+    void AskRandom(Machine &machine) {
+        if (g.randomFor > 0) {
+            g.randomFor = 0;
+            Randomise(machine);
+        } else {
+            g.randomFor = 90;
+            Say(g.row == kRowRandom ? "Again: random colours" : "LK again: random");
+        }
+    }
+    // HK: the set back as it was before the random colours
+    void Undo() {
+        if (!g.canUndo) {
+            return;
+        }
+        PutBack();
+        for (int line = 0; line < Lines(); line++) {
+            for (int n = 0; n < kColoursInPalette; n++) {
+                SetColour(g.character, g.undoSet, line, n, g.undo[line][n]);
+            }
+        }
+        g.canUndo = false;
+        g.unsaved = 0;
+        Say("Random colours undone");
+    }
 
     // Trying a saved set: the set's colours kept to put back, then the saved ones over them (a "-" in the
     // file keeps the set's own); stopping puts them back unless the saved one was loaded
@@ -254,12 +287,13 @@ namespace {
         case kRowLine:
             g.line = (g.line + by + Lines()) % Lines();
             g.blink = kBlinkFor;
+            g.lineWanted = g.line; // (and the animation that shows it, when the game can say)
             break;
         case kRowColour:
             g.colour = (g.colour + by + kSeen) % kSeen;
             g.blink = kBlinkFor;
             break;
-        case kRowRandom: Randomise(machine); break;
+        case kRowRandom: AskRandom(machine); break;
         case kRowSave: {
             std::string name;
             Say(SaveSet(g.character, g.set, name) ? "Saved as " + ShortName(name, kLineMost - 9) : std::string("Not saved: no folder"));
@@ -382,7 +416,7 @@ namespace {
         }
         y += 22;
         // What the controls do (on the Load row, its own), the last line giving way to a message
-        const char *const help[] = {"Arrows: choose/change", "LP copy  MP paste", "HP game's  LK random"};
+        const char *const help[] = {"Arrows: choose/change", "LP copy  MP paste", g.canUndo ? "HK undo  LK random" : "HP game's  LK random"};
         const char *const loadHelp[] = {"Left/Right: try one", "LP load it  MK delete", "Up/Down: put it back"};
         const char *const *lines = g.row == kRowLoad ? loadHelp : help;
         for (int n = 0; n < 2; n++) {
@@ -428,12 +462,17 @@ namespace {
         static std::mt19937 random(std::random_device{}());
         std::uniform_int_distribution<int> level(0, 0x0FFF);
         for (int line = 0; line < Lines(); line++) {
+            for (int n = 0; n < kColoursInPalette; n++) {
+                g.undo[line][n] = Colour(g.character, g.set, line, n);
+            }
             for (int n = 0; n < kSeen; n++) {
                 SetColour(g.character, g.set, line, n, static_cast<uint16_t>(level(random)));
             }
         }
         g.unsaved = 0;
-        Say("Random colours");
+        g.canUndo = true;
+        g.undoSet = g.set;
+        Say("Random: HK undoes it");
     }
     void ResetCharacter(Machine &) {
         if (!g.on || g.character < 0) {
@@ -479,6 +518,8 @@ void EditorBeforeFrame(Machine &machine) {
     if (character != g.character) {
         Save();
         g.character = character;
+        g.canUndo = false;
+        g.lineWanted = g.line ? g.line : -1; // (the new character's animation for the line chosen)
     }
     const uint16_t now = machine.players[0];
     machine.players[0] = 0;
@@ -509,6 +550,17 @@ void EditorBeforeFrame(Machine &machine) {
         }
     }
     g.deleteFor = std::max(g.deleteFor - 1, 0);
+    g.randomFor = std::max(g.randomFor - 1, 0);
+    // The animation that shows the line chosen (the game may take a moment to find out: asked each frame)
+    if (g.lineWanted >= 0) {
+        const int animation = TheDescription().animationForLine ? TheDescription().animationForLine(machine, g.lineWanted) : -1;
+        if (animation >= 0) {
+            SetFeatureValue(kAnimation, animation);
+        }
+        if (animation != -2) {
+            g.lineWanted = -1;
+        }
+    }
     if (g.row == kRowLoad) {
         if (pressed & kPunch1) {
             Load();
@@ -523,7 +575,9 @@ void EditorBeforeFrame(Machine &machine) {
     } else if (pressed & kPunch3) {
         Change(GameColour(g.character, g.set, g.line, g.colour));
     } else if (pressed & kKick1) {
-        Randomise(machine);
+        AskRandom(machine);
+    } else if (pressed & kKick3) {
+        Undo();
     }
     if (g.unsaved >= 0 && ++g.unsaved >= kSaveAfter) {
         Save();
@@ -555,8 +609,9 @@ void RegisterEditor() {
     game.commands.push_back({"colours_reset_set", kPage, "Game's colours for this set",
                              "While editing: every colour of the set being edited back to the game's.", ResetSet});
     game.commands.push_back({"colours_random", kPage, "Random colours for this set",
-                             "While editing: every colour of the set being edited at random (the panel's last row too, "
-                             "and LK). \"Game's colours for this set\" puts them back.",
+                             "While editing: every colour of the set being edited at random (the panel's Random row and "
+                             "LK too, pressed twice). HK puts back the colours from before, until the next change; "
+                             "\"Game's colours for this set\" puts back the game's.",
                              Randomise});
     game.commands.push_back({"colours_reset_character", kPage, "Game's colours for this character",
                              "While editing: every set of the character being edited back to the game's colours.", ResetCharacter});
