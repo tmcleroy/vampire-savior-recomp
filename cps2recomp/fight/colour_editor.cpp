@@ -109,16 +109,28 @@ namespace {
         int saidFor = 0;
     } g;
 
+    constexpr size_t kValueMost = 15, kLineMost = 21; // characters: beside a row's name, and a whole line
+    // Text cut to fit the panel (".." at its end when cut)
+    std::string Fit(std::string text, size_t most) {
+        return text.size() <= most ? text : text.substr(0, most - 2) + "..";
+    }
     void Say(std::string text) {
-        g.said = std::move(text);
+        g.said = Fit(std::move(text), kLineMost);
         g.saidFor = kSaidFor;
+    }
+    // A saved set's name as the panel shows it: without the character's own name at its start ("Ryu Classic" is
+    // "Classic" on Ryu's panel), to fit
+    std::string ShortName(const std::string &saved, size_t most) {
+        const std::string prefix = std::string(Name(g.character)) + " ";
+        const bool own = saved.size() > prefix.size() && saved.compare(0, prefix.size(), prefix) == 0;
+        return Fit(own ? saved.substr(prefix.size()) : saved, most);
     }
     void Save() {
         if (g.unsaved < 0 || g.character < 0) {
             return;
         }
         g.unsaved = -1;
-        Say(SaveColours(g.character) ? std::string("Saved ") + Name(g.character) : std::string("Not saved: no data folder"));
+        Say(SaveColours(g.character) ? std::string("Saved ") + Name(g.character) : std::string("Not saved: no folder"));
     }
     void PutBack();
     void End() {
@@ -210,7 +222,7 @@ namespace {
         }
         g.trying = false; // (kept)
         g.unsaved = 0;
-        Say("Loaded " + g.saved[static_cast<size_t>(g.loading - 1)]);
+        Say("Loaded " + ShortName(g.saved[static_cast<size_t>(g.loading - 1)], kLineMost - 7));
     }
     void Delete() {
         if (!g.loading) {
@@ -224,7 +236,7 @@ namespace {
         const std::string name = g.saved[static_cast<size_t>(g.loading - 1)];
         PutBack();
         g.deleteFor = 0;
-        Say(RemoveSavedSet(g.character, name) ? "Deleted " + name : std::string("Not deleted"));
+        Say(RemoveSavedSet(g.character, name) ? "Deleted " + ShortName(name, kLineMost - 8) : std::string("Not deleted"));
         g.saved = SavedSets(g.character);
     }
 
@@ -250,7 +262,7 @@ namespace {
         case kRowRandom: Randomise(machine); break;
         case kRowSave: {
             std::string name;
-            Say(SaveSet(g.character, g.set, name) ? "Saved as " + name : std::string("Not saved: no data folder"));
+            Say(SaveSet(g.character, g.set, name) ? "Saved as " + ShortName(name, kLineMost - 9) : std::string("Not saved: no folder"));
             break;
         }
         case kRowLoad:
@@ -326,7 +338,8 @@ namespace {
             case kRowSave: snprintf(value, sizeof(value), "%s", chosen ? "< >" : ""); break;
             case kRowLoad:
                 snprintf(value, sizeof(value), "%s",
-                         g.loading ? g.saved[static_cast<size_t>(g.loading - 1)].c_str() : !chosen ? "" : g.saved.empty() ? "none saved" : "< >");
+                         g.loading ? ShortName(g.saved[static_cast<size_t>(g.loading - 1)], kValueMost).c_str()
+                                   : !chosen ? "" : g.saved.empty() ? "none saved" : "< >");
                 break;
             default: {
                 // a bar of 16 levels, and the level
