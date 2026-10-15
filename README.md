@@ -118,6 +118,15 @@ It is **off unless you switch it on**, in every preset, because it changes how t
 With it off the game is exactly the board's. Nothing here stretches the picture: the extra
 columns are the game's own stage, drawn by the port from what the game already has.
 
+**Invisible walls**, a second switch under Widescreen, keeps the 16:9 picture and plays the game
+exactly as the board does: the players are stopped where the board's picture ends, by walls that
+are not seen, the camera goes as far as the board's, and the stage's pieces and things thrown are
+kept as on the board. Near a stage's end the view stays on the stage, so the play area is then to
+one side of the wide picture. The game's memory is the same as with widescreen off, frame for
+frame (`make check-widescreen` compares it along the ladder). Pieces of a stage that the board
+draws only once they are in its own picture can come in at the play area's edge rather than the
+picture's.
+
 ## Custom colours
 
 Give any character colours of your own: change them in the game's colour editor, or bring the ones

@@ -5,6 +5,9 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Invisible walls (a second switch under Widescreen, on the launcher's first page and the in-game menu's Display
+  page): fights shown in 16:9 but played exactly as on the board, the players stopped where the board's picture
+  ends. Off unless switched on; nothing without widescreen.
 - Display options (the Display page, in the launcher and the in-game menu): Scaling (Sharp, as
   before; Whole pixels; Smooth), Picture shape (4:3, as before; Square pixels; Fill) and Window size
   (3x, as before; 2x to 6x). Nothing changes until you choose (toolkit cps2recomp#19).
