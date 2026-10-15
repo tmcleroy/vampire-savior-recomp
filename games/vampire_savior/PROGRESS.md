@@ -362,8 +362,7 @@ has yet used them in a window or listened.
   with three, 737 frames a second on the Mac. Checked with no window: pictures, traces, sound
   dumps. Nobody has played them yet.
 - Known of them: with the stage behind, a stage's pieces that belong in front of the fighters are
-  behind them, and a super move's own backdrop is not shown; a fighter that has fallen leaves its
-  shadow; the two "Best" counts are features, so a preset chosen in the launcher clears them.
+  behind them, and a super move's own backdrop is not shown; the two "Best" counts are features, so a preset chosen in the launcher clears them.
 
 Facts found for the model viewer:
 - A character's animations: three tables of longs by the character's number, at `0BCEFA`, `0BCF7A` and

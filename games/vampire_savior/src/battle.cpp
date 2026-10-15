@@ -53,6 +53,7 @@ namespace {
     constexpr int kDropFor = 80;             // frames the way down to the next stage takes
     constexpr int kDropJump = 8;             //   the frame of it at which the winner jumps off the old stage
     constexpr int kDropSlide = 16;           //   ... at which the old stage starts to go up and out
+    constexpr int kDropRise = 48;            //   how far each stage moves up as it goes to black or comes from it
     constexpr int kDropIn = 38;              //   ... at which the winner jumps above the new stage, to come down onto it
     constexpr int kDropFrom = 240;           //   and how far above the new stage's floor that is
     constexpr int kMiddle = (kStageLeft + kStageRight) / 2;
@@ -524,13 +525,33 @@ namespace {
         Give(machine, fighters);
     }
 
-    // The picture nearer black by `part` of 256
-    void Darken(Machine &machine, int part) {
+    // A picture nearer black by `part` of 256
+    void Dim(uint32_t *picture, size_t pixels, int part) {
         const int keep = 256 - std::clamp(part, 0, 256);
-        uint32_t *picture = machine.Picture();
-        for (int i = 0; i < machine.PictureWidth() * Video::kHeight; i++) {
+        for (size_t i = 0; i < pixels; i++) {
             const uint32_t p = picture[i];
             picture[i] = ((((p & 0xFF00FF) * static_cast<uint32_t>(keep)) >> 8) & 0xFF00FF) | ((((p & 0x00FF00) * static_cast<uint32_t>(keep)) >> 8) & 0x00FF00);
+        }
+    }
+    void Dim(std::vector<uint32_t> &picture, int part) {
+        Dim(picture.data(), picture.size(), part);
+    }
+    void Darken(Machine &machine, int part) {
+        Dim(machine.Picture(), static_cast<size_t>(machine.PictureWidth()) * Video::kHeight, part);
+    }
+    // A picture moved up by `by` lines (down, if less than nothing), black where it has left
+    void Rise(std::vector<uint32_t> &picture, int by) {
+        by = std::clamp(by, -Video::kHeight, +Video::kHeight);
+        if (!by || picture.empty()) {
+            return;
+        }
+        const size_t width = picture.size() / Video::kHeight, lines = static_cast<size_t>(Video::kHeight - std::abs(by));
+        if (by > 0) {
+            memmove(picture.data(), picture.data() + static_cast<size_t>(by) * width, lines * width * sizeof(uint32_t));
+            std::fill(picture.begin() + static_cast<std::ptrdiff_t>(lines * width), picture.end(), 0u);
+        } else {
+            memmove(picture.data() + static_cast<size_t>(-by) * width, picture.data(), lines * width * sizeof(uint32_t));
+            std::fill(picture.begin(), picture.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(-by) * width), 0u);
         }
     }
 
@@ -582,8 +603,9 @@ namespace {
     }
 
     // The way down, after the picture and sound of the old stage are put together: the next match's machines
-    // run, the winner put above the next stage to come down onto it, and the old picture goes up and out as
-    // the new one comes up from below.
+    // run, the winner put above the next stage to come down onto it, and the old picture goes up and to black
+    // before the new one comes up from below and out of black (one taking the other's place line by line put
+    // a hard edge across the picture, the old stage over the new).
     void Drop(Machine &machine) {
         static Made old, fighters, stage;
         Take(machine, g_soundBefore, old);
@@ -618,14 +640,18 @@ namespace {
         g_dropBackSound.Add(stage.sound);
         Over(stage.picture, fighters.picture, 256);
 
-        // (slowly off, quickly through, slowly in)
-        const int t = std::clamp((g.since - kDropSlide) * 256 / (kDropFor - kDropSlide), 0, 256);
-        const int eased = t * t * (3 * 256 - 2 * t) / (256 * 256);
-        const int up = eased * Video::kHeight / 256;
-        if (up > 0 && old.picture.size() == stage.picture.size()) {
-            const size_t width = old.picture.size() / Video::kHeight, row = width * sizeof(uint32_t);
-            memmove(old.picture.data(), old.picture.data() + static_cast<size_t>(up) * width, static_cast<size_t>(Video::kHeight - up) * row);
-            memcpy(old.picture.data() + static_cast<size_t>(Video::kHeight - up) * width, stage.picture.data(), static_cast<size_t>(up) * row);
+        // (slowly off, quickly through, slowly in: the sound over the whole way, each picture over half of it)
+        const auto ease = [](int t) { return t * t * (3 * 256 - 2 * t) / (256 * 256); };
+        const int eased = ease(std::clamp((g.since - kDropSlide) * 256 / (kDropFor - kDropSlide), 0, 256));
+        const int half = (kDropFor - kDropSlide) / 2;
+        const bool next = g.since >= kDropSlide + half;
+        const int part = ease(std::clamp((g.since - kDropSlide - (next ? half : 0)) * 256 / half, 0, 256));
+        if (next && old.picture.size() == stage.picture.size()) {
+            old.picture = stage.picture;
+        }
+        if (g.since > kDropSlide) {
+            Rise(old.picture, next ? (part - 256) * kDropRise / 256 : part * kDropRise / 256);
+            Dim(old.picture, next ? 256 - part : part);
         }
         for (int16_t &sample : old.sound) {
             sample = static_cast<int16_t>(sample * (256 - eased) / 256);
@@ -810,6 +836,13 @@ void BattleBeforeFrame(Machine &machine) {
 void BattleFrame(Machine &machine) {
     if (g.kind != Kind::None) {
         Frame(machine);
+    }
+    // The ring out: the shadow of the one who went over the end does not stay on the floor
+    static int noShadow = -1;
+    const int out = g.kind == Kind::RingOut ? g.out : -1;
+    if (out != noShadow) {
+        noShadow = out;
+        NoShadow(machine, out);
     }
     // What the next frame of the port's machine draws: all of it; or no panel; or the fighters alone, marked,
     // to be laid over the stage that another machine shows

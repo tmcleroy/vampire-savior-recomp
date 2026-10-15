@@ -56,6 +56,9 @@ bool IsShadow(uint32_t tile, uint16_t attributes);
 bool NotTheStage(uint32_t tile, uint16_t attributes); // everything but the stage's pieces
 bool ThePanel(uint32_t tile, uint16_t attributes);    // the panel only
 bool NotTheFighters(uint32_t tile, uint16_t attributes); // the panel and the stage's pieces
+// A player's shadow not drawn from the next frame on (-1: both drawn), for a player put out of the way or
+// fallen off the stage: its shadow would stay on the floor (machines.cpp; the spares' frames draw both)
+void NoShadow(Machine &machine, int player);
 
 // Machines kept as save states and run beside the port's are the toolkit's (runtime/spare.h: Spare, RunSpare,
 // Promote, Take, Give, Made); what is wanted (above), the camera's place and the wide picture are kept around a
