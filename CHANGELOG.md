@@ -5,6 +5,10 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Board settings (the launcher's and the menu's Board page): the test menu's operator settings
+  (difficulty, attack power, timer speed, game speed, damage gauges, event, automatic, continue, demo
+  sound, self-censorship), each as the board is set unless chosen; the board's settings memory is not
+  changed. The in-game menu has a Test menu row (the board's test switch, as F2; toolkit cps2recomp#22).
 - Invisible walls (on the Display page, in the launcher's Features and the in-game menu): fights shown in 16:9 but played exactly as on the board, the players stopped where the board's picture
   ends. Off unless switched on; nothing without widescreen.
 - Display options (the Display page, in the launcher and the in-game menu): Scaling (Sharp, as
