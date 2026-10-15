@@ -90,6 +90,7 @@ struct Port {
     void RunCommand(size_t index);
     int coinFrames = 0;   // frames left of the menu's coin
     int start2Frames = 0; // ... and of its press of player 2's Start
+    int testFrames = 0;   // ... and of its press of the test switch
 
     // What the menu asked for (it is closed if that went well)
     void MenuAct(Menu::Action action);

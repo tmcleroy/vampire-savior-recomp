@@ -8,6 +8,8 @@
 
 namespace cps2recomp {
 
+void RegisterBoard();    // board.cpp
+void BoardBeforeFrame(Machine &machine);
 void RegisterCheats();   // cheats.cpp
 void CheatsFrame(Machine &machine);
 void RegisterCollision(); // collision.cpp
@@ -50,6 +52,7 @@ void RegisterGame() {
     RegisterBattle();
     RegisterModel();
     RegisterMachines();
+    RegisterBoard();
     RegisterCheats();
     RegisterTraining();
     RegisterCollision();
@@ -70,6 +73,7 @@ void RegisterGame() {
     TheGame().inTraining = [] { return FeatureOn("training_mode"); };
     RegisterColours();
     TheGame().beforeFrame = [](Machine &machine) {
+        BoardBeforeFrame(machine);
         colours::BeforeFrame(machine);
         // (first: the modes below may run other machines' frames, which are never wide)
         WidescreenBeforeFrame(machine);

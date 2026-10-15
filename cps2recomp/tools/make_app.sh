@@ -14,6 +14,14 @@ NAME=$($CFG name "$GAME")
 APP_ID=$($CFG app_id "$GAME")
 APP="$B/$NAME.app"
 
+# (nothing to do when the bundle is newer than both programs and this script: `make` asks for it every time)
+IN="$APP/Contents/MacOS"
+if [ -z "$FORCE" ] && [ -f "$APP/Contents/Info.plist" ] && [ "$IN/$GAME" -nt "$B/$GAME" ] && [ "$IN/$GAME-launcher" -nt "$B/$GAME-launcher" ] &&
+    [ "$IN/$GAME" -nt "$0" ]; then
+    echo "$APP is up to date"
+    exit 0
+fi
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"
 cp "$B/$GAME-launcher" "$B/$GAME" "$APP/Contents/MacOS/"

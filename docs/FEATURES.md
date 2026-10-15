@@ -84,6 +84,26 @@ board does not have. Each mode has a page there with a Start row and its choices
 | Hidden characters | `hidden_characters` | Choosing Gallon gives Dark Gallon and choosing Bishamon gives Oboro Bishamon (the last boss, whom no code chooses on this set); a punch chooses their first colours, a kick their second. The "?" box gives Shadow, who becomes each opponent beaten in a one-player game. For player 1, player 2 or both; the alternative modes' fighters too. Off in every preset. Choices: Off, Player 1, Player 2, Both. |
 | Straight to the title | `skip_intro` | When the game starts, and when it is reset, the board's memory test, the version and the warning, the notices and the introduction are run unseen, and the picture comes back with the title (with a coin in, or free play, the title that asks for Start) a second or so later. The alternative modes start as they did. |
 
+## Board
+
+The board's own operator settings, as its test menu has them (設定: System and Game). Each is "As the
+board is set" unless chosen, and a choice is taken when the game starts or is reset; the board's
+settings memory is not changed. The in-game menu's "Test menu" row (or F2) opens the game's own
+test menu instead.
+
+| Feature | Name in `settings.ini` | What it does |
+| --- | --- | --- |
+| Difficulty | `board_difficulty` | How well the computer fights, 1 (easiest) to 8 (hardest); a new board has 2. |
+| Attack power | `board_attack` | How much damage a hit does, 1 to 4 (2). |
+| Timer speed | `board_timer` | How fast the round's clock runs, 1 to 4 (2). |
+| Game speed | `board_speed` | Normal, Turbo 1 to 3, or Free select 1 to 3 (the players choose; Free select 2). |
+| Damage gauges | `board_gauges` | How many health bars each fighter has, 1 to 4 (2). |
+| Event | `board_event` | Normal, or one match only (and no continue). |
+| Automatic | `board_automatic` | Whether players may choose the automatic guard: None, or Free select. |
+| Continue | `board_continue` | Whether a game over can be continued. |
+| Demo sound | `board_demo_sound` | Whether the attract mode plays sound. |
+| Self-censorship | `board_censorship` | The board's own restraint setting (自主規制). |
+
 ## Display
 
 | Feature | Name in `settings.ini` | What it does |
@@ -138,7 +158,8 @@ board does not have. Each mode has a page there with a Start row and its choices
 
 ## Always there
 
-Not features, because they change nothing in the game: the in-game menu, save states (nine slots),
+Not features, because they change nothing in the game: the in-game menu (with its Test menu row, the
+board's test switch), save states (nine slots),
 stopping the game and going on a frame at a time, slow motion, a coin button, Reset, and choosing
 keys and gamepad buttons in the launcher. The menu's "Start over" row and the rows that start a
 mode are commands, not features.

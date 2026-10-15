@@ -573,6 +573,24 @@ Tester feedback (2026-10-14, branch `tester-feedback`):
 - Ring out drop: rise 48 lines and fade to black over 32 frames, then the next stage from 48 below and
   from black over 32; sound crossfaded over the whole 64.
 
+## Board settings (2026-10-15)
+
+`board.cpp`: the test menu's operator settings (設定: System and Game) as features on the Board page, each
+"As the board is set" unless chosen. The board's start reads the settings memory (001980, called at 001168)
+and copies the record (FF0C66) into variables; the hook at 00116E, where the call returns, puts the choices
+in them. The settings memory is not changed. The test switch (the menu's Test menu row, F2) puts the board's
+own values back, since the test menu shows, changes and saves the variables; leaving it does not read the
+settings again, so the choices go back in when a game next begins (00A4BA and 008F56, each before it copies
+difficulty to FF80BE and continue to FF811F).
+
+The record and the variables (from A5), with the values found by stepping each row of the test menu's pages:
++01 continue 98 (0 no, 1 yes), +03 demo sound 99, +06 self-censorship 8C (0 off); +10 difficulty A0 (0-7,
+levels 1-8, a new board 1), +11 attack power A1 (0-3, 1), +12 timer speed A2 (0-3, 1), +13 game speed A3
+(0 normal, 1-3 turbo 1-3, 4-6 free select 1-3; 5), +14 damage gauges A4 (0-3 for one to four; 1), +15 event
+A5 (0 normal, 1 one match, which clears continue), +16 automatic BB (0 none, 1 free select). Checked headless:
+the variables with and without choices, the test menu showing the board's, and difficulty 8 back in FF80BE
+in the game after it.
+
 ## Approximate, or left to the interpreters
 
 - The Z80 sound driver is translated too (4,498 instructions, 62 routines; 142 million of its
