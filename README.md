@@ -148,8 +148,8 @@ change it.
   editor shows a character). The others' extra lines are seen only when an effect needs them.
 - **Colour, Red, Green, Blue**: one of the line's 15 colours (it blinks on the character when you
   choose it), and its red, green and blue in the board's 16 levels each.
-- **Random colours**: every colour of the set at random, at a second press (LK twice, or left or
-  right twice on the row), so that one press by mistake loses nothing. HK puts back the colours from
+- **Random colours**: every colour of the set at random, at a second press on its row (LK, left
+  or right, twice), so that one press by mistake loses nothing. HK puts back the colours from
   before the random ones, until the next change.
 - **Save set** and **Load**: keep a set you like in the character's library and put it back later,
   into this set or any other (a design made on LP can go on KK). Left and right on Load try each
