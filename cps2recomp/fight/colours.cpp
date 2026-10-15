@@ -1,76 +1,54 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Copyright (C) 2026 Tommy McLeroy
+// Copyright (C) 2026 Tommy McLeroy. Part of cps2recomp.
 //
-// Vampire Savior: the players' own colours for the characters. In the folder "palettes" beside settings.ini,
-// a copy of the set's vm3j.10b changed with PalMod gives its colours for the characters (their sets and their
-// effects' palettes), and a text file for a character new colours for any of its sets (vsav.h, kColourSets),
-// over the PalMod file's. They are written over the game's in the ROM image, where the game reads them each time it colours a player, so the
-// game's code is the same with them as without. A command writes the game's own colours out as files to
-// start from.
-#include "palettes.h"
-#include "vsav.h"
+// Custom colours (colours.h): the files in the palettes folder read into the ROM image, the game's own colours
+// kept to put back and written out, the editor's colours and its library of saved sets.
+#include "colours.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
-#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
 
-namespace cps2recomp {
+namespace cps2recomp::colours {
 
 namespace {
-    using namespace vsav;
-
     constexpr const char *kFeature = "custom_colours";
-    constexpr const char *kFolder = "palettes", *kGameColours = "original";
+    constexpr const char *kFolder = "palettes", *kGameColours = "original", *kLibrary = "library";
 
-    // The characters that have colours: their numbers, the names this set of the game gives them and the
-    // names the game has abroad (files may be called by either)
-    struct Character {
-        int number;
-        const char *name;
-        const char *abroad;
-    };
-    constexpr Character kList[] = {
-        {0, "Bulleta", "BB Hood"},     {1, "Demitri", nullptr},        {2, "Gallon", "Talbain"},
-        {3, "Victor", nullptr},        {4, "Zabel", "Lord Raptor"},    {5, "Morrigan", nullptr},
-        {6, "Anakaris", nullptr},      {7, "Felicia", nullptr},        {8, "Bishamon", nullptr},
-        {9, "Aulbath", "Rikuo"},       {10, "Sasquatch", nullptr},     {12, "Q-Bee", nullptr},
-        {13, "Lei-Lei", "Hsien-Ko"},   {14, "Lilith", nullptr},        {15, "Jedah", nullptr},
-        {kDarkGallon, "Dark Gallon", "Dark Talbain"}, {kOboroBishamon, "Oboro Bishamon", nullptr},
-    };
-    // The sets by what chooses them (vsav.h, kColours)
-    constexpr const char *kSetNames[kColourSetsEach] = {"LP", "MP", "HP", "LK", "MK", "HK", "PP", "KK", "AUTO1", "AUTO2"};
+    Description g_description;
 
-    // Where the characters' colours are in the ROM (their sets and their effects' palettes), and the game's
-    // own, kept to put back: a copy of the ROM from the first of those places to the end of the last
-    struct Range {
-        uint32_t from, to;
-    };
+    // The game's own colours, kept to put back: a copy of the ROM from the first of their places to the end of
+    // the last
     std::vector<Range> g_ranges;
     std::vector<uint8_t> g_original;
     uint32_t g_originalFrom = 0;
     bool g_applied = false, g_wasOn = false;
 
-    // A ROM file as PalMod (the players' palette editor) changes it: the last of the set's program files, which
-    // has all of the characters' colours, its words with their bytes swapped (RomSet::program has them as the
-    // 68000 does)
-    constexpr const char *kRomFile = "vm3j.10b";
-    constexpr uint32_t kRomFileAt = 0x380000, kRomFileSize = 0x80000;
-
-    uint32_t Long(uint32_t address) {
-        const uint8_t *p = Program(address);
-        return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) | (static_cast<uint32_t>(p[2]) << 8) | p[3];
+    int Sets() {
+        return static_cast<int>(g_description.setNames.size());
     }
-    uint32_t SetsOf(int number) {
-        return Long(kColourSets + 4u * static_cast<uint32_t>(number));
+    int Palettes() {
+        return g_description.palettesInSet;
     }
-    constexpr uint32_t kSetsSize = kColourSetSize * kColourSetsEach;
-    constexpr uint32_t kEffectsSize = kEffectPalettes * kColoursInPalette * 2;
+    // (a count as a word: "a set has four lines")
+    const char *CountWord(int n, bool capital) {
+        static const char *const lower[] = {"no", "one", "two", "three", "four", "five", "six", "seven", "eight"};
+        static const char *const upper[] = {"No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"};
+        return n >= 0 && n <= 8 ? (capital ? upper : lower)[n] : "several";
+    }
+    std::string SetNameList() {
+        std::string list;
+        for (const char *name : g_description.setNames) {
+            list += (list.empty() ? "" : " ") + std::string(name);
+        }
+        return list;
+    }
     bool InRanges(uint32_t address) {
         for (const Range &range : g_ranges) {
             if (address >= range.from && address < range.to) {
@@ -120,12 +98,28 @@ namespace {
         }
         return text;
     }
+    // A line's words, up to a remark (a "#" with no hex digit after it; "#12345" is a colour typed wrong)
+    std::vector<std::string> Words(const std::string &line) {
+        std::istringstream words(line);
+        std::vector<std::string> list;
+        for (std::string word; words >> word;) {
+            if (word[0] == '#' && (word.size() == 1 || HexDigit(word[1]) < 0)) {
+                break;
+            }
+            list.push_back(word);
+        }
+        return list;
+    }
 
     // (beside settings.ini; none when the game was started without one)
     std::string FolderPath() {
         const std::string &settings = SettingsPath();
         const size_t slash = settings.find_last_of("/\\");
         return settings.empty() ? std::string() : (slash == std::string::npos ? std::string(".") : settings.substr(0, slash)) + "/" + kFolder;
+    }
+
+    uint32_t ColourAddress(int number, int set, int line, int n) {
+        return SetAddress(number, set) + static_cast<uint32_t>(line * kColoursInPalette + n) * 2;
     }
 
     // Reads a character's file, if it has one, into the ROM image; how many sets it changed
@@ -144,34 +138,25 @@ namespace {
         if (!in) {
             return 0;
         }
-        const uint32_t sets = SetsOf(who.number);
         int set = -1, palette = 0, changed = 0, number = 0;
         std::string line;
-        auto complain = [&](const char *what) { fprintf(stderr, "%s, line %d: %s\n", path.c_str(), number, what); };
+        auto complain = [&](const std::string &what) { fprintf(stderr, "%s, line %d: %s\n", path.c_str(), number, what.c_str()); };
         while (std::getline(in, line)) {
             number++;
-            // (a "#" with no hex digit after it starts a remark; "#12345" is a colour typed wrong)
-            std::istringstream words(line);
-            std::vector<std::string> list;
-            for (std::string word; words >> word;) {
-                if (word[0] == '#' && (word.size() == 1 || HexDigit(word[1]) < 0)) {
-                    break;
-                }
-                list.push_back(word);
-            }
+            const std::vector<std::string> list = Words(line);
             if (list.empty()) {
                 continue;
             }
             if (list[0].front() == '[') {
                 const std::string name = Upper(list[0].substr(1, list[0].find(']') - 1));
                 set = -1;
-                for (int n = 0; n < kColourSetsEach; n++) {
-                    if (name == kSetNames[n]) {
+                for (int n = 0; n < Sets(); n++) {
+                    if (name == g_description.setNames[static_cast<size_t>(n)]) {
                         set = n;
                     }
                 }
                 if (set < 0) {
-                    complain("not a set's name (LP MP HP LK MK HK PP KK AUTO1 AUTO2)");
+                    complain("not a set's name (" + SetNameList() + ")");
                 }
                 palette = 0;
                 changed += set >= 0;
@@ -180,8 +165,8 @@ namespace {
             if (set < 0) {
                 continue; // (colours before a set's name, or under a name that is wrong: said already)
             }
-            if (palette >= kPalettesInSet) {
-                complain("a set has four lines of colours");
+            if (palette >= Palettes()) {
+                complain(std::string("a set has ") + CountWord(Palettes(), false) + " lines of colours");
                 continue;
             }
             if (list.size() > kColoursInPalette) {
@@ -196,40 +181,40 @@ namespace {
                     complain("not a colour (#RRGGBB, #RGB, or - for the game's own)");
                     continue;
                 }
-                uint8_t *p = Program(sets + static_cast<uint32_t>(set) * kColourSetSize +
-                                     static_cast<uint32_t>(palette * kColoursInPalette + static_cast<int>(n)) * 2);
-                // (the top four bits are the game's: kept)
-                p[0] = static_cast<uint8_t>((p[0] & 0xF0) | (colour >> 8));
-                p[1] = static_cast<uint8_t>(colour);
+                SetColour(who.number, set, palette, static_cast<int>(n), static_cast<uint16_t>(colour));
             }
             palette++;
         }
         return changed;
     }
 
-    // Takes the colours a PalMod-changed copy of kRomFile in the folder has that the game's has not, where the
+    // Takes the colours a PalMod-changed copy of the ROM file in the folder has that the game's has not, where the
     // characters' colours are (and nothing else: the file holds the game's rules too); how many
     int LoadRomFile(const std::string &folder) {
-        const std::string path = folder + "/" + kRomFile;
+        const Description &d = g_description;
+        if (!d.romFile) {
+            return 0;
+        }
+        const std::string path = folder + "/" + d.romFile;
         std::ifstream in(path, std::ios::binary);
         if (!in) {
             return 0;
         }
         std::vector<uint8_t> file((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        auto at = [&](uint32_t address) { return file[(address - kRomFileAt) ^ 1]; };
-        // (the tables of where the colours are must be the game's: it is this set's file)
-        bool same = file.size() == kRomFileSize;
-        for (uint32_t a = kColourSets; same && a < kEffectColours + kColourNumbers * 4; a++) {
+        const uint32_t swap = d.romFileSwapped ? 1 : 0;
+        auto at = [&](uint32_t address) { return file[(address - d.romFileAt) ^ swap]; };
+        // (the stretch that must be the game's: it is this set's file)
+        bool same = file.size() == d.romFileSize;
+        for (uint32_t a = d.same.from; same && a < d.same.to; a++) {
             same = at(a) == *Program(a);
         }
         if (!same) {
-            fprintf(stderr, "%s: not this set's %s (the Japanese set's, 970519), changed or not; left alone\n",
-                    path.c_str(), kRomFile);
+            fprintf(stderr, "%s: not this set's %s (%s), changed or not; left alone\n", path.c_str(), d.romFile, d.romFileWhose);
             return 0;
         }
         int colours = 0, elsewhere = 0;
         uint32_t firstElsewhere = 0;
-        for (uint32_t a = kRomFileAt; a < kRomFileAt + kRomFileSize; a += 2) {
+        for (uint32_t a = d.romFileAt; a < d.romFileAt + d.romFileSize; a += 2) {
             uint8_t *p = Program(a);
             if (at(a) == p[0] && at(a + 1) == p[1]) {
                 continue;
@@ -250,29 +235,24 @@ namespace {
         return colours;
     }
 
-    // The game's colours back, then the files' over them if the feature is on: kRomFile's, then the text files'
     // The places of the colours found and the game's own kept (once); false if the ROM is not as expected
     bool Prepare() {
         if (!g_original.empty()) {
             return true;
         }
-        if (!g_ranges.empty()) {
+        if (!g_ranges.empty() || !g_description.ranges) {
             return false; // (found wrong once: said then)
         }
-        auto add = [](uint32_t from, uint32_t size) { g_ranges.push_back({from, from + size}); };
-        for (int n = 0; n < kColourNumbers; n++) {
-            add(SetsOf(n), kSetsSize);
-        }
-        for (int n = 0; n < kColourNumbers; n++) {
-            add(Long(kEffectColours + 4u * static_cast<uint32_t>(n)), kEffectsSize);
-        }
+        g_ranges = g_description.ranges();
         uint32_t from = UINT32_MAX, to = 0;
         for (const Range &range : g_ranges) {
             from = std::min(from, range.from);
             to = std::max(to, range.to);
         }
-        if (from < kRomFileAt || to > kRomFileAt + kRomFileSize || to > ProgramSize()) {
+        const Description &d = g_description;
+        if (g_ranges.empty() || (d.romFile && (from < d.romFileAt || to > d.romFileAt + d.romFileSize)) || to > ProgramSize()) {
             fprintf(stderr, "custom colours: the ROM is not as expected; left alone\n");
+            g_ranges.push_back({0, 0});
             return false;
         }
         g_originalFrom = from;
@@ -280,6 +260,7 @@ namespace {
         return true;
     }
 
+    // The game's colours back, then the files' over them if the feature is on: the ROM file's, then the text files'
     void Apply() {
         g_applied = true;
         if (!Prepare()) {
@@ -294,10 +275,10 @@ namespace {
         const int colours = LoadRomFile(folder);
         if (colours) {
             fprintf(stderr, "custom colours: %d colour%s from %s/%s\n", colours, colours == 1 ? "" : "s", folder.c_str(),
-                    kRomFile);
+                    g_description.romFile);
         }
         int files = 0, sets = 0;
-        for (const Character &who : kList) {
+        for (const Character &who : g_description.characters) {
             const int changed = Load(who, folder);
             files += changed > 0;
             sets += changed;
@@ -321,24 +302,16 @@ namespace {
         const std::string out = folder + "/" + kGameColours;
         std::error_code error;
         std::filesystem::create_directories(out, error);
-        for (const Character &who : kList) {
+        for (const Character &who : g_description.characters) {
             std::ofstream file(out + "/" + who.name + ".txt");
             file << "# " << who.name << (who.abroad ? std::string(" (") + who.abroad + ")" : std::string())
                  << ": the game's own colours.\n"
-                    "# To change them, copy this file to the palettes folder and change the colours there. Each set\n"
-                    "# is chosen by the buttons in its name ([PP]: two punches at once, [KK]: two kicks; [AUTO1] and\n"
-                    "# [AUTO2]: chosen for auto guard) and has four lines of 16 colours; the character is drawn in\n"
-                    "# the first line's, the others are its effects. The 16th colour of a line is never seen. A\n"
-                    "# colour is #RRGGBB or #RGB, rounded to the board's 16 levels of each; - keeps the game's.\n"
-                    "# Sets and lines that are left out keep the game's colours.\n";
-            const uint32_t sets = SetsOf(who.number) - g_originalFrom;
-            for (int set = 0; set < kColourSetsEach; set++) {
-                file << "\n[" << kSetNames[set] << "]\n";
-                for (int palette = 0; palette < kPalettesInSet; palette++) {
+                 << g_description.originalHelp;
+            for (int set = 0; set < Sets(); set++) {
+                file << "\n[" << g_description.setNames[static_cast<size_t>(set)] << "]\n";
+                for (int palette = 0; palette < Palettes(); palette++) {
                     for (int n = 0; n < kColoursInPalette; n++) {
-                        const uint8_t *p = &g_original[sets + static_cast<uint32_t>(set) * kColourSetSize +
-                                                       static_cast<uint32_t>(palette * kColoursInPalette + n) * 2];
-                        file << (n ? " " : "") << ColourText(static_cast<uint16_t>(p[0] << 8 | p[1]));
+                        file << (n ? " " : "") << ColourText(GameColour(who.number, set, palette, n));
                     }
                     file << "\n";
                 }
@@ -346,26 +319,29 @@ namespace {
         }
         fprintf(stderr, "custom colours: the game's colours written to %s\n", out.c_str());
     }
-} // namespace
 
-const char *ColourName(int number) {
-    for (const Character &who : kList) {
-        if (who.number == number) {
-            return who.name;
+    const Character *Find(int number) {
+        for (const Character &one : g_description.characters) {
+            if (one.number == number) {
+                return &one;
+            }
         }
-    }
-    return "";
-}
-
-uint32_t ColourSetAddress(int number, int set) {
-    return SetsOf(number) + static_cast<uint32_t>(set) * kColourSetSize;
-}
-
-namespace {
-    uint32_t ColourAddress(int number, int set, int line, int n) {
-        return ColourSetAddress(number, set) + static_cast<uint32_t>(line * kColoursInPalette + n) * 2;
+        return nullptr;
     }
 } // namespace
+
+const Description &TheDescription() {
+    return g_description;
+}
+
+const char *Name(int number) {
+    const Character *who = Find(number);
+    return who ? who->name : "";
+}
+
+uint32_t SetAddress(int number, int set) {
+    return g_description.setAddress(number, set);
+}
 
 uint16_t Colour(int number, int set, int line, int n) {
     const uint8_t *p = Program(ColourAddress(number, set, line, n));
@@ -387,12 +363,7 @@ void SetColour(int number, int set, int line, int n, uint16_t colour) {
 }
 
 bool SaveColours(int number) {
-    const Character *who = nullptr;
-    for (const Character &one : kList) {
-        if (one.number == number) {
-            who = &one;
-        }
-    }
+    const Character *who = Find(number);
     const std::string folder = FolderPath();
     if (!who || folder.empty()) {
         return false;
@@ -404,10 +375,10 @@ bool SaveColours(int number) {
     }
     std::ostringstream text;
     bool any = false;
-    for (int set = 0; set < kColourSetsEach; set++) {
+    for (int set = 0; set < Sets(); set++) {
         std::string lines;
         bool changed = false;
-        for (int line = 0; line < kPalettesInSet; line++) {
+        for (int line = 0; line < Palettes(); line++) {
             bool same = true;
             for (int n = 0; n < kColoursInPalette; n++) {
                 same = same && Colour(number, set, line, n) == GameColour(number, set, line, n);
@@ -423,7 +394,7 @@ bool SaveColours(int number) {
             lines += "\n";
         }
         if (changed) {
-            text << "\n[" << kSetNames[set] << "]\n" << lines;
+            text << "\n[" << g_description.setNames[static_cast<size_t>(set)] << "]\n" << lines;
             any = true;
         }
     }
@@ -441,10 +412,9 @@ bool SaveColours(int number) {
 }
 
 namespace {
-    constexpr const char *kLibrary = "library";
     std::string LibraryPath(int number) {
         const std::string folder = FolderPath();
-        const char *name = ColourName(number);
+        const char *name = Name(number);
         return folder.empty() || !*name ? std::string() : folder + "/" + kLibrary + "/" + name;
     }
     // (names in the order a person counts them: the numbers in them by their value)
@@ -503,17 +473,18 @@ bool SaveSet(int number, int set, std::string &saved) {
     std::filesystem::create_directories(path, error);
     // (the next number after the character's name that is free)
     for (int n = 1;; n++) {
-        saved = std::string(ColourName(number)) + " " + std::to_string(n);
+        saved = std::string(Name(number)) + " " + std::to_string(n);
         if (!std::filesystem::exists(path + "/" + saved + ".txt", error)) {
             break;
         }
     }
     std::ofstream file(path + "/" + saved + ".txt");
-    file << "# " << ColourName(number) << ": a set of colours saved in the colour editor (" << kSetNames[set]
+    file << "# " << Name(number) << ": a set of colours saved in the colour editor (" << g_description.setNames[static_cast<size_t>(set)]
          << "), to load into any of the character's sets.\n"
-            "# Four lines of 16 colours: the character's own, then its effects'. A colour is #RRGGBB or #RGB;\n"
+         << "# " << CountWord(Palettes(), true)
+         << " lines of 16 colours: the character's own, then its effects'. A colour is #RRGGBB or #RGB;\n"
             "# - keeps the colour of the set it is loaded into.\n";
-    for (int line = 0; line < kPalettesInSet; line++) {
+    for (int line = 0; line < Palettes(); line++) {
         for (int n = 0; n < kColoursInPalette; n++) {
             file << (n ? " " : "") << ColourText(Colour(number, set, line, n));
         }
@@ -522,7 +493,7 @@ bool SaveSet(int number, int set, std::string &saved) {
     return static_cast<bool>(file);
 }
 
-bool ReadSavedSet(int number, const std::string &saved, uint16_t colours[kPalettesInSet][kColoursInPalette]) {
+bool ReadSavedSet(int number, const std::string &saved, uint16_t colours[kMostPalettes][kColoursInPalette]) {
     const std::string path = LibraryPath(number);
     std::ifstream in(path + "/" + saved + ".txt");
     if (path.empty() || !in) {
@@ -530,15 +501,8 @@ bool ReadSavedSet(int number, const std::string &saved, uint16_t colours[kPalett
     }
     // (lines of colours, as in a character's file; a [name] line, if any, is passed over)
     int line = 0;
-    for (std::string text; line < kPalettesInSet && std::getline(in, text);) {
-        std::istringstream words(text);
-        std::vector<std::string> list;
-        for (std::string word; words >> word;) {
-            if (word[0] == '#' && (word.size() == 1 || HexDigit(word[1]) < 0)) {
-                break;
-            }
-            list.push_back(word);
-        }
+    for (std::string text; line < Palettes() && std::getline(in, text);) {
+        const std::vector<std::string> list = Words(text);
         if (list.empty() || list[0].front() == '[') {
             continue;
         }
@@ -559,19 +523,20 @@ bool RemoveSavedSet(int number, const std::string &saved) {
     return !path.empty() && std::filesystem::remove(path + "/" + saved + ".txt", error);
 }
 
-void PalettesBeforeFrame(Machine &) {
+void EditorCheck(); // colour_editor.cpp
+void RegisterEditor();
+
+void BeforeFrame(Machine &) {
+    EditorCheck();
     if (!g_applied || FeatureOn(kFeature) != g_wasOn) {
         Apply();
     }
 }
 
-void RegisterPalettes() {
-    TheGame().features.push_back({kFeature, "Display", "Custom colours",
-                                  "Characters in the colours of the files in the \"palettes\" folder in the game's data "
-                                  "folder: a vm3j.10b changed with PalMod, and text files, one a character (Morrigan.txt), "
-                                  "which go before it. With no files the game's own colours. They are taken when a player is "
-                                  "coloured: at the next round.",
-                                  kFeatureEnhanced});
+void Register(const Description &description) {
+    g_description = description;
+    g_description.palettesInSet = std::clamp(description.palettesInSet, 1, kMostPalettes);
+    TheGame().features.push_back({kFeature, "Display", "Custom colours", description.featureDescription, kFeatureEnhanced});
     TheGame().commands.push_back({"colours_reload", "Display", "Load colour files again",
                                   "Reads the palettes folder again, for files changed while the game runs. They are taken "
                                   "when a player is next coloured.",
@@ -580,6 +545,7 @@ void RegisterPalettes() {
                                   "Writes every character's own colours as files in palettes/original, to copy into the "
                                   "palettes folder and change.",
                                   WriteGameColours});
+    RegisterEditor();
 }
 
-} // namespace cps2recomp
+} // namespace cps2recomp::colours
