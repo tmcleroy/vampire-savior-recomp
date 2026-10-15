@@ -10,7 +10,9 @@
 // warning), 6, 0 again, and into the loop of its show: 0C, 0E, 10 (the notices), ..., 18 the introduction,
 // whose own step (kGameStep) is 10 when the title comes. With a coin in (free play puts them in) it goes
 // from that second 0 to 2 and 4 instead: the title that asks for Start. A step past the introduction ends
-// the skipping too. The modes that reset the board to get somewhere of their own skip it themselves.
+// the skipping too. Only the board's start begins it (Machine::frame is 0 again at a reset): the step is 0 for a
+// few frames between the screens of a game too. The modes that reset the board to get somewhere of their own
+// skip it themselves.
 #include "modes.h"
 
 namespace cps2recomp {
@@ -41,14 +43,16 @@ namespace {
     }
 } // namespace
 
-void TitleFrame(Machine &) {
+void TitleFrame(Machine &machine) {
     // (a mode started: its start is its own, and so is running unseen)
     if (InAMode()) {
         g_skipping = g_fast = false;
         return;
     }
     const uint16_t mode = Ram16(kMode);
-    if (mode == 0 && !g_skipping) {
+    // (only the board's first frame: the step is 0 again between screens of a game, and a game must never be
+    // run unseen)
+    if (machine.frame <= 1 && mode == 0 && !g_skipping) {
         g_skipping = FeatureOn("skip_intro");
         g_booted = false;
         g_frames = 0;

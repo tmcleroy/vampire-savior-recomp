@@ -24,6 +24,9 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 - In-game menu: a long description no longer runs over the hint at the foot of the panel (Display
   page, Custom colours), a long value no longer runs over its title (Model viewer, Animation), and
   the panel is opaque.
+- Straight to the title: no longer runs a game fast and unseen for up to a minute and a half after
+  Start (the game's step is 0 for a few frames between its screens too, which it took for the board
+  starting again); only a start or a reset of the board begins the skipping now.
 
 ## 0.1.0-beta.5 - 2026-10-14
 
