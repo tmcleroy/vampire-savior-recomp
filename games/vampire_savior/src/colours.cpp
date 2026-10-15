@@ -14,6 +14,7 @@ bool ModelViewer();
 int ModelCharacter();
 int ModelCharacterNumber(int choice);
 int ModelAnimationStep(Machine &machine, int choice, int by);
+int ModelAnimationForLine(Machine &machine, int line);
 const std::vector<const char *> &ModelAnimationNames();
 
 namespace {
@@ -85,6 +86,7 @@ void RegisterColours() {
     d.characterNumber = ModelCharacterNumber;
     d.animationStep = ModelAnimationStep;
     d.animationNames = ModelAnimationNames;
+    d.animationForLine = ModelAnimationForLine;
     d.backgrounds = {"Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7",
                      "Stage 8", "Stage 9", "Stage 10", "Stage 11", "Stage 12", "White", "Black"};
     colours::Register(d);

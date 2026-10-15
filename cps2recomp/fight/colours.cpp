@@ -537,15 +537,16 @@ void Register(const Description &description) {
     g_description = description;
     g_description.palettesInSet = std::clamp(description.palettesInSet, 1, kMostPalettes);
     TheGame().features.push_back({kFeature, "Display", "Custom colours", description.featureDescription, kFeatureEnhanced});
-    TheGame().commands.push_back({"colours_reload", "Display", "Load colour files again",
+    RegisterEditor();
+    // (the files' commands on the editor's page, after its own)
+    TheGame().commands.push_back({"colours_reload", "Colour editor", "Load colour files again",
                                   "Reads the palettes folder again, for files changed while the game runs. They are taken "
                                   "when a player is next coloured.",
                                   [](Machine &) { Apply(); }});
-    TheGame().commands.push_back({"colours_write", "Display", "Write the game's colours",
+    TheGame().commands.push_back({"colours_write", "Colour editor", "Write the game's colours",
                                   "Writes every character's own colours as files in palettes/original, to copy into the "
                                   "palettes folder and change.",
                                   WriteGameColours});
-    RegisterEditor();
 }
 
 } // namespace cps2recomp::colours

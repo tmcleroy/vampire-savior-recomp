@@ -12,6 +12,24 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
   (`palettes/library/<Character>/`, one file a set, named `Lilith 1`, `Lilith 2`...) and "Load"
   puts a saved one into any set: left and right try each on the character, LP loads it, MK twice
   deletes it, and moving off the row without loading puts the colours back.
+- Colour editor: Random colours (LK or the Random row) needs a second press, and HK puts back the
+  colours from before them. Choosing a Line shows the animation that uses it most (Bulleta, Victor,
+  Morrigan, Anakaris, Q-Bee). "Load colour files again" and "Write the game's colours" are on the
+  colour editor's menu page. The README gives the palettes folder for Windows and Linux too.
+- Model viewer: no second shadow on the floor (the hidden second player's came round into the
+  picture when the character walked right); what a stage has in front of the fighters is in front
+  of the character again ("Stage in front", at its own size).
+- Ring out: the fallen fighter's shadow no longer stays on the floor, and the way down to the next
+  stage fades through black instead of the new stage pushing the old one up with a hard edge.
+- `vampire_savior.exe` opened by itself starts the launcher (straight into the game once a ROM set
+  is chosen) instead of closing at once; on Windows no console window opens beside the game, and a
+  start that fails says why in a message box.
+- In-game menu: a long description no longer runs over the hint at the foot of the panel (Display
+  page, Custom colours), a long value no longer runs over its title (Model viewer, Animation), and
+  the panel is opaque.
+- Straight to the title: no longer runs a game fast and unseen for up to a minute and a half after
+  Start (the game's step is 0 for a few frames between its screens too, which it took for the board
+  starting again); only a start or a reset of the board begins the skipping now.
 
 ## 0.1.0-beta.5 - 2026-10-14
 

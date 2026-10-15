@@ -362,8 +362,7 @@ has yet used them in a window or listened.
   with three, 737 frames a second on the Mac. Checked with no window: pictures, traces, sound
   dumps. Nobody has played them yet.
 - Known of them: with the stage behind, a stage's pieces that belong in front of the fighters are
-  behind them, and a super move's own backdrop is not shown; a fighter that has fallen leaves its
-  shadow; the two "Best" counts are features, so a preset chosen in the launcher clears them.
+  behind them, and a super move's own backdrop is not shown; the two "Best" counts are features, so a preset chosen in the launcher clears them.
 
 Facts found for the model viewer:
 - A character's animations: three tables of longs by the character's number, at `0BCEFA`, `0BCF7A` and
@@ -538,6 +537,26 @@ keeps the set's own, the 16th of a line never changed) and puts them back on lea
 LP loaded it; MK twice (within 1.5 s) deletes the file. Checked headless with a movie: two saved,
 each tried, back to none, one loaded, one tried and put back, one deleted; the files and the
 character's file agree.
+
+Tester feedback (2026-10-14, branch `tester-feedback`):
+- Model viewer's second shadow: the second player stands 768 to the right and object x counts in 1024,
+  so its shadow wrapped into the picture once player 1 stood right of about 256. `NoShadow` (machines.cpp)
+  moves the pieces of shadow nearer that player's column (player x - camera + 64) off the picture when the
+  board takes the list (`Video::objectsTaken`); the spares' frames run with it off. The ring out uses it
+  for the fallen fighter. Checked headless: walk right and back, normal and wide; a forced ring out and a
+  natural one.
+- "Stage in front": at 1x on a stage the picture is drawn a third time with everything but the panel and
+  player 2's sets; a pixel of the character that is not what that picture shows has something in front
+  of it, and takes it. Differs from before on Abaraya (kettle and steam) and Fetus of God (a bulb) only,
+  with Bulleta in the middle; other stages' front pieces are elsewhere.
+- Line row: which animation shows which line is found by running (the pictures' own data has the line in
+  some form not yet read: `+04` points to a header and 4-byte pieces with flag bytes 0x10-0x12, 0x02,
+  0x24 before tile numbers): every frame of every animation put in player 1's record on a spare copy of
+  the viewer's machine, eight a frame, counting objects in sets kPaletteSlot+0..3 of the list the game
+  made. About 300 animations, done a few seconds after the editor shows the character. Morrigan: line 1
+  A56, line 2 C2 (4 objects), line 3 A53. Not for the kFirstLineOnly characters.
+- Ring out drop: rise 48 lines and fade to black over 32 frames, then the next stage from 48 below and
+  from black over 32; sound crossfaded over the whole 64.
 
 ## Approximate, or left to the interpreters
 
