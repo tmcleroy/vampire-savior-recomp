@@ -24,6 +24,11 @@ means off; `FeatureValue` gives the number chosen; `--features name=2`), can las
 (`kFeatureSession`: not kept in settings.ini, off again at Reset), and the menu shows each category
 as a page of its own.
 
+Every game also has the port's own features (`RegisterPortFeatures`, `port/main.cpp`): run-ahead on
+the Game page, and on the Display page how the picture is fitted to the window (`display_scaling`,
+`display_shape`: `port/present.h`) and the size it opens at (`window_size`). The first choice of each
+is how the port always drew it, so they are the same in every preset.
+
 ## Commands
 
 `TheGame().commands` are things the game's sources do when asked: a row of the menu (on the first

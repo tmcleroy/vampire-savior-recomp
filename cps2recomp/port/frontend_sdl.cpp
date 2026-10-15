@@ -13,6 +13,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 using namespace cps2recomp;
@@ -89,17 +90,19 @@ int RunWindowed(Port &port) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
-    const int scale = std::max(1, port.opt.scale);
-    // The board's picture is 384 x 224 shown on a 4:3 screen (its pixels are narrower than they are tall)
+    // (the window: so many times the board's 224 lines, --scale's or the Display page's)
+    const int scale = port.opt.scale > 0 ? port.opt.scale : WindowSize();
     // (the window's name: game.cfg's "title" where a game has one, else its name)
 #ifdef GAME_TITLE
     const char *title = GAME_TITLE;
 #else
     const char *title = GAME_NAME;
 #endif
-    // (4:3 for the board's picture; as much wider as the widest picture the game's sources may ask for)
+    // (the picture's shape: the board's 384 x 224 shown 4:3 unless the Display page says otherwise, and as
+    // much wider as the widest picture the game's sources may ask for; 4:3 for a picture that fills it)
     const int columns = TheGame().widestPicture ? std::clamp(TheGame().widestPicture(), +Video::kWidth, +Video::kMaxWidth) : Video::kWidth;
-    SDL_Window *window = SDL_CreateWindow(title, 224 * scale * 4 / 3 * columns / Video::kWidth, 224 * scale,
+    auto windowShape = [](int across) { return PictureShape(across, Video::kHeight, DisplayShape(), 4.0f / 3.0f * across / Video::kWidth); };
+    SDL_Window *window = SDL_CreateWindow(title, static_cast<int>(std::lround(Video::kHeight * scale * windowShape(columns))), Video::kHeight * scale,
                                           SDL_WINDOW_RESIZABLE | (port.opt.fullscreen ? SDL_WINDOW_FULLSCREEN : 0) |
                                               (getenv("CPS2RECOMP_HIDDEN_WINDOW") ? SDL_WINDOW_HIDDEN : 0)); // (hidden: for tests)
     // The picture goes to the window through SDL's GPU API, or through SDL's renderer where there is no
@@ -314,30 +317,32 @@ int RunWindowed(Port &port) {
             port.pad[1] = pads[1] & ~heldAtClose;
         }
 
-        // The picture as large as fits the window at its shape: 4:3 for the board's 384 columns, and as much
-        // wider as a wider picture has more of them (16:9 for 512)
-        // (a window, not full screen or maximized, takes the shape of the widest picture again when that
-        // changes: widescreen switched on or off in the menu)
-        if (TheGame().widestPicture) {
-            static int shownColumns = columns;
-            const int now = std::clamp(TheGame().widestPicture(), +Video::kWidth, +Video::kMaxWidth);
-            if (now != shownColumns) {
-                shownColumns = now;
+        // The window takes the picture's shape again when that changes (widescreen, or the Display page's
+        // shape), and its size when the Display page's size does: a window only, not full screen or maximized
+        {
+            static int shownColumns = columns, shownSize = scale;
+            static Shape shownShape = DisplayShape();
+            const int now = TheGame().widestPicture ? std::clamp(TheGame().widestPicture(), +Video::kWidth, +Video::kMaxWidth) : columns;
+            const int size = port.opt.scale > 0 ? port.opt.scale : WindowSize();
+            if (now != shownColumns || DisplayShape() != shownShape || size != shownSize) {
                 if (!(SDL_GetWindowFlags(window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED))) {
                     int windowWidth = 0, windowHeight = 0;
                     SDL_GetWindowSize(window, &windowWidth, &windowHeight);
-                    SDL_SetWindowSize(window, windowHeight * 4 / 3 * now / Video::kWidth, windowHeight);
+                    if (size != shownSize) {
+                        windowHeight = Video::kHeight * size;
+                    }
+                    SDL_SetWindowSize(window, static_cast<int>(std::lround(windowHeight * windowShape(now))), windowHeight);
                 }
+                shownColumns = now;
+                shownShape = DisplayShape();
+                shownSize = size;
             }
         }
+        // The picture in the window as the Display page says (present.h)
         int width = 0, height = 0;
         presenter.Size(width, height);
-        const float shape = 4.0f / 3.0f * static_cast<float>(port.ShownWidth()) / Video::kWidth;
-        SDL_FRect where;
-        where.w = std::min<float>(static_cast<float>(width), height * shape);
-        where.h = where.w / shape;
-        where.x = (width - where.w) / 2;
-        where.y = (height - where.h) / 2;
+        presenter.SetScaling(DisplayScaling());
+        const SDL_FRect where = FitPicture(width, height, port.ShownWidth(), Video::kHeight, DisplayShape(), DisplayScaling());
 
         if (port.menu.IsOpen()) {
             // The game's picture as it was, with the menu over it
