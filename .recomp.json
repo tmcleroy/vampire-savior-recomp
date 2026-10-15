@@ -1,0 +1,15 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "Vampire Savior: The Lord of Vampire",
+  "wikidata": "Q3554366",
+  "system": "Arcade",
+  "type": "recomp",
+  "original": {"region": "Japan", "revision": "970519"},
+  "project": "Vampire Savior Recomp",
+  "status": "released",
+  "targets": ["Windows", "Linux", "macOS", "Steam Deck"],
+  "toolchain": "cps2recomp",
+  "approach": "Static recompilation of the CPS-2 board's 68000 and Z80 programs to C++, on its own CPS-2 machine with no emulator",
+  "maintainers": [{"name": "tmcleroy", "link": "https://github.com/tmcleroy"}],
+  "tags": ["CPS-2", "fighting", "training mode"]
+}
