@@ -85,7 +85,7 @@ another is started or the menu's Reset.
 | Training mode | A fight with no clock that nobody loses, and the aids above |
 | Attract mode | The game's own show on a loop, as a cabinet left alone plays it, with no coin to keep out: everything, the introduction only, or its eight demonstration fights one after another |
 | Stage viewer | Any of the twelve stages with nobody on it and no panel, its own pieces moving and its music playing (or another stage's). Scroll it with the stick, or let it drift from end to end. "Infinite" is all twelve in turn, each scrolling into the next as its tune fades into the next one's |
-| Model viewer | One character by itself, on a stage or on plain white or black, from a quarter of its size to 25 times. It stands and moves with your controls, or goes through any of its animations (named A0, B12, C3... as the game's own lists number them; left and right step through them), at full speed or in slow motion |
+| Model viewer | One character by itself, on a stage or on plain white or black, from a quarter of its size to 25 times. It stands and moves with your controls, or goes through any of its animations (named A0, B12, C3... as the game's own lists number them; left and right step through them), at full speed or in slow motion. At its own size, what the stage has in front of the fighters stays in front (or, with "Stage in front" off, behind it) |
 | Survival | One opponent after another on the health you have left. How many can you beat? |
 | Endless battle | Two fighters the game plays, for as long as you like, with no bars and no clock, on one stage, on stages that fade one into another, or on a floor that scrolls through them all. Touch the controls to take a fighter over |
 | Ring out | No health. Knock your opponent over the end of the stage and jump down to the next one |
@@ -142,10 +142,15 @@ change it.
 - **Set**: which of the character's ten colour sets, by how it is chosen at the character choice:
   LP, MP, HP, LK, MK, HK, two punches together (PP), two kicks together (KK), and the two used with
   auto guard.
-- **Line**: the character's own colours, or one of three lines for their effects.
+- **Line**: the character's own colours, or one of three lines for their effects. Choosing a line
+  shows the animation that uses it most, for the characters that keep all four lines on show
+  (Bulleta, Victor, Morrigan, Anakaris and Q-Bee; it is found in the first few seconds the
+  editor shows a character). The others' extra lines are seen only when an effect needs them.
 - **Colour, Red, Green, Blue**: one of the line's 15 colours (it blinks on the character when you
   choose it), and its red, green and blue in the board's 16 levels each.
-- **Random colours**: every colour of the set at random. Again for another.
+- **Random colours**: every colour of the set at random, at a second press (LK twice, or left or
+  right twice on the row), so that one press by mistake loses nothing. HK puts back the colours from
+  before the random ones, until the next change.
 - **Save set** and **Load**: keep a set you like in the character's library and put it back later,
   into this set or any other (a design made on LP can go on KK). Left and right on Load try each
   saved one on the character; LP loads it, MK twice deletes it, and moving off the row without
@@ -156,10 +161,17 @@ change it.
 Changes show at once and are saved as you go. **To play in them, choose the character with the
 button of the set you changed** (Lilith with LP, say), anywhere: arcade, versus, training.
 
-**Files.** What you change goes in a `palettes` folder beside `settings.ini` (on macOS
-`~/Library/Application Support/Vampire Savior/palettes/`), a text file a character (`Lilith.txt`)
-holding only the sets that are not the game's. You can write or share them by hand: "Write the
-game's colours" (on the Display page) puts every character's own colours in `palettes/original` to
+**Files.** What you change goes in a `palettes` folder beside `settings.ini`, a text file a
+character (`Lilith.txt`) holding only the sets that are not the game's. The folder is:
+
+| System | Folder |
+| --- | --- |
+| Windows | `%APPDATA%\Vampire Savior\palettes` (paste it into Explorer's address bar; it is the `AppData\Roaming` folder in your user folder) |
+| macOS | `~/Library/Application Support/Vampire Savior/palettes` |
+| Linux, SteamOS | `~/.local/share/Vampire Savior/palettes` |
+
+You can write or share them by hand: "Write the game's colours" (on the colour editor's page of
+the menu) puts every character's own colours in `palettes/original` to
 start from, and [docs/FEATURES.md](docs/FEATURES.md) has the format. Saved sets are files too, one a
 set, in `palettes/library/<Character>/` (`Lilith 1.txt`, `Lilith 2.txt`...): to share a design, share
 its file, and to use one someone gave you, put it in that folder.
@@ -170,6 +182,7 @@ put the copy in `palettes`. The characters' colours it changed are used, their e
 (poisoned, burned and the like); anything else in that file is left as the game's, so it cannot
 change how the game plays. Text files go over it.
 
+"Load colour files again", on the same page, reads files you changed while the game runs.
 "Custom colours" on the Display page switches all of it: on in Enhanced (it changes nothing until
 there are files), off in Pure.
 
@@ -198,6 +211,8 @@ the game.
 
 macOS: the app is not notarized, so the first time, right-click it and choose Open.
 Linux: unpack the archive anywhere and run `vampire_savior-launcher`.
+Windows: run `vampire_savior-launcher.exe`. Opening `vampire_savior.exe` by itself starts the
+launcher too (straight into the game once a ROM set has been chosen).
 
 ### Steam Deck
 

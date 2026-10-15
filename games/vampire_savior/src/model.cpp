@@ -9,7 +9,10 @@
 // player put out of the way: not followed by the camera, out of the picture, and never drawn. The picture
 // is made in two parts. The frame's own is the stage with nothing on it. The character is then drawn by
 // itself (the board's objects alone, and of them only player 1's and its shadow), and laid over the stage
-// or the plain colour at the size wanted, about the place where the character stands.
+// or the plain colour at the size wanted, about the place where the character stands. At its own size on a
+// stage, what the stage has in front of the fighters is put back in front of the character: the picture is
+// drawn a third time as the board would, and where the character's pixels are not what it shows, something
+// stands in front of them.
 //
 // A character's animations are in three tables in the ROM, by the character's number (the game starts one
 // at 027EB8, 027EC0 or 027EC8): each a list of how far on from the table an animation is. An animation is
@@ -76,6 +79,7 @@ namespace {
         int32_t anchorX = 0, anchorY = 0;
     } g;
     bool g_fast = false;
+    bool g_noShadow = false; // the second player's shadow is not drawn (NoShadow)
 
     void Fast(bool on) {
         if (on != g_fast) {
@@ -130,6 +134,11 @@ namespace {
         const unsigned set = attributes & 0x1F;
         return set < 5 || set > 15 || ThePanel(tile, attributes);
     }
+    // and for the picture as the board would show it, everything but the panel and the second player
+    bool NotInAFight(uint32_t tile, uint16_t attributes) {
+        const unsigned set = attributes & 0x1F;
+        return ThePanel(tile, attributes) || ((kPlayerSets[1] >> set) & 1);
+    }
 
     void StartModel(Machine &machine) {
         End();
@@ -148,7 +157,7 @@ namespace {
 
     // The menu's "Reset options": every choice of the viewer's page back to what it is when nothing is chosen
     constexpr const char *kChoices[] = {"model_character", "model_background", "model_size", "model_animation",
-                                        "model_speed",     "model_repeat",    "model_all"};
+                                        "model_speed",     "model_repeat",    "model_all",  "model_foreground"};
     void ResetChoices(Machine &) {
         for (const char *choice : kChoices) {
             SetFeatureValue(choice, 0);
@@ -190,6 +199,112 @@ namespace {
             }
         }
         return 0;
+    }
+
+    // Which animations show which of the character's palettes, for the colour editor's Line row: found by
+    // showing each frame of every animation on a copy of the viewer's machine (a spare: runtime/spare.h), a few
+    // frames each frame of the viewer's, and counting the objects the game puts in the list in each of the
+    // player's colour sets (its first, kPaletteSlot, is the set's first line). The pictures' own data says
+    // which line a piece is drawn in, but not in a form read yet. For each line, the animation with the
+    // frame that has the most objects in it.
+    constexpr int kScanFramesEach = 8;      // frames of the copy run in a frame of the viewer's
+    constexpr int kScanFramesMost = 48;     // frames of an animation looked at, at most
+    struct LineScan {
+        int character = -1;
+        Spare spare;
+        int choice = 0;                     // the animation being looked at (0: not begun)
+        uint32_t first = 0, frame = 0;
+        int frames = 0;
+        bool done = false;
+        int best[kPalettesInSet] = {};      // for each line, the animation found, and its objects in that line
+        int most[kPalettesInSet] = {};
+    } g_scan;
+
+    // (in the copy: the objects in each line of the player's, from the list the game has just made)
+    void CountLines(const Machine &machine, int counts[kPalettesInSet]) {
+        const uint8_t *list = machine.ObjectsToCome();
+        const int slot = Ram8(Player(0) + kPaletteSlot);
+        for (int n = 0; n < 0x1000; n += 4) {
+            const uint16_t y = static_cast<uint16_t>((list[n * 2 + 2] << 8) | list[n * 2 + 3]);
+            const uint16_t attributes = static_cast<uint16_t>((list[n * 2 + 6] << 8) | list[n * 2 + 7]);
+            if (y >= 0x8000 || attributes >= 0xFF00) {
+                break; // (the list's end)
+            }
+            const int line = (attributes & 0x1F) - slot;
+            if (line >= 0 && line < kPalettesInSet) {
+                counts[line]++;
+            }
+        }
+    }
+    // A frame of the scan (only while the editor is on, and not for the characters whose other lines are
+    // elsewhere: kFirstLineOnly)
+    void Scan(Machine &machine) {
+        const int character = kCharacterNumbers[g.character];
+        if (g_scan.character != character) {
+            g_scan = LineScan();
+            g_scan.character = character;
+            g_scan.done = (kFirstLineOnly >> (character & 31)) & 1;
+            if (!g_scan.done) {
+                Archive ar(g_scan.spare.state, true); // (the copy: the viewer's machine as it is)
+                machine.Serialize(ar);
+                g_scan.spare.ready = true;
+            }
+        }
+        if (g_scan.done) {
+            return;
+        }
+        RunSpare(machine, g_scan.spare, [](Machine &) { SetRam8(kClock, kClockFull); }, nullptr, [character](Machine &m) {
+            for (int n = 0; n < kScanFramesEach && !g_scan.done; n++) {
+                // (what the frame shown last made, counted; then the next frame, or the next animation)
+                if (g_scan.choice) {
+                    int counts[kPalettesInSet] = {};
+                    CountLines(m, counts);
+                    for (int line = 0; line < kPalettesInSet; line++) {
+                        if (counts[line] > g_scan.most[line]) {
+                            g_scan.most[line] = counts[line];
+                            g_scan.best[line] = g_scan.choice;
+                        }
+                    }
+                    const uint8_t follows = m.Read8(g_scan.frame + kFrameEnd);
+                    const uint32_t next = follows & 0x80 ? Read32(m, g_scan.frame + kFrameJump) : follows & 0x40 ? 0 : g_scan.frame + kFrameBytes;
+                    if (next > g_scan.frame && IsFrame(m, next) && ++g_scan.frames < kScanFramesMost) {
+                        g_scan.frame = next;
+                    } else {
+                        const int choice = Step(m, character, g_scan.choice, 1);
+                        if (choice <= g_scan.choice) { // (gone round: every animation looked at)
+                            g_scan.done = true;
+                            break;
+                        }
+                        g_scan.choice = choice;
+                        g_scan.first = g_scan.frame = AnimationAt(m, character, (choice - 1) / kChoicesAList, (choice - 1) % kChoicesAList);
+                        g_scan.frames = 0;
+                    }
+                } else {
+                    g_scan.choice = Step(m, character, 0, 1);
+                    g_scan.first = g_scan.frame = g_scan.choice ? AnimationAt(m, character, (g_scan.choice - 1) / kChoicesAList, (g_scan.choice - 1) % kChoicesAList) : 0;
+                    if (!g_scan.first) {
+                        g_scan.done = true;
+                        break;
+                    }
+                }
+                SetRam32(Player(0) + kFrame, g_scan.frame);
+                SetRam32(Player(0) + kTimer, Read32(m, g_scan.frame));
+                SetRam8(Player(0) + kTimer, 0x7F);
+                m.players[0] = m.players[1] = 0;
+                m.RunFrame();
+            }
+        });
+    }
+
+    // The colour editor's question (colours.h, Description::animationForLine)
+    int ForLine(int line) {
+        if (line <= 0) {
+            return 0; // (the body: standing shows all of it)
+        }
+        if (g_scan.character != kCharacterNumbers[g.character] || !g_scan.done) {
+            return -2;
+        }
+        return line < kPalettesInSet && g_scan.best[line] ? g_scan.best[line] : -1;
     }
 
     const char *AnimationChoice() {
@@ -304,6 +419,20 @@ namespace {
         for (int line = 0; line < height; line++) {
             video.RenderLine(line, &model[static_cast<size_t>(line) * width]);
         }
+        // (the stage's pieces in front of the character: at its own size, on a stage, where it is not moved
+        // aside for the colour editor's panel; the picture as the board would draw it)
+        static std::vector<uint32_t> fight;
+        const int size = kSizes[std::clamp(FeatureValue("model_size"), 0, static_cast<int>(std::size(kSizes)) - 1)];
+        const bool front = size == 4 && g.background < kStages && !colours::EditorShift() && FeatureValue("model_foreground") == 0;
+        if (front) {
+            fight.resize(model.size());
+            video.layerMask = 0xF;
+            video.markObjects = false;
+            video.hideObject = NotInAFight;
+            for (int line = 0; line < height; line++) {
+                video.RenderLine(line, &fight[static_cast<size_t>(line) * width]);
+            }
+        }
         video.layerMask = layers;
         video.markObjects = marked;
         video.hideObject = hidden;
@@ -314,7 +443,6 @@ namespace {
         // Each pixel of the picture looks at the character's picture, so many quarters to a pixel, about
         // where the character stands (its feet for the smaller sizes; for the larger ones a place in its
         // middle, put in the middle of the picture, so that it is not all legs)
-        const int size = kSizes[std::clamp(FeatureValue("model_size"), 0, static_cast<int>(std::size(kSizes)) - 1)];
         const bool large = size > 8;
         const int fromX = g.anchorX, fromY = g.anchorY - (large ? 56 : 0);
         const int toX = (large ? width / 2 : g.anchorX) - colours::EditorShift(), toY = large ? height / 2 : g.anchorY;
@@ -332,7 +460,8 @@ namespace {
                 if (sourceX >= 0 && sourceX < width) {
                     const uint32_t pixel = model[static_cast<size_t>(sourceY) * width + sourceX];
                     if (pixel & 0x80000000) {
-                        picture[static_cast<size_t>(y) * width + x] = pixel & 0xFFFFFF;
+                        const uint32_t shown = front ? fight[static_cast<size_t>(sourceY) * width + sourceX] : pixel;
+                        picture[static_cast<size_t>(y) * width + x] = (shown & 0xFFFFFF) == (pixel & 0xFFFFFF) ? pixel & 0xFFFFFF : shown;
                     }
                 }
             }
@@ -379,6 +508,9 @@ int ModelAnimationStep(Machine &machine, int choice, int by) {
     }
     return next;
 }
+int ModelAnimationForLine(Machine &, int line) {
+    return ForLine(line);
+}
 const std::vector<const char *> &ModelAnimationNames() {
     return AnimationNames();
 }
@@ -391,6 +523,13 @@ void EndModel() {
 }
 
 void ModelBeforeFrame(Machine &machine) {
+    // (the second player stands 768 to the right, and the object list counts across in 1024: its shadow
+    // would come round into the picture, on the floor, when the character walks to the right)
+    const bool noShadow = g.on && !g.starting;
+    if (noShadow != g_noShadow) {
+        g_noShadow = noShadow;
+        NoShadow(machine, noShadow ? 1 : -1);
+    }
     if (!g.on) {
         return;
     }
@@ -409,6 +548,9 @@ void ModelBeforeFrame(Machine &machine) {
     }
     machine.players[1] = 0;
     PutAway();
+    if (colours::EditorAnimation()) {
+        Scan(machine);
+    }
     colours::EditorBeforeFrame(machine); // (takes player 1's controls, when it is on)
     SetSlowMotion(kSlowBy[std::clamp(FeatureValue("model_speed"), 0, static_cast<int>(std::size(kSlowBy)) - 1)]);
     SetRam8(kClock, kClockFull);
@@ -473,6 +615,11 @@ void RegisterModel() {
                              {"Feast of the Damned", "Concrete Cave", "Tower of Arrogance", "Red Thirst", "Deserted Chateau", "Abaraya",
                               "Vanity Paradise", "War Agony", "Forever Torment", "Green Scream", "Iron Horse, Iron Terror", "Fetus of God",
                               "White", "Black"}});
+    game.features.push_back({"model_foreground", kModel, "Stage in front",
+                             "What the stage has in front of the fighters (a table, a fence, a fire): in front of the character "
+                             "too, as in a fight, or behind it so that all of it is seen. In front only at the character's own "
+                             "size, and not in the colour editor.",
+                             0, {"In front", "Behind"}});
     game.features.push_back({"model_size", kModel, "Size", "How large the character is drawn, from a quarter of its own size to 25 times.", 0,
                              {"1x", "1.5x", "2x", "3x", "4x", "6x", "8x", "12x", "16x", "25x", "0.25x", "0.5x", "0.75x"}});
     game.features.push_back({"model_animation", kModel, "Animation",

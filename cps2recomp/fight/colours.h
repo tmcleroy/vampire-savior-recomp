@@ -89,6 +89,10 @@ struct Description {
     int (*characterNumber)(int choice) = nullptr;
     int (*animationStep)(Machine &machine, int choice, int by) = nullptr;
     const std::vector<const char *> &(*animationNames)() = nullptr;
+    // The animation (a choice of the editor's "Animation") that best shows a line of the character's set, for
+    // the Line row to go to: 0 standing, -1 none found (the animation is left as it is), -2 not known yet (asked
+    // again next frame). Not given: the Line row leaves the animation alone.
+    int (*animationForLine)(Machine &machine, int line) = nullptr;
     // The "Background" choice as short as the panel needs it (the menu's own names when not given)
     std::vector<const char *> backgrounds;
 };
