@@ -57,6 +57,21 @@ for n in 1 2 3 4 5 6 7 8 9 10 11 12; do
     # is: the game's flag for it held on, for the game's code and the rewrites alike)
     stage $n "CameraAcross,CameraUp,$outer,$inPicture" "--poke FF8107=01"
 done
+# Moves that go by the picture's edges (moves.cpp): an endless battle on one stage taken over by player 1, as a
+# character that has them (Felicia 8, Bishamon 9, Q-Bee 12: endless_one's choices), with a movie of its inputs; nobody
+# loses health, or the one knocked down would be someone else
+check_moves() { # movie, frames, character, rewrites that are to be called
+    out=$($port --rom "${ROM:-rom}" --headless --frames "$2" --movie "$movies/$1.txt" --keys 10:cendless_start \
+        --features "endless_one=$3,endless_two=1,endless_stage=2,full_gauge,no_damage,no_damage_2" --check-rewrites 2>&1)
+    echo "== $1 (character $3)"
+    out=$(echo "$out" | grep -E "^rewrite ($4) ")
+    echo "$out"
+    echo "$out" | grep -E " 0 calls|calls, [1-9][0-9]* differed" >/dev/null && return 1
+    return 0
+}
+at_once check_moves wall_cling 3300 8 "OnTheWall"
+at_once check_moves moves 27000 12 "QBeeToTheWall|QBeeFlies|QBeeCarries"
+at_once check_moves moves 27000 9 "BishamonCaught"
 at_once_wait || status=1
 [ $status -eq 0 ] && echo "ok: every rewrite does what the game's code does" || echo "FAILED"
 exit $status

@@ -71,6 +71,7 @@ the page holds the aids below.
 | Input display | What each player presses and for how long, the stick as a keypad number |
 | Combo readout | Hits, damage, how much is lost for good and how much comes back, the round's best |
 | Health refills | A player's health comes back when they have not been hit for a moment |
+| Gauge refills | A player's special gauge is full again when they have not spent any of it for a moment |
 | The dummy | Stands, crouches, jumps; guards (always, after a hit, at random; high or low as each attack needs); pushes away or guard cancels; softens throws; gets up where it fell or rolls towards or away; records and replays in three slots (one, or any at random), and can answer with a recording after guarding or being hit |
 | Start over | The round as it began, in the middle or a corner, sides swapped or not (Backspace, or a gamepad's left shoulder) |
 | Stage | Any of the twelve stages, or the game's own choice |
@@ -117,6 +118,9 @@ It is **off unless you switch it on**, in every preset, because it changes how t
 - A stage's own pieces and things thrown are kept while they are in the wide picture, not only
   the board's. (Some pieces still come in a little late at the wide picture's edge, and at the
   very ends of a stage a few columns of the planes behind are not painted: see the roadmap.)
+- Moves that go to "the wall" go to the wide picture's edge: Felicia's wall cling, Q-Bee's flight
+  to the wall and her throw that carries the opponent there, and one of Bishamon's catches.
+  (A few other characters' moves still go by the board's edges: see the roadmap.)
 - The bars, the clock and the gauges stay in the middle. Survival, the endless battle, the ring
   out and the stage viewer are wide too. Everything that is not a fight keeps the board's 4:3.
 
