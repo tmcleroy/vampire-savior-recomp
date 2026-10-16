@@ -1,5 +1,12 @@
 # Vampire Savior Recomp
 
+> [!IMPORTANT]
+> **This project has moved to [CPS-2 Recomp](https://github.com/tmcleroy/cps2recomp)**, together with the other
+> CPS-2 ports: one download and one launcher for every game, with the settings they share set once for all of
+> them. Vampire Savior is [here](https://github.com/tmcleroy/cps2recomp/tree/main/games/vampire_savior), and new releases are on
+> [its releases page](https://github.com/tmcleroy/cps2recomp/releases). Your settings, save states and the ROM set
+> you chose carry over. This repository and its releases stay as they were, and get no more changes.
+
 An unofficial native PC port of the arcade game *Vampire Savior: The Lord of Vampire* (Capcom,
 1997, CPS-2 board) for macOS, Linux (Steam Deck included) and Windows, made by static
 recompilation, with a full training mode.
