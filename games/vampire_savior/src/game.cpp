@@ -21,6 +21,7 @@ void RegisterPlanes();    // planes.cpp
 void RegisterRows();      // rows.cpp
 void RegisterPicture();   // picture.cpp
 void RegisterEdges();     // edges.cpp
+void RegisterMoves();     // moves.cpp
 void RegisterPieces();    // pieces.cpp
 void RegisterFrames();    // frames.cpp
 void RegisterTraining(); // training.cpp
@@ -64,12 +65,13 @@ void RegisterGame() {
     RegisterRows();
     RegisterPicture();
     RegisterEdges();
+    RegisterMoves();
     RegisterPieces();
     RegisterFrames();
     RegisterWidescreen();
     RegisterTitle();
     // The training aids work only in a training session (the dummy's are the toolkit's: fight::RegisterDummy)
-    TrainingAids({"damage_readout", "frame_data", "frame_log", "frame_meter", "health_refill", "hit_boxes", "input_display"});
+    TrainingAids({"damage_readout", "frame_data", "frame_log", "frame_meter", "gauge_refill", "health_refill", "hit_boxes", "input_display"});
     TheGame().inTraining = [] { return FeatureOn("training_mode"); };
     RegisterColours();
     TheGame().beforeFrame = [](Machine &machine) {

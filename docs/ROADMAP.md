@@ -28,3 +28,6 @@ game's rules and the player's machine.
 5. **Other releases of the game** (`vsav`, `vsavu`, `vsava`, `vsavh`) and the other CPS-2 games
    the toolkit can take.
 6. **Video options**: integer scaling choices, a scanline or CRT shader, all off unless chosen.
+7. **Widescreen**: the moves that still go by the board's picture's edges, found in the game's code by
+   its width (some of Zabel's, Morrigan's, Lilith's and Jedah's, and code shared by things thrown),
+   written again with the wide picture's edges as Felicia's wall cling and Q-Bee's are (`moves.cpp`).

@@ -5,6 +5,20 @@ pre-release (`-beta.N`) until every platform's build has been played by hand.
 
 ## Unreleased
 
+- Training mode: Gauge refills (the Training page and the launcher's): a player's special gauge is
+  full again when they have not spent any of it for a moment.
+- Endless battle (Shuffle, Scroll) and ring out: what the stage has in front of the fighters (a
+  table, a kettle, the leaves of Green Scream) is in front of them again, and a move's own picture
+  is shown: Jedah's Finale Rosso turns everything behind the fighters red, as on the board.
+- Endless battle (Shuffle, Scroll) and ring out: the stage behind the fighters no longer goes past
+  its own ends and draws its pieces in the wrong places. The fighters' own (unseen) match could be
+  on Fetus of God, whose camera goes further than any other stage's.
+- Widescreen: Felicia's wall cling holds her on the wide picture's edge (it put her where the
+  board's picture ends, inside the wide one, and she often dropped off at once). Q-Bee's flight to
+  the wall and her throw that carries the opponent to it go to the wide edge (at a stage's end the
+  flight landed short and the attack never came), and so does a catch of Bishamon's. Those moves
+  are readable code now, checked against the game's (`make check-rewrites`).
+
 ## 0.1.0-beta.7 - 2026-10-15
 
 - In-game menu: Right on a row that leads to a page goes into that page. The launcher's Features

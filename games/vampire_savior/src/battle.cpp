@@ -22,6 +22,7 @@
 #include <cstring>
 #include <random>
 #include <string>
+#include <unordered_set>
 
 namespace cps2recomp {
 
@@ -76,6 +77,11 @@ namespace {
     }
     constexpr int kStageToRound = 1100; // frames a stage's machine runs before its round is on, at most (counted: 921 for most stages, 1,046 for Fetus of God), and a few
     constexpr int kArena = (kCameraLeft + kCameraRight) / 2; // where the fighters' own camera is kept while the stage scrolls
+    // The stage the fighters' own match is on when another machine shows the stage behind them (it is never
+    // seen): one whose camera goes no further than the usual ends. The stage behind follows the fighters'
+    // camera, and Fetus of God's goes 96 further each way: a stage shown behind fighters fighting there was
+    // taken beyond its own ends, its pieces with it.
+    constexpr int kFightersStage = 1; // Feast of the Damned
     constexpr size_t kSoundAhead = 16;          // samples of another machine's sound kept in hand
     constexpr uint16_t kAnyButton = kLeft | kRight | kUp | kDown | kPunch1 | kPunch2 | kPunch3 | kKick1 | kKick2 | kKick3;
 
@@ -227,6 +233,7 @@ namespace {
             g.computer[1] = true;
             g.stage = 0;
             if (kind == Kind::RingOut) {
+                g.stage = kFightersStage;
                 g.way = kStageBehind;
                 g.back = AnyStage(0);
                 g.dropStage = AnyStage(g.back);
@@ -247,6 +254,7 @@ namespace {
             g.way = choice == 0 ? kStageShuffle : choice == 1 ? kStageScroll : kStageOne;
             if (Layered()) {
                 g.back = g.stage;
+                g.stage = kFightersStage;
                 g.backCamera = LeftEnd();
                 g_backSound.Start();
             }
@@ -364,9 +372,45 @@ namespace {
 
     // --- the stage behind the fighters ---
 
+    // What of a stage is in front of the fighters. The board draws the object list's later entries over its
+    // earlier ones, and the game puts a stage's pieces on its list before or after the players' by how far
+    // forward they are. A stage machine has players of its own (never drawn): the pieces met before them
+    // (from the list's end) are the ones in front. Drawn as objects alone and marked, line by line.
+    bool g_playerMet = false, g_playersListed = false;
+    bool BehindThePlayers(uint32_t tile, uint16_t attributes) {
+        const unsigned set = attributes & 0x1F;
+        if (set >= 10 && set < 22) { // (the players' own colour sets: modes.h, kPlayerSets)
+            g_playerMet = g_playersListed = true;
+            return true;
+        }
+        return NotTheStage(tile, attributes) || g_playerMet;
+    }
+    void StageInFront(Machine &m, std::vector<uint32_t> &front) {
+        Video &video = m.video;
+        const int width = m.PictureWidth();
+        front.resize(static_cast<size_t>(width) * Video::kHeight);
+        const auto hidden = video.hideObject;
+        const unsigned layers = video.layerMask;
+        const bool marked = video.markObjects;
+        video.hideObject = BehindThePlayers;
+        video.layerMask = 1;
+        video.markObjects = true;
+        g_playersListed = false;
+        for (int line = 0; line < Video::kHeight; line++) {
+            g_playerMet = false;
+            video.RenderLine(line, &front[static_cast<size_t>(line) * width]);
+        }
+        video.hideObject = hidden;
+        video.layerMask = layers;
+        video.markObjects = marked;
+        if (!g_playersListed) {
+            front.clear(); // (no players on the list: which pieces are in front is not known)
+        }
+    }
+
     // One of the stage machines for a frame: on its way to its round, or showing its stage with the camera
-    // where it is wanted
-    void RunStage(Machine &machine, Spare &spare, int stage, int cameraX, int cameraY, Made *made) {
+    // where it is wanted (and, if asked, what of it is in front of the fighters)
+    void RunStage(Machine &machine, Spare &spare, int stage, int cameraX, int cameraY, Made *made, std::vector<uint32_t> *front = nullptr) {
         RunSpare(machine, spare, [&](Machine &m) {
             Wanted().stage = stage;
             if (!spare.ready) {
@@ -378,13 +422,69 @@ namespace {
                 CameraAt().x = cameraX;
                 CameraAt().y = cameraY;
             }
-        }, made);
+        }, made, [&](Machine &m) {
+            if (front) {
+                if (spare.ready) {
+                    StageInFront(m, *front);
+                } else {
+                    front->clear();
+                }
+            }
+        });
+    }
+
+    // A move's own picture. Some moves have the stage's planes for themselves (the game holds them still for
+    // it: a player's +136, copied to each plane's +60) and draw a picture of their own there: Jedah's Finale
+    // Rosso turns everything behind the fighters red. That is on the fighters' machine, whose scroll screens
+    // are not shown here. While the planes are held, they are drawn (without objects) and their colours kept
+    // from the first frame; when much of what they show is in none of those colours, the move's picture is
+    // up, and it is shown in place of the stage behind. (Held planes alone are not enough: many moves hold
+    // them and draw nothing, and the fighters' own stage is not the one shown.)
+    constexpr int kBackdropPercent = 30; // of the picture in new colours, from which it is the move's picture
+    bool MovesPicture(Machine &machine, std::vector<uint32_t> &picture) {
+        static std::unordered_set<uint32_t> colours;
+        static bool held = false;
+        if (!Ram8(kCameraRecord + kCameraHeld)) {
+            held = false;
+            return false;
+        }
+        Video &video = machine.video;
+        const int width = machine.PictureWidth();
+        picture.resize(static_cast<size_t>(width) * Video::kHeight);
+        const auto hidden = video.hideObject;
+        const unsigned layers = video.layerMask;
+        const bool marked = video.markObjects;
+        video.hideObject = nullptr;
+        video.layerMask = 0xE;
+        video.markObjects = false;
+        for (int line = 0; line < Video::kHeight; line++) {
+            video.RenderLine(line, &picture[static_cast<size_t>(line) * width]);
+        }
+        video.hideObject = hidden;
+        video.layerMask = layers;
+        video.markObjects = marked;
+        if (!held) {
+            held = true;
+            colours.clear();
+            colours.insert(picture.begin(), picture.end());
+            return false;
+        }
+        size_t fresh = 0;
+        for (const uint32_t pixel : picture) {
+            fresh += !colours.count(pixel);
+        }
+        return fresh * 100 > picture.size() * kBackdropPercent;
     }
 
     // The fighters laid over a stage's picture: the pixels the fighters' machine drew an object at. `show` of
     // 256 is how much of them is seen. The pixels of the player `falls` (-1: nobody) are drawn `down` lower:
     // that player is falling off the stage.
-    void Over(std::vector<uint32_t> &stage, const std::vector<uint32_t> &fighters, int show, int falls = -1, int down = 0) {
+    // Where `front` (if it is the same size) has a marked pixel, the stage is in front of the fighters.
+    void Over(std::vector<uint32_t> &stage, const std::vector<uint32_t> &fighters, int show, int falls = -1, int down = 0,
+              const std::vector<uint32_t> *front = nullptr) {
+        if (front && front->size() != stage.size()) {
+            front = nullptr;
+        }
         const uint32_t sets = falls >= 0 ? kPlayerSets[falls] : 0;
         const uint32_t keep = static_cast<uint32_t>(256 - show), put = static_cast<uint32_t>(show);
         if (stage.size() != fighters.size()) {
@@ -406,6 +506,9 @@ namespace {
                     if (to >= Video::kHeight) {
                         continue;
                     }
+                    if (front && ((*front)[static_cast<size_t>(to) * width + static_cast<size_t>(x)] & 0x80000000)) {
+                        continue;
+                    }
                     uint32_t &b = stage[static_cast<size_t>(to) * width + static_cast<size_t>(x)];
                     b = show >= 256 ? f & 0xFFFFFF :
                         ((((b & 0xFF00FF) * keep + (f & 0xFF00FF) * put) >> 8) & 0xFF00FF) | ((((b & 0x00FF00) * keep + (f & 0x00FF00) * put) >> 8) & 0x00FF00);
@@ -422,7 +525,9 @@ namespace {
     // of 256 is how much of the fighters is seen (they fade when one match follows another).
     void Layer(Machine &machine, int show) {
         static Made fighters, back, next;
+        static std::vector<uint32_t> backFront, nextFront, front, moves;
         Take(machine, g_soundBefore, fighters);
+        const bool movesPicture = MovesPicture(machine, moves);
         const int cameraY = static_cast<int16_t>(Ram16(kCameraY));
         const int cameraX = g.way == kStageScroll ? g.backCamera / 256 : static_cast<int16_t>(Ram16(kCameraX));
         const bool fighting = g.phase != Phase::Starting;
@@ -434,7 +539,7 @@ namespace {
             g_backNext.Clear();
             g_backNextSound.Start();
         }
-        RunStage(machine, g_back, g.back, cameraX, cameraY, &back);
+        RunStage(machine, g_back, g.back, cameraX, cameraY, &back, &backFront);
         if (!g_back.ready) {
             RunStage(machine, g_back, g.back, cameraX, cameraY, &back); // (twice as fast as the fighters' machine on the way)
             Give(machine, fighters);
@@ -453,7 +558,7 @@ namespace {
                 onTheWay = std::clamp((kStageToRound - g_backNext.frames + framesLeft - 1) / framesLeft, 3, 6);
             }
             for (int n = 0; n < (wasReady ? 1 : onTheWay); n++) {
-                RunStage(machine, g_backNext, g.backNext, g.way == kStageScroll ? LeftEnd() / 256 : cameraX, cameraY, &next);
+                RunStage(machine, g_backNext, g.backNext, g.way == kStageScroll ? LeftEnd() / 256 : cameraX, cameraY, &next, &nextFront);
                 if (g_backNext.ready) {
                     break;
                 }
@@ -470,9 +575,10 @@ namespace {
         }
         g.backFor++;
 
-        // The stage's picture: one stage, or two (faded, or side by side)
+        // The stage's picture: one stage, or two (faded, or side by side); and what of it is in front
         int nextGain = 0;
         nextShown = nextShown && next.picture.size() == back.picture.size();
+        front = backFront;
         if (nextShown && g.way == kStageShuffle) {
             g.blend = std::min(g.blend + 1, kBlend);
             nextGain = g.blend * 256 / kBlend;
@@ -481,6 +587,9 @@ namespace {
                 const uint32_t rb = (((a & 0xFF00FF) * static_cast<uint32_t>(256 - nextGain) + (b & 0xFF00FF) * static_cast<uint32_t>(nextGain)) >> 8) & 0xFF00FF;
                 const uint32_t gr = (((a & 0x00FF00) * static_cast<uint32_t>(256 - nextGain) + (b & 0x00FF00) * static_cast<uint32_t>(nextGain)) >> 8) & 0x00FF00;
                 back.picture[i] = rb | gr;
+            }
+            if (nextGain >= 128) {
+                front = nextFront;
             }
         } else if (g.way == kStageScroll) {
             // (onwards: across this stage, then this stage out and the next in, if that one is ready)
@@ -495,15 +604,30 @@ namespace {
             const int slide = std::min(g.slide / 256, width);
             nextGain = slide * 256 / width;
             if (slide > 0) {
+                const bool fronts = front.size() == back.picture.size() && nextFront.size() == back.picture.size();
                 for (int y = 0; y < Video::kHeight; y++) {
                     uint32_t *row = &back.picture[static_cast<size_t>(y) * width];
                     memmove(row, row + slide, static_cast<size_t>(width - slide) * sizeof(uint32_t));
                     memcpy(row + width - slide, &next.picture[static_cast<size_t>(y) * width], static_cast<size_t>(slide) * sizeof(uint32_t));
+                    if (fronts) {
+                        uint32_t *mask = &front[static_cast<size_t>(y) * width];
+                        memmove(mask, mask + slide, static_cast<size_t>(width - slide) * sizeof(uint32_t));
+                        memcpy(mask + width - slide, &nextFront[static_cast<size_t>(y) * width], static_cast<size_t>(slide) * sizeof(uint32_t));
+                    }
+                }
+                if (!fronts) {
+                    front.clear();
                 }
             }
         }
+        // (a move's own picture: in place of the stage, and nothing of the stage in front)
+        if (movesPicture && moves.size() == back.picture.size()) {
+            back.picture = moves;
+            front.clear();
+        }
         const bool falling = g.out >= 0 && (g.phase == Phase::Falling || g.phase == Phase::Dropping || g.phase == Phase::Over);
-        Over(back.picture, fighters.picture, show, falling ? g.out : -1, falling ? Fallen(g.phase == Phase::Falling ? g.since : kFallFor * 4) : 0);
+        Over(back.picture, fighters.picture, show, falling ? g.out : -1, falling ? Fallen(g.phase == Phase::Falling ? g.since : kFallFor * 4) : 0,
+             &front);
         fighters.picture = back.picture;
         // The sound: the fighters', and the stages' music, one fading into the other
         g_backSound.Mix(fighters.sound, 256 - nextGain);
@@ -514,6 +638,7 @@ namespace {
         if ((g.way == kStageShuffle && g.blend >= kBlend) || (g.way == kStageScroll && g.slide >= Across())) {
             g_back = std::move(g_backNext);
             g_backNext.Clear();
+            backFront.swap(nextFront);
             g_backSound = g_backNextSound;
             g.back = g.backNext;
             g.backNext = 0;
@@ -608,6 +733,7 @@ namespace {
     // a hard edge across the picture, the old stage over the new).
     void Drop(Machine &machine) {
         static Made old, fighters, stage;
+        static std::vector<uint32_t> front;
         Take(machine, g_soundBefore, old);
         if (g.since == 1) {
             g_dropSound.Start();
@@ -635,10 +761,10 @@ namespace {
             g.dropCameraX = static_cast<int16_t>(Ram16(kCameraX));
             g.dropCameraY = static_cast<int16_t>(Ram16(kCameraY));
         });
-        RunStage(machine, g_dropBack, g.dropStage, g.dropCameraX, g.dropCameraY, &stage);
+        RunStage(machine, g_dropBack, g.dropStage, g.dropCameraX, g.dropCameraY, &stage, &front);
         g_dropSound.Add(fighters.sound);
         g_dropBackSound.Add(stage.sound);
-        Over(stage.picture, fighters.picture, 256);
+        Over(stage.picture, fighters.picture, 256, -1, 0, &front);
 
         // (slowly off, quickly through, slowly in: the sound over the whole way, each picture over half of it)
         const auto ease = [](int t) { return t * t * (3 * 256 - 2 * t) / (256 * 256); };

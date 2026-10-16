@@ -30,6 +30,11 @@ namespace {
     using namespace vsav;
 
     constexpr int kRefillAfter = 90; // frames without a hit after which health comes back
+    // ... and without spending any of the special gauge, after which it is full again (the game's own most: 99
+    // stocks, 3 for a player who chose "Auto" guarding: 029A6C)
+    constexpr uint8_t kStocksAuto = 3;
+    int g_unspent[2] = {0, 0};
+    uint8_t g_stocksBefore[2] = {0, 0};
 
     constexpr uint16_t kSticks = kLeft | kRight | kUp | kDown;
     constexpr uint16_t kButtons = kPunch1 | kPunch2 | kPunch3 | kKick1 | kKick2 | kKick3;
@@ -256,7 +261,7 @@ namespace {
             machine.Serialize(ar);
         }
         g_roundFought = fought;
-        const bool readout = FeatureOn("damage_readout"), refill = FeatureOn("health_refill");
+        const bool readout = FeatureOn("damage_readout"), refill = FeatureOn("health_refill"), gaugeRefill = FeatureOn("gauge_refill");
         const bool inputs = FeatureOn("input_display");
         const bool fighting = Fighting();
         if (!fighting || !g_fighting) {
@@ -275,6 +280,12 @@ namespace {
                 SetRam16(Player(n) + kHealth, kHealthFull);
                 SetRam16(Player(n) + kHealthCeiling, kHealthFull);
             }
+            const uint8_t stocks = Ram8(Player(n) + kStocks), most = Ram8(Player(n) + kAutoGuard) ? kStocksAuto : kStocksFull;
+            g_unspent[n] = stocks < g_stocksBefore[n] ? 0 : g_unspent[n] + 1;
+            if (gaugeRefill && g_unspent[n] > kRefillAfter && stocks < most) {
+                SetRam8(Player(n) + kStocks, most);
+            }
+            g_stocksBefore[n] = Ram8(Player(n) + kStocks);
             if (readout) {
                 // The damage a player took is shown on that player's side, under the health bar (how much of it is
                 // lost for good, how much is the white part of the bar that comes back, the round's best)
@@ -408,6 +419,9 @@ void RegisterTraining() {
                              "while it can, blue after; yellow reeling from a hit, light blue from a guarded one; grey in the air."});
     game.features.push_back({"health_refill", "Training mode", "Health refills",
                              "A player's health comes back when they have not been hit for a moment."});
+    game.features.push_back({"gauge_refill", "Training mode", "Gauge refills",
+                             "A player's special gauge is full again when they have not spent any of it for a moment (99 stocks; "
+                             "3 for a player who chose Auto guarding, the most the game lets them have)."});
     fight::DummyOptions dummy;
     // While guarding: buttons pressed one after another, guarding still (pushing the attacker away); or a guard
     // cancel: towards, down, down and towards with a punch or a kick, again and again

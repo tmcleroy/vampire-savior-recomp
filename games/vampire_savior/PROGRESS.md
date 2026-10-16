@@ -318,6 +318,40 @@ is kept on the stage as before (the camera now goes there, so the board's pictur
 - Not hand-played; not looked at in a window. A piece that the board draws only once it is in its own picture
   comes in at the play area's edge, not the picture's.
 
+## Tester feedback (2026-10-16)
+
+- Moves that go by the picture's edges (`moves.cpp`): the game finds "the wall" from the left edge of the plane
+  the player rides (`01559E`, `+10` of its record) and the board's 384 columns. Written again with WideMargin:
+  `022D96` (every character's wall cling puts the player 16 past the edge; only Felicia clings: `027BD8`, in
+  the air 48 or more above the floor, at an edge by `+116`, holding towards it after letting go once),
+  Q-Bee's flight to the wall (`0494B4`, its frames `049576`; quarter circle back and a kick, `+106` 0) and the
+  throw that carries the opponent there (`049ACC`), Bishamon's catch (`042542`, his move `0E`). Each is checked
+  by `check_rewrites.sh` with the movies `moves.txt` and `wall_cling.txt` (endless battles taken over by
+  player 1). In widescreen at the left end Q-Bee's flight now reaches the wall (steps `0E06`, `0E08`); before,
+  it landed short. The characters' code by number: the table at `0BD1FA` (the specials, `+06` 0E). Still the
+  board's edges: Zabel `037312`, Morrigan `03A96A`, Lilith `04F412`/`0517BA`, Jedah `055AE6`, and the code of
+  things thrown from `063D58` (not looked at).
+- The layered modes (Shuffle, Scroll, ring out): the fighters' own match is always on Feast of the Damned
+  (`kFightersStage`): the stage behind follows the fighters' camera, and Fetus of God's goes 96 further each
+  way (shown stages were driven past their ends).
+- What of the stage is in front of the fighters: the board draws later object list entries over earlier
+  ones (video.cpp), and the game lists a stage's pieces before or after the players by depth. The stage
+  machine is drawn again, objects alone, with a hide rule that counts entries from the list's end and keeps
+  the stage's pieces met before the first entry of a player's colour sets (10-21). Checked against the board's
+  own picture on a one-stage endless battle on every stage (the rule against which fighter pixels the real
+  picture covers): no difference on eight stages; Abaraya 0.5% of fighter pixels, Iron Horse, Green Scream
+  and Fetus of God under 0.1% (pieces between the two players, shadows).
+- A move's own picture: a player's `+136` holds the stage's planes (copied to each plane's `+60` at
+  `01DA5E`); Jedah's Finale Rosso then draws red on the 32-pixel scroll screen. While the fighters' machine's
+  planes are held its scroll screens are drawn (no objects); when more than 30% of the picture is in colours
+  that were not in it when the hold began, that picture replaces the stage behind. `FF8123` is the screen's
+  shake (`01DA3C`), not the backdrop. Not checked for other characters' backdrops; a move that shakes the
+  picture keeps its colours and is not taken for one.
+- Gauge refills (`gauge_refill`): stocks back to the most (99, or 3 with Auto guarding: `029A6C`) 90 frames
+  after they last went down. Checked headless only.
+- Not reproduced: the sound cutting out after Finale Rosso in a ring out (the tester could not repeat it).
+- Not hand-played; seen in headless pictures and traces only.
+
 ## Modes (2026-10-12)
 
 "Alternative modes", the first row of the menu (`src/modes.cpp`): training (moved there), attract
